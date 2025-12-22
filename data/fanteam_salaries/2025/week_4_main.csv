@@ -1,0 +1,385 @@
+Tournament,PlayerID,Name,FName,Club,Lineup,Position,Price
+1013696,4352538,Penix Jr.,Michael,ATL,expected,quarterback,14.1
+1013696,4352540,Jones,Emory,ATL,injured,quarterback,11.5
+1013696,4352541,Cousins,Kirk,ATL,unexpected,quarterback,11.6
+1013696,4352542,Allgeier,Tyler,ATL,expected,running_back,8.7
+1013696,4352543,Robinson,Bijan,ATL,expected,running_back,17.4
+1013696,4352547,Carter,Nathan,ATL,injured,running_back,5.2
+1013696,4352549,Agnew,Jamal,ATL,expected,wide_receiver,4
+1013696,4352550,Mooney,Darnell,ATL,expected,wide_receiver,10.8
+1013696,4352551,Sills V,David,ATL,unexpected,wide_receiver,4.7
+1013696,4352552,McCloud III,Ray-Ray,ATL,expected,wide_receiver,7.2
+1013696,4352553,London,Drake,ATL,expected,wide_receiver,13.3
+1013696,4352559,Washington,Casey,ATL,expected,wide_receiver,5.1
+1013696,4352560,Hodge,KhaDarel,ATL,injured,wide_receiver,4.5
+1013696,4352562,DEF/ST Falcons,,ATL,expected,defense_special,7.4
+1013696,4352563,Pitts Sr.,Kyle,ATL,expected,tight_end,9.5
+1013696,4352565,Woerner,Charlie,ATL,unexpected,tight_end,4.8
+1013696,4352566,Franks,Feleipe,ATL,unexpected,tight_end,4
+1013696,4352567,Quitoriano,Teagan,ATL,unexpected,tight_end,4
+1013696,4352569,Jackson,Lamar,BAL,expected,quarterback,19.9
+1013696,4352570,Rush,Cooper,BAL,unexpected,quarterback,17.2
+1013696,4352571,Ali,Rasheen,BAL,unexpected,running_back,4.4
+1013696,4352572,Henry,Derrick,BAL,expected,running_back,15.6
+1013696,4352574,Hill,Justice,BAL,expected,running_back,8
+1013696,4352579,Hopkins,DeAndre,BAL,expected,wide_receiver,8.6
+1013696,4352581,Bateman,Rashod,BAL,expected,wide_receiver,9.1
+1013696,4352582,Flowers,Zay,BAL,expected,wide_receiver,13.9
+1013696,4352585,Wester,LaJohntay,BAL,expected,wide_receiver,4
+1013696,4352586,Wallace,Tylan,BAL,expected,wide_receiver,7.9
+1013696,4352589,Walker,Devontez,BAL,expected,wide_receiver,8.1
+1013696,4352592,Mitchell-Paden,Zaire,BAL,unexpected,tight_end,4
+1013696,4352594,DEF/ST Ravens,,BAL,expected,defense_special,7.1
+1013696,4352597,Andrews,Mark,BAL,expected,tight_end,10.3
+1013696,4352598,Kolar,Charlie,BAL,unexpected,tight_end,5.2
+1013696,4352601,Allen,Josh,BUF,expected,quarterback,19.2
+1013696,4352602,Trubisky,Mitchell,BUF,unexpected,quarterback,16.7
+1013696,4352603,Cook,James,BUF,expected,running_back,18.6
+1013696,4352604,Davis,Ray,BUF,expected,running_back,6.5
+1013696,4352606,Johnson,Ty,BUF,expected,running_back,6.9
+1013696,4352608,Gilliam,Reggie,BUF,unexpected,running_back,4
+1013696,4352611,Palmer,Joshua,BUF,expected,wide_receiver,9.2
+1013696,4352612,Moore,Elijah,BUF,expected,wide_receiver,5.5
+1013696,4352613,Coleman,Keon,BUF,expected,wide_receiver,11.6
+1013696,4352614,Shavers,Tyrell,BUF,unexpected,wide_receiver,4.9
+1013696,4352618,Samuel,Curtis,BUF,expected,wide_receiver,5.3
+1013696,4352620,Shakir,Khalil,BUF,expected,wide_receiver,11.2
+1013696,4352622,DEF/ST Bills,,BUF,expected,defense_special,9.9
+1013696,4352624,Hawes,Jackson,BUF,unexpected,tight_end,5.9
+1013696,4352625,Kincaid,Dalton,BUF,expected,tight_end,12.8
+1013696,4352627,Knox,Dawson,BUF,expected,tight_end,5.6
+1013696,4352630,Dalton,Andy,CAR,unexpected,quarterback,12.1
+1013696,4352631,Young,Bryce,CAR,expected,quarterback,14.5
+1013696,4352634,Dowdle,Rico,CAR,expected,running_back,8.1
+1013696,4352637,Hubbard,Chuba,CAR,possible,running_back,14.5
+1013696,4352638,Etienne,Trevor,CAR,expected,running_back,5
+1013696,4352642,Legette,Xavier,CAR,injured,wide_receiver,6.5
+1013696,4352643,Moore,David,CAR,expected,wide_receiver,6.5
+1013696,4352645,Tremayne,Brycen,CAR,expected,wide_receiver,7.7
+1013696,4352646,Renfrow,Hunter,CAR,expected,wide_receiver,8.5
+1013696,4352648,Horn Jr.,Jimmy,CAR,expected,wide_receiver,4.8
+1013696,4352649,McMillan,Tetairoa,CAR,possible,wide_receiver,14
+1013696,4352651,DEF/ST Panthers,,CAR,expected,defense_special,7.7
+1013696,4352652,Sanders,Ja'Tavion,CAR,injured,tight_end,8.2
+1013696,4352656,Mitchell,James,CAR,expected,tight_end,4
+1013696,4352657,Tremble,Tommy,CAR,expected,tight_end,7.3
+1013696,4352658,Evans,Mitchell,CAR,expected,tight_end,5.6
+1013696,4352659,Bagent,Tyson,CHI,unexpected,quarterback,16.8
+1013696,4352660,Williams,Caleb,CHI,expected,quarterback,19.4
+1013696,4352662,Keenum,Case,CHI,unexpected,quarterback,16.7
+1013696,4352665,Swift,D'Andre,CHI,possible,running_back,13.1
+1013696,4352666,Monangai,Kyle,CHI,expected,running_back,7.3
+1013696,4352667,Johnson,Roschon,CHI,expected,running_back,4.6
+1013696,4352668,Wheeler,Ian,CHI,refuted,running_back,4
+1013696,4352672,Zaccheaus,Olamide,CHI,expected,wide_receiver,7.9
+1013696,4352673,Duvernay,Devin,CHI,unexpected,wide_receiver,4.5
+1013696,4352675,Odunze,Rome,CHI,expected,wide_receiver,17.7
+1013696,4352676,Burden III,Luther,CHI,expected,wide_receiver,8.3
+1013696,4352679,Walker,Jahdae,CHI,unexpected,wide_receiver,4
+1013696,4352680,Moore,DJ,CHI,expected,wide_receiver,12.3
+1013696,4352681,DEF/ST Bears,,CHI,expected,defense_special,7.9
+1013696,4352685,Kmet,Cole,CHI,expected,tight_end,8.9
+1013696,4352686,Smythe,Durham,CHI,unexpected,tight_end,4.5
+1013696,4352719,Sanders,Shedeur,CLE,unexpected,quarterback,12.4
+1013696,4352720,Gabriel,Dillon,CLE,unexpected,quarterback,12.5
+1013696,4352722,Flacco,Joe,CLE,expected,quarterback,15
+1013696,4352727,Ford,Jerome,CLE,expected,running_back,7.7
+1013696,4352728,Strong Jr.,Pierre,CLE,refuted,running_back,4
+1013696,4352730,Sampson,Dylan,CLE,expected,running_back,8.3
+1013696,4352731,Judkins,Quinshon,CLE,expected,running_back,13.2
+1013696,4352732,Davis,Kaden,CLE,unexpected,wide_receiver,4
+1013696,4352736,Jeudy,Jerry,CLE,expected,wide_receiver,12.3
+1013696,4352737,McDonald,Cade,CLE,injured,wide_receiver,4
+1013696,4352738,Thrash,Jamari,CLE,expected,wide_receiver,5.6
+1013696,4352740,Tillman,Cedric,CLE,expected,wide_receiver,10.2
+1013696,4352741,Carter,DeAndre,CLE,unexpected,wide_receiver,4.5
+1013696,4352743,Larvadain,Gage,CLE,unexpected,wide_receiver,4
+1013696,4352744,Bates,Brenden,HOU,unexpected,tight_end,4
+1013696,4352745,Whiteheart,Blake,CLE,expected,tight_end,4
+1013696,4352747,Fannin Jr.,Harold,CLE,expected,tight_end,10.7
+1013696,4352748,Njoku,David,CLE,expected,tight_end,10.3
+1013696,4352750,DEF/ST Browns,,CLE,expected,defense_special,7
+1013696,4352796,Vele,Devaughn,NO,possible,wide_receiver,5.2
+1013696,4352809,Goff,Jared,DET,expected,quarterback,17.5
+1013696,4352810,Allen,Kyle,DET,unexpected,quarterback,15
+1013696,4352811,Gibbs,Jahmyr,DET,expected,running_back,18.4
+1013696,4352812,Montgomery,David,DET,expected,running_back,14.6
+1013696,4352814,Vaki,Sione,DET,injured,running_back,4.2
+1013696,4352815,Robichaux,Kye,DET,injured,running_back,4
+1013696,4352816,Saylors,Jacob,DET,unexpected,running_back,4
+1013696,4352817,Williams,Jameson,DET,expected,wide_receiver,12.8
+1013696,4352819,Lovett,Dominic,DET,expected,wide_receiver,4
+1013696,4352820,Patrick,Tim,JAX,unexpected,wide_receiver,4.4
+1013696,4352822,TeSlaa,Isaac,DET,expected,wide_receiver,6.2
+1013696,4352823,St. Brown,Amon-Ra,DET,expected,wide_receiver,18.1
+1013696,4352825,Raymond,Kalif,DET,expected,wide_receiver,6.7
+1013696,4352830,Wright,Brock,DET,expected,tight_end,7.7
+1013696,4352831,DEF/ST Lions,,DET,expected,defense_special,9.8
+1013696,4352834,LaPorta,Sam,DET,expected,tight_end,12.4
+1013696,4352867,Stroud,C.J.,HOU,expected,quarterback,14.7
+1013696,4352868,Mertz,Graham,HOU,unexpected,quarterback,12.1
+1013696,4352869,Mills,Davis,HOU,unexpected,quarterback,12.2
+1013696,4352871,Marks,Woody,HOU,expected,running_back,9.5
+1013696,4352872,Johnson,Jakob,HOU,injured,running_back,4
+1013696,4352874,Ogunbowale,Dare,HOU,expected,running_back,4.9
+1013696,4352875,Chubb,Nick,HOU,expected,running_back,12.5
+1013696,4352876,Pierce,Dameon,HOU,unexpected,running_back,4.7
+1013696,4352879,Berrios,Braxton,HOU,expected,wide_receiver,4
+1013696,4352881,Higgins,Jayden,HOU,expected,wide_receiver,6.4
+1013696,4352885,Hutchinson,Xavier,HOU,expected,wide_receiver,6.8
+1013696,4352887,Metchie III,John,PHI,expected,wide_receiver,4.7
+1013696,4352888,Collins,Nico,HOU,expected,wide_receiver,15.5
+1013696,4352889,Kirk,Christian,HOU,expected,wide_receiver,11.4
+1013696,4352890,Noel,Jaylin,HOU,expected,wide_receiver,6.1
+1013696,4352891,DEF/ST Texans,,HOU,expected,defense_special,9.5
+1013696,4352892,Schultz,Dalton,HOU,expected,tight_end,9.8
+1013696,4352898,Brooks,British,HOU,unexpected,running_back,4
+1013696,4352899,Jones,Daniel,IND,expected,quarterback,19.1
+1013696,4352900,Leonard,Riley,IND,unexpected,quarterback,16.8
+1013696,4352902,Richardson Sr.,Anthony,IND,unexpected,quarterback,16.9
+1013696,4352904,Bentley IV,Ulysses,IND,unexpected,running_back,4
+1013696,4352905,Taylor,Jonathan,IND,expected,running_back,19.4
+1013696,4352906,Giddens,DJ,IND,expected,running_back,5.7
+1013696,4352909,Goodson,Tyler,IND,unexpected,running_back,4.6
+1013696,4352914,Pittman Jr.,Michael,IND,expected,wide_receiver,13.9
+1013696,4352915,Dulin,Ashton,IND,unexpected,wide_receiver,4.5
+1013696,4352917,Pierce,Alec,IND,injured,wide_receiver,10.3
+1013696,4352919,Downs,Josh,IND,expected,wide_receiver,10
+1013696,4352922,Gould,Anthony,IND,expected,wide_receiver,4.4
+1013696,4352923,Mitchell,Adonai,IND,expected,wide_receiver,5.4
+1013696,4352925,Warren,Tyler,IND,expected,tight_end,12.6
+1013696,4352927,Mallory,Will,IND,unexpected,tight_end,4.1
+1013696,4352928,Alie-Cox,Mo,IND,unexpected,tight_end,4.9
+1013696,4352929,Ogletree,Drew,IND,expected,tight_end,4.8
+1013696,4352930,DEF/ST Colts,,IND,expected,defense_special,7.8
+1013696,4352933,Lawrence,Trevor,JAX,expected,quarterback,14.9
+1013696,4352934,Mullens,Nick,JAX,unexpected,quarterback,12.4
+1013696,4352936,Allen Jr.,LeQuint,JAX,expected,running_back,6.5
+1013696,4352937,Etienne Jr.,Travis,JAX,expected,running_back,14.7
+1013696,4352939,Bigsby,Tank,PHI,unexpected,running_back,4.4
+1013696,4352940,Tuten,Bhayshul,JAX,expected,running_back,8.8
+1013696,4352941,Thomas Jr.,Brian,JAX,expected,wide_receiver,13.5
+1013696,4352942,Brown,Dyami,JAX,possible,wide_receiver,9.9
+1013696,4352946,Cephus,Joshua,JAX,injured,wide_receiver,4
+1013696,4352948,Pancol,Eli,JAX,refuted,wide_receiver,4
+1013696,4352949,Hunter,Travis,JAX,expected,wide_receiver,9.4
+1013696,4352951,Washington,Parker,JAX,expected,wide_receiver,9.7
+1013696,4352954,Strange,Brenton,JAX,expected,tight_end,9.3
+1013696,4352955,Long,Hunter,JAX,expected,tight_end,5.6
+1013696,4352956,DEF/ST Jaguars,,JAX,expected,defense_special,8.6
+1013696,4352957,Morris,Quintin,JAX,unexpected,tight_end,4
+1013696,4352960,Mundt,Johnny,JAX,expected,tight_end,5
+1013696,4352961,Mahomes,Patrick,KC,expected,quarterback,18.7
+1013696,4352962,Minshew,Gardner,KC,unexpected,quarterback,16.2
+1013696,4352965,Smith,Brashard,KC,expected,running_back,5.7
+1013696,4352968,Hunt,Kareem,KC,expected,running_back,10
+1013696,4352969,Pacheco,Isiah,KC,expected,running_back,9.5
+1013696,4352970,Mitchell,Elijah,KC,unexpected,running_back,4
+1013696,4352972,Smith-Schuster,JuJu,KC,expected,wide_receiver,6.1
+1013696,4352975,Brownlee,Jason,KC,unexpected,wide_receiver,4.3
+1013696,4352977,Remigio,Nikko,KC,expected,wide_receiver,4.8
+1013696,4352978,Royals,Jalen,KC,expected,wide_receiver,4.9
+1013696,4352979,Moore,Skyy,SF,expected,wide_receiver,4.5
+1013696,4352983,Thornton,Tyquan,KC,expected,wide_receiver,11.4
+1013696,4352984,Worthy,Xavier,KC,expected,wide_receiver,12.3
+1013696,4352985,Wiley,Jared,KC,unexpected,tight_end,4.5
+1013696,4352986,Kelce,Travis,KC,expected,tight_end,11.4
+1013696,4352987,Gray,Noah,KC,expected,tight_end,6.4
+1013696,4352989,Tonyan,Robert,KC,unexpected,tight_end,4
+1013696,4352992,DEF/ST Chiefs,,KC,expected,defense_special,7.6
+1013696,4352993,Miller,Cam,LV,unexpected,quarterback,13.4
+1013696,4352994,Smith,Geno,LV,expected,quarterback,15.9
+1013696,4352996,Jeanty,Ashton,LV,expected,running_back,12.9
+1013696,4352997,White,Zamir,LV,expected,running_back,6.8
+1013696,4352998,Laube,Dylan,LV,expected,running_back,5.2
+1013696,4353000,Mostert,Raheem,LV,unexpected,running_back,4.7
+1013696,4353002,Meyers,Jakobi,LV,expected,wide_receiver,13.4
+1013696,4353004,Thornton Jr.,Dont'e,LV,expected,wide_receiver,8.2
+1013696,4353006,Bech,Jack,LV,expected,wide_receiver,5.8
+1013696,4353008,Tucker,Tre,LV,expected,wide_receiver,17.8
+1013696,4353012,Bachman,Alex,LV,unexpected,wide_receiver,4
+1013696,4353013,Bowers,Brock,LV,expected,tight_end,14.2
+1013696,4353014,Mayer,Michael,LV,injured,tight_end,7.3
+1013696,4353017,Thomas,Ian,LV,expected,tight_end,4.6
+1013696,4353018,DEF/ST Raiders,,LV,expected,defense_special,7.8
+1013696,4353021,Herbert,Justin,LAC,expected,quarterback,17.8
+1013696,4353023,Lance,Trey,LAC,unexpected,quarterback,15.5
+1013696,4353024,Hampton,Omarion,LAC,expected,running_back,14.7
+1013696,4353025,Haskins,Hassan,LAC,expected,running_back,8.3
+1013696,4353027,Sanders,Raheim,CLE,unexpected,running_back,4.3
+1013696,4353031,McConkey,Ladd,LAC,expected,wide_receiver,13.3
+1013696,4353032,Matlock,Scott,LAC,unexpected,running_back,4
+1013696,4353035,Allen,Keenan,LAC,expected,wide_receiver,14.9
+1013696,4353037,Harris,Tre',LAC,expected,wide_receiver,6.3
+1013696,4353039,Campbell,Dalevon,CAR,unexpected,wide_receiver,4
+1013696,4353041,Johnston,Quentin,LAC,expected,wide_receiver,14.7
+1013696,4353042,Lambert-Smith,Keandre,LAC,expected,wide_receiver,4.5
+1013696,4353044,Davis,Derius,LAC,injured,wide_receiver,4.6
+1013696,4353045,Dissly,Will,LAC,injured,tight_end,6.3
+1013696,4353047,Gadsden,Oronde,LAC,expected,tight_end,6.9
+1013696,4353048,Fisk,Tucker,LAC,unexpected,tight_end,4
+1013696,4353049,DEF/ST Chargers,,LAC,expected,defense_special,9
+1013696,4353050,Conklin,Tyler,LAC,expected,tight_end,6.8
+1013696,4353053,Stafford,Matthew,LAR,expected,quarterback,15.1
+1013696,4353054,Bennett IV,Stetson,LAR,unexpected,quarterback,12.5
+1013696,4353056,Garoppolo,Jimmy,LAR,unexpected,quarterback,12.6
+1013696,4353057,Corum,Blake,LAR,expected,running_back,7.4
+1013696,4353058,Hunter,Jarquez,LAR,unexpected,running_back,4.5
+1013696,4353059,Schrader,Cody,JAX,expected,running_back,4
+1013696,4353060,Williams,Kyren,LAR,expected,running_back,14.9
+1013696,4353065,Atwell,Tutu,LAR,expected,wide_receiver,5.5
+1013696,4353066,Smith,Xavier,LAR,unexpected,wide_receiver,5.7
+1013696,4353068,Nacua,Puka,LAR,expected,wide_receiver,20
+1013696,4353070,Adams,Davante,LAR,possible,wide_receiver,14.5
+1013696,4353071,Mumpfield,Konata,LAR,unexpected,wide_receiver,4
+1013696,4353073,Whittington,Jordan,LAR,expected,wide_receiver,6.2
+1013696,4353074,Parkinson,Colby,LAR,possible,tight_end,4.9
+1013696,4353075,DEF/ST Rams,,LAR,expected,defense_special,8.1
+1013696,4353076,Ferguson,Terrance,LAR,unexpected,tight_end,4
+1013696,4353077,Higbee,Tyler,LAR,possible,tight_end,6.9
+1013696,4353079,Allen,Davis,LAR,expected,tight_end,7.3
+1013696,4353110,Howell,Sam,PHI,unexpected,quarterback,16.5
+1013696,4353141,Maye,Drake,NE,expected,quarterback,17.8
+1013696,4353142,Dobbs,Joshua,NE,unexpected,quarterback,15.3
+1013696,4353143,Gibson,Antonio,NE,expected,running_back,8.1
+1013696,4353144,Stevenson,Rhamondre,NE,expected,running_back,10.6
+1013696,4353146,Henderson,TreVeyon,NE,expected,running_back,10
+1013696,4353149,Bourne,Kendrick,SF,expected,wide_receiver,8.5
+1013696,4353152,Chism III,Efton,NE,unexpected,wide_receiver,4.8
+1013696,4353154,Polk,Ja'Lynn,NE,injured,wide_receiver,4
+1013696,4353155,Douglas,DeMario,NE,expected,wide_receiver,7.1
+1013696,4353156,Williams,Kyle,NE,expected,wide_receiver,5.2
+1013696,4353157,Boutte,Kayshon,NE,expected,wide_receiver,9.2
+1013696,4353159,Hollins,Mack,NE,expected,wide_receiver,7.4
+1013696,4353160,Diggs,Stefon,NE,expected,wide_receiver,11.2
+1013696,4353161,Hooper,Austin,NE,expected,tight_end,6.5
+1013696,4353164,DEF/ST Patriots,,NE,expected,defense_special,9.3
+1013696,4353167,Henry,Hunter,NE,expected,tight_end,11.9
+1013696,4353168,Westover,Jack,NE,unexpected,tight_end,4
+1013696,4353170,Shough,Tyler,NO,unexpected,quarterback,11.2
+1013696,4353172,Rattler,Spencer,NO,expected,quarterback,13.6
+1013696,4353173,Jones Jr.,Velus,NO,unexpected,running_back,4
+1013696,4353174,Miller,Kendre,NO,expected,running_back,7.1
+1013696,4353175,Kamara,Alvin,NO,expected,running_back,13.1
+1013696,4353179,Neal,Devin,NO,expected,running_back,5.6
+1013696,4353181,Tipton,Mason,NO,unexpected,wide_receiver,4
+1013696,4353184,Austin Jr.,Kevin,NO,unexpected,wide_receiver,4
+1013696,4353185,Cooks,Brandin,NO,expected,wide_receiver,6.8
+1013696,4353187,Olave,Chris,NO,expected,wide_receiver,13
+1013696,4353188,Shaheed,Rashid,NO,expected,wide_receiver,10.8
+1013696,4353191,Johnson,Juwan,NO,expected,tight_end,11.8
+1013696,4353193,Stoll,Jack,NO,expected,tight_end,7.9
+1013696,4353194,Matavao,Moliki,NO,unexpected,tight_end,4
+1013696,4353195,DEF/ST Saints,,NO,expected,defense_special,5.9
+1013696,4353196,Pline,Mason,NO,injured,tight_end,4
+1013696,4353198,DeVito,Tommy,NE,unexpected,quarterback,15.2
+1013696,4353199,Wilson,Russell,NYG,unexpected,quarterback,15.3
+1013696,4353200,Dart,Jaxson,NYG,expected,quarterback,12.7
+1013696,4353201,Winston,Jameis,NYG,unexpected,quarterback,12.8
+1013696,4353202,Singletary,Devin,NYG,expected,running_back,9
+1013696,4353204,Gray,Eric,NYG,injured,running_back,4.6
+1013696,4353206,Tracy Jr.,Tyrone,NYG,injured,running_back,11.1
+1013696,4353207,Skattebo,Cam,NYG,expected,running_back,14.1
+1013696,4353210,Collins,Beaux,NYG,unexpected,wide_receiver,4
+1013696,4353211,Felton,Da'Quan,NYG,injured,wide_receiver,4
+1013696,4353213,Hyatt,Jalin,NYG,expected,wide_receiver,4.5
+1013696,4353214,Olszewski,Gunner,NYG,unexpected,wide_receiver,4
+1013696,4353216,Slayton,Darius,NYG,expected,wide_receiver,8.3
+1013696,4353222,Robinson,Wan'Dale,NYG,expected,wide_receiver,13.3
+1013696,4353223,Nabers,Malik,NYG,expected,wide_receiver,15.8
+1013696,4353225,Manhertz,Chris,NYG,unexpected,tight_end,4.4
+1013696,4353226,Bellinger,Daniel,NYG,expected,tight_end,5.1
+1013696,4353227,Fidone II,Thomas,NYG,expected,tight_end,4
+1013696,4353228,DEF/ST Giants,,NYG,expected,defense_special,7.5
+1013696,4353229,Terry II,Jermaine,NYG,refuted,tight_end,4
+1013696,4353230,Johnson,Theo,NYG,expected,tight_end,8.4
+1013696,4353261,Hurts,Jalen,PHI,expected,quarterback,19.3
+1013696,4353264,McKee,Tanner,PHI,unexpected,quarterback,16.6
+1013696,4353268,Dillon,A.J.,PHI,expected,running_back,4.7
+1013696,4353269,Shipley,Will,PHI,expected,running_back,5.4
+1013696,4353270,Barkley,Saquon,PHI,expected,running_back,18.4
+1013696,4353271,Dotson,Jahan,PHI,expected,wide_receiver,6.5
+1013696,4353273,Smith,DeVonta,PHI,expected,wide_receiver,13.3
+1013696,4353274,Cooper,Darius,PHI,injured,wide_receiver,4
+1013696,4353282,Brown,A.J.,PHI,expected,wide_receiver,14.4
+1013696,4353285,Bryant,Harrison,HOU,unexpected,tight_end,4.1
+1013696,4353287,Calcaterra,Grant,PHI,expected,tight_end,4.8
+1013696,4353288,Goedert,Dallas,PHI,expected,tight_end,10.9
+1013696,4353289,DEF/ST Eagles,,PHI,expected,defense_special,8.5
+1013696,4353291,Granson,Kylen,PHI,unexpected,tight_end,4.5
+1013696,4353322,Jones,Mac,SF,possible,quarterback,17.4
+1013696,4353323,Mordecai,Tanner,SF,refuted,quarterback,15.1
+1013696,4353324,Purdy,Brock,SF,expected,quarterback,17.5
+1013696,4353325,Bradley,Carter,SF,refuted,quarterback,15
+1013696,4353329,Juszczyk,Kyle,SF,expected,running_back,6.2
+1013696,4353330,Guerendo,Isaac,SF,unexpected,running_back,4.5
+1013696,4353331,McCaffrey,Christian,SF,expected,running_back,19.9
+1013696,4353333,James,Jordan,SF,unexpected,running_back,4
+1013696,4353334,Gage Jr.,Russell,SF,unexpected,wide_receiver,5.3
+1013696,4353335,Jennings,Jauan,SF,possible,wide_receiver,12.7
+1013696,4353341,Watkins,Jordan,SF,injured,wide_receiver,4
+1013696,4353342,Pearsall,Ricky,SF,possible,wide_receiver,13.3
+1013696,4353348,Farrell,Luke,SF,expected,tight_end,6.6
+1013696,4353349,Tonges,Jake,SF,expected,tight_end,7.3
+1013696,4353350,Willis,Brayden,SF,unexpected,tight_end,4
+1013696,4353351, DEF/ST 49ers,,SF,expected,defense_special,8.3
+1013696,4353370,Valdes-Scantling,Marquez,SF,expected,wide_receiver,4.4
+1013696,4353382,Mayfield,Baker,TB,possible,quarterback,18.4
+1013696,4353383,Bridgewater,Teddy,TB,unexpected,quarterback,15.8
+1013696,4353387,White,Rachaad,TB,expected,running_back,9.2
+1013696,4353388,Tucker,Sean,TB,unexpected,running_back,5.2
+1013696,4353389,Williams,Josh,TB,unexpected,running_back,4
+1013696,4353390,Irving,Bucky,TB,expected,running_back,16.3
+1013696,4353392,Johnson,Tez,TB,expected,wide_receiver,5.2
+1013696,4353394,Evans,Mike,TB,injured,wide_receiver,11.9
+1013696,4353395,Godwin,Chris,TB,possible,wide_receiver,10.4
+1013696,4353396,Smith,Jaden,TB,injured,wide_receiver,4
+1013696,4353397,Shepard,Sterling,TB,expected,wide_receiver,9.1
+1013696,4353399,Palmer,Trey,NO,unexpected,wide_receiver,4.2
+1013696,4353403,Egbuka,Emeka,TB,expected,wide_receiver,15.3
+1013696,4353404,Johnson,Kameron,TB,expected,wide_receiver,4.3
+1013696,4353405,Miller,Ryan,TB,expected,wide_receiver,6.7
+1013696,4353406,Durham,Payne,TB,expected,tight_end,4.9
+1013696,4353407,Kieft,Ko,TB,injured,tight_end,4
+1013696,4353408,Culp,Devin,TB,unexpected,tight_end,4.5
+1013696,4353409,Otton,Cade,TB,expected,tight_end,7.8
+1013696,4353410, DEF/ST Buccaneers,,TB,expected,defense_special,7.6
+1013696,4353412,Allen,Brandon,TEN,unexpected,quarterback,11.9
+1013696,4353413,Ward,Cameron,TEN,expected,quarterback,14.4
+1013696,4353416,Mims,Jordan,TEN,unexpected,running_back,4
+1013696,4353417,Chestnut,Julius,TEN,expected,running_back,5.6
+1013696,4353418,Mullings,Kalel,TEN,injured,running_back,5.2
+1013696,4353421,Pollard,Tony,TEN,expected,running_back,13.4
+1013696,4353423,Lockett,Tyler,TEN,expected,wide_receiver,6.9
+1013696,4353425,Dike,Chimere,TEN,expected,wide_receiver,5.2
+1013696,4353427,Ayomanor,Elic,TEN,expected,wide_receiver,10.8
+1013696,4353429,Ridley,Calvin,TEN,expected,wide_receiver,11.6
+1013696,4353432,Jefferson,Van,TEN,expected,wide_receiver,5.5
+1013696,4353433,Oliver,Bryce,TEN,injured,wide_receiver,4.5
+1013696,4353434,Burks,Treylon,TEN,injured,wide_receiver,4
+1013696,4353436, DEF/ST Titans,,TEN,expected,defense_special,7.2
+1013696,4353438,Martin-Robinson,David,TEN,unexpected,tight_end,4
+1013696,4353439,Okonkwo,Chig,TEN,expected,tight_end,9.8
+1013696,4353441,Helm,Gunnar,TEN,expected,tight_end,6.1
+1013696,4353442,Mariota,Marcus,WAS,expected,quarterback,18.1
+1013696,4353444,Daniels,Jayden,WAS,injured,quarterback,18.6
+1013696,4353445,Johnson,Josh,WAS,unexpected,quarterback,15.9
+1013696,4353447,Robinson Jr.,Brian,SF,expected,running_back,7.5
+1013696,4353448,McNichols,Jeremy,WAS,expected,running_back,9.1
+1013696,4353450,Rodriguez Jr.,Chris,WAS,expected,running_back,7.7
+1013696,4353451,Croskey-Merritt,Jacory,WAS,possible,running_back,10
+1013696,4353453,McLaurin,Terry,WAS,injured,wide_receiver,13.1
+1013696,4353457,Lane,Jaylin,WAS,expected,wide_receiver,6
+1013696,4353458,Samuel Sr.,Deebo,WAS,expected,wide_receiver,13.7
+1013696,4353461,McCaffrey,Luke,WAS,expected,wide_receiver,8.2
+1013696,4353463,Brown,Noah,WAS,injured,wide_receiver,6.1
+1013696,4353467, DEF/ST Commanders,,WAS,expected,defense_special,8.1
+1013696,4353468,Ertz,Zach,WAS,expected,tight_end,10.8
+1013696,4353469,Bates,John,WAS,injured,tight_end,5
+1013696,4353471,Sinnott,Ben,WAS,expected,tight_end,4.6
+1013696,4353472,Yankoff,Colson,WAS,unexpected,tight_end,4
+1013696,4362631,Brown,Hollywood,KC,expected,wide_receiver,11.5
+1013696,4383861,Bond,Isaiah,CLE,expected,wide_receiver,5.8
+1013696,4383862,Winfree,Juwann,HOU,refuted,wide_receiver,4
+1013696,4383863,Cooper,Amari,LV,refuted,wide_receiver,4
+1013696,4383865,Prince,Deneric,NE,injured,running_back,4

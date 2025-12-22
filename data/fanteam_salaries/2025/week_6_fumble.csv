@@ -1,0 +1,110 @@
+Tournament,PlayerID,Name,FName,Club,Lineup,Position,Price
+1020020,4352689,Browning,Jake,CIN,unexpected,quarterback,13.7
+1020020,4352693,Perine,Samaje,CIN,expected,running_back,6.2
+1020020,4352695,Brown,Chase,CIN,expected,running_back,12.4
+1020020,4352697,Brooks,Tahj,CIN,expected,running_back,6
+1020020,4352698,Brightwell,Gary,CIN,unexpected,running_back,4
+1020020,4352700,Iosivas,Andrei,CIN,expected,wide_receiver,7.3
+1020020,4352703,Tinsley,Mitchell,CIN,expected,wide_receiver,5.6
+1020020,4352704,Chase,Ja'Marr,CIN,possible,wide_receiver,16
+1020020,4352705,Higgins,Tee,CIN,expected,wide_receiver,11.1
+1020020,4352706,Jones,Charlie,CIN,unexpected,wide_receiver,4.4
+1020020,4352710,Burton,Jermaine,CIN,unexpected,wide_receiver,4.5
+1020020,4352711,Hudson,Tanner,CIN,unexpected,tight_end,4
+1020020,4352712,Grandy,Cam,CIN,unexpected,tight_end,4.6
+1020020,4352713,Gesicki,Mike,CIN,expected,tight_end,7.2
+1020020,4352714,DEF/ST Bengals,,CIN,expected,defense_special,6.6
+1020020,4352715,Sample,Drew,CIN,expected,tight_end,5.6
+1020020,4352717,McLachlan,Tanner,CIN,refuted,tight_end,4
+1020020,4352718,Fant,Noah,CIN,expected,tight_end,8.1
+1020020,4352836,Love,Jordan,GB,expected,quarterback,17.4
+1020020,4352837,Willis,Malik,GB,unexpected,quarterback,14.9
+1020020,4352840,Wilson,Emanuel,GB,expected,running_back,6.6
+1020020,4352841,Jacobs,Josh,GB,expected,running_back,17.1
+1020020,4352842,Brooks,Chris,GB,expected,running_back,6.3
+1020020,4352847,Watson,Christian,GB,possible,wide_receiver,9
+1020020,4352848,Williams,Savion,GB,expected,wide_receiver,5.4
+1020020,4352849,Golden,Matthew,GB,expected,wide_receiver,9.7
+1020020,4352851,Doubs,Romeo,GB,expected,wide_receiver,12.6
+1020020,4352852,Wicks,Dontayvion,GB,expected,wide_receiver,8.2
+1020020,4352857,Heath,Malik,GB,expected,wide_receiver,5.2
+1020020,4352859,FitzPatrick,John,GB,expected,tight_end,6.1
+1020020,4352860,Musgrave,Luke,GB,expected,tight_end,5.7
+1020020,4352861,Sims,Ben,GB,expected,tight_end,4
+1020020,4352862,DEF/ST Packers,,GB,expected,defense_special,8.5
+1020020,4352865,Kraft,Tucker,GB,expected,tight_end,11.3
+1020020,4352979,Moore,Skyy,SF,unexpected,wide_receiver,4.4
+1020020,4352993,Miller,Cam,LV,unexpected,quarterback,11.4
+1020020,4352994,Smith,Geno,LV,expected,quarterback,13.9
+1020020,4352996,Jeanty,Ashton,LV,expected,running_back,14.3
+1020020,4352997,White,Zamir,LV,unexpected,running_back,4.9
+1020020,4352998,Laube,Dylan,LV,unexpected,running_back,4.7
+1020020,4353000,Mostert,Raheem,LV,expected,running_back,6.6
+1020020,4353002,Meyers,Jakobi,LV,expected,wide_receiver,11.9
+1020020,4353004,Thornton Jr.,Dont'e,LV,expected,wide_receiver,7.5
+1020020,4353006,Bech,Jack,LV,expected,wide_receiver,5.9
+1020020,4353008,Tucker,Tre,LV,expected,wide_receiver,14.3
+1020020,4353012,Bachman,Alex,LV,unexpected,wide_receiver,4.6
+1020020,4353013,Bowers,Brock,LV,injured,tight_end,12.4
+1020020,4353014,Mayer,Michael,LV,expected,tight_end,6.5
+1020020,4353017,Thomas,Ian,LV,expected,tight_end,4.8
+1020020,4353018,DEF/ST Raiders,,LV,expected,defense_special,8
+1020020,4353111,Rypien,Brett,CIN,refuted,quarterback,11.2
+1020020,4353149,Bourne,Kendrick,SF,expected,wide_receiver,8.9
+1020020,4353321,Rourke,Kurtis,SF,injured,quarterback,14
+1020020,4353322,Jones,Mac,SF,possible,quarterback,16.4
+1020020,4353323,Mordecai,Tanner,SF,refuted,quarterback,14.1
+1020020,4353324,Purdy,Brock,SF,injured,quarterback,16.5
+1020020,4353325,Bradley,Carter,JAX,refuted,quarterback,14.2
+1020020,4353326,Taylor Jr.,Patrick,SF,injured,running_back,4
+1020020,4353329,Juszczyk,Kyle,SF,expected,running_back,6.2
+1020020,4353330,Guerendo,Isaac,SF,expected,running_back,4.4
+1020020,4353331,McCaffrey,Christian,SF,expected,running_back,19.7
+1020020,4353333,James,Jordan,SF,expected,running_back,4.2
+1020020,4353334,Gage Jr.,Russell,SF,unexpected,wide_receiver,4
+1020020,4353335,Jennings,Jauan,SF,possible,wide_receiver,11.5
+1020020,4353340,Robinson,Demarcus,SF,expected,wide_receiver,6
+1020020,4353341,Watkins,Jordan,SF,injured,wide_receiver,4
+1020020,4353342,Pearsall,Ricky,SF,injured,wide_receiver,12.3
+1020020,4353348,Farrell,Luke,SF,expected,tight_end,6.1
+1020020,4353349,Tonges,Jake,SF,expected,tight_end,9.7
+1020020,4353350,Willis,Brayden,SF,unexpected,tight_end,4
+1020020,4353351, DEF/ST 49ers,,SF,expected,defense_special,7.5
+1020020,4353370,Valdes-Scantling,Marquez,SF,expected,wide_receiver,4.5
+1020020,4353382,Mayfield,Baker,TB,expected,quarterback,18
+1020020,4353383,Bridgewater,Teddy,TB,possible,quarterback,15.5
+1020020,4353387,White,Rachaad,TB,expected,running_back,11.6
+1020020,4353388,Tucker,Sean,TB,expected,running_back,6.2
+1020020,4353389,Williams,Josh,TB,injured,running_back,4.2
+1020020,4353390,Irving,Bucky,TB,injured,running_back,15.7
+1020020,4353392,Johnson,Tez,TB,expected,wide_receiver,5.5
+1020020,4353394,Evans,Mike,TB,injured,wide_receiver,16.5
+1020020,4353395,Godwin,Chris,TB,injured,wide_receiver,9.3
+1020020,4353396,Smith,Jaden,TB,injured,wide_receiver,4
+1020020,4353397,Shepard,Sterling,TB,expected,wide_receiver,8.3
+1020020,4353403,Egbuka,Emeka,TB,expected,wide_receiver,17.9
+1020020,4353404,Johnson,Kameron,TB,expected,wide_receiver,4
+1020020,4353405,Miller,Ryan,TB,expected,wide_receiver,5.4
+1020020,4353406,Durham,Payne,TB,expected,tight_end,4.8
+1020020,4353408,Culp,Devin,TB,unexpected,tight_end,4.2
+1020020,4353409,Otton,Cade,TB,expected,tight_end,7.6
+1020020,4353410, DEF/ST Buccaneers,,TB,expected,defense_special,8
+1020020,4353412,Allen,Brandon,TEN,unexpected,quarterback,11.1
+1020020,4353413,Ward,Cameron,TEN,expected,quarterback,13.6
+1020020,4353416,Mims,Jordan,TEN,unexpected,running_back,4
+1020020,4353417,Chestnut,Julius,TEN,unexpected,running_back,4.7
+1020020,4353419,Spears,Tyjae,TEN,expected,running_back,6.7
+1020020,4353421,Pollard,Tony,TEN,expected,running_back,11.2
+1020020,4353423,Lockett,Tyler,TEN,expected,wide_receiver,6.5
+1020020,4353425,Dike,Chimere,TEN,expected,wide_receiver,6.1
+1020020,4353427,Ayomanor,Elic,TEN,expected,wide_receiver,10.7
+1020020,4353429,Ridley,Calvin,TEN,expected,wide_receiver,11
+1020020,4353432,Jefferson,Van,TEN,possible,wide_receiver,5.2
+1020020,4353433,Oliver,Bryce,TEN,injured,wide_receiver,4.7
+1020020,4353434,Burks,Treylon,TEN,refuted,wide_receiver,4
+1020020,4353436, DEF/ST Titans,,TEN,expected,defense_special,7.2
+1020020,4353438,Martin-Robinson,David,TEN,unexpected,tight_end,4
+1020020,4353439,Okonkwo,Chig,TEN,expected,tight_end,8.9
+1020020,4353441,Helm,Gunnar,TEN,expected,tight_end,6.3
+1020020,4353447,Robinson Jr.,Brian,SF,expected,running_back,5.1
+1020020,4383863,Cooper,Amari,LV,refuted,wide_receiver,4
