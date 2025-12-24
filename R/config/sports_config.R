@@ -27,7 +27,7 @@ get_sports_config <- function() {
       color = APP_COLORS$sage,
       color_light = "#C5D4B8",
       icon_scale = 1.2,  # 20% larger than base
-      sections = c("team_dashboard", "player_dashboard", "projections", "performance"),
+      sections = c("team_dashboard", "player_dashboard", "fanteam_contests", "projections", "performance"),
       default_section = "team_dashboard"
     ),
     
@@ -106,6 +106,12 @@ get_sections_config <- function() {
       id = "player_dashboard",
       name = "Players",
       icon = "user"
+    ),
+    
+    fanteam_contests = list(
+      id = "fanteam_contests",
+      name = "FanTeam",
+      icon = "trophy"
     ),
     
     # Common sections

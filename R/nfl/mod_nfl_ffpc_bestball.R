@@ -53,12 +53,22 @@ nfl_ffpc_bestball_ui <- function(id) {
                
                fluidRow(
                  column(6,
-                        numericInput(ns("draft_spot"), "My Draft Spot",
-                                     value = 1, min = 1, max = 12, step = 1)
+                        selectInput(ns("competition"), "Competition",
+                                    choices = c("Superflex" = "superflex", "Classic" = "classic"),
+                                    selected = "superflex")
                  ),
                  column(6,
                         numericInput(ns("num_teams"), "Number of Teams",
                                      value = 12, min = 8, max = 14, step = 1)
+                 )
+               ),
+               fluidRow(
+                 column(6,
+                        numericInput(ns("draft_spot"), "My Draft Spot",
+                                     value = 1, min = 1, max = 12, step = 1)
+                 ),
+                 column(6,
+                        # Placeholder for future settings
                  )
                )
              )
@@ -140,6 +150,11 @@ nfl_ffpc_bestball_ui <- function(id) {
                    span(class = "draft-stat-label", "My Next Pick: "),
                    span(class = "draft-stat-value", style = "color: var(--accent-coral); font-weight: 700;",
                         textOutput(ns("my_next_pick"), inline = TRUE))
+                 ),
+                 div(
+                   class = "draft-stat",
+                   span(class = "draft-stat-label", "Drafts Tracked: "),
+                   span(class = "draft-stat-value", textOutput(ns("drafts_tracked"), inline = TRUE))
                  )
                ),
                
@@ -177,6 +192,9 @@ nfl_ffpc_bestball_server <- function(id) {
       draft_data = NULL,
       drafted_players = character(0),
       headshots_cache = NULL,
+      draft_history = NULL,      # Historical draft counts per player
+      draft_pairs = NULL,        # Historical player pairing counts
+      total_drafts = 0,          # Total number of drafts for percentage calc
       initialized = FALSE
     )
     
@@ -195,6 +213,113 @@ nfl_ffpc_bestball_server <- function(id) {
         })
       }
     }) |> bindEvent(TRUE, once = TRUE)
+    
+    # =========================================================================
+    # DRAFT HISTORY LOADING
+    # Loads historical draft data filtered by competition type
+    # Google Sheet: https://docs.google.com/spreadsheets/d/1BVOJ_FIfJLB1V6722LqwxmeyEtYGkS6qM2uxUhTEuP0
+    # =========================================================================
+    
+    FFPC_HISTORY_SHEET_ID <- "1BVOJ_FIfJLB1V6722LqwxmeyEtYGkS6qM2uxUhTEuP0"
+    
+    observe({
+      comp <- input$competition
+      req(comp)
+      
+      log_debug(">>> Loading draft history for competition:", comp, level = "INFO")
+      
+      tryCatch({
+        # Load from Google Sheet
+        raw_data <- googlesheets4::read_sheet(
+          FFPC_HISTORY_SHEET_ID,
+          sheet = "Sheet1"
+        )
+        
+        if (is.null(raw_data) || nrow(raw_data) == 0) {
+          log_debug(">>> No draft history data found", level = "WARN")
+          rv$draft_history <- data.frame(player = character(0), times_drafted = integer(0))
+          rv$draft_pairs <- data.frame(player_1 = character(0), player_2 = character(0), times_paired = integer(0))
+          return()
+        }
+        
+        log_debug(">>> Raw draft history loaded:", nrow(raw_data), "drafts", level = "INFO")
+        
+        # Clean column names
+        raw_data <- raw_data %>% janitor::clean_names()
+        
+        # Filter by competition type (case-insensitive match)
+        comp_label <- if (comp == "superflex") "Superflex" else "Classic"
+        filtered <- raw_data %>% 
+          filter(tolower(competition) == tolower(comp_label))
+        
+        log_debug(">>> Filtered to", nrow(filtered), "drafts for", comp_label, level = "INFO")
+        
+        if (nrow(filtered) == 0) {
+          rv$draft_history <- data.frame(player = character(0), times_drafted = integer(0))
+          rv$draft_pairs <- data.frame(player_1 = character(0), player_2 = character(0), times_paired = integer(0))
+          rv$total_drafts <- 0
+          return()
+        }
+        
+        # Store total drafts for percentage calculations
+        rv$total_drafts <- nrow(filtered)
+        
+        # Create unique draft ID from league_number + date
+        filtered <- filtered %>%
+          mutate(draft_id = paste(league_number, date, sep = "_"))
+        
+        # Identify round columns (columns starting with "x" followed by number, or just numbers)
+        round_cols <- names(filtered)[grepl("^x?\\d+$", names(filtered))]
+        
+        # If no round columns found, try looking for columns 7 onwards
+        if (length(round_cols) == 0) {
+          # Assume columns after draft_spot are rounds
+          meta_cols <- c("competition", "stake", "date", "league_number", "type", "draft_spot", "draft_id")
+          round_cols <- setdiff(names(filtered), meta_cols)
+        }
+        
+        log_debug(">>> Found round columns:", paste(round_cols, collapse = ", "), level = "DEBUG")
+        
+        # Pivot to long format: one row per player pick
+        picks_long <- filtered %>%
+          select(draft_id, all_of(round_cols)) %>%
+          tidyr::pivot_longer(
+            cols = all_of(round_cols),
+            names_to = "round",
+            values_to = "player"
+          ) %>%
+          filter(!is.na(player) & player != "") %>%
+          mutate(player = trimws(as.character(player)))
+        
+        log_debug(">>> Total picks found:", nrow(picks_long), level = "INFO")
+        
+        # Count times each player was drafted
+        rv$draft_history <- picks_long %>%
+          group_by(player) %>%
+          summarise(times_drafted = n(), .groups = "drop") %>%
+          arrange(desc(times_drafted))
+        
+        log_debug(">>> Unique players drafted:", nrow(rv$draft_history), level = "INFO")
+        
+        # Count player pairings (players drafted together in same draft)
+        # This creates all pairs within each draft
+        rv$draft_pairs <- picks_long %>%
+          inner_join(picks_long, by = "draft_id", suffix = c("_1", "_2")) %>%
+          filter(player_1 < player_2) %>%  # Avoid duplicates and self-pairs
+          group_by(player_1, player_2) %>%
+          summarise(times_paired = n(), .groups = "drop") %>%
+          arrange(desc(times_paired))
+        
+        log_debug(">>> Player pairs calculated:", nrow(rv$draft_pairs), level = "INFO")
+        log_debug(">>> Draft history loaded successfully for", comp_label, level = "INFO")
+        
+      }, error = function(e) {
+        log_debug(">>> Error loading draft history:", e$message, level = "WARN")
+        rv$draft_history <- data.frame(player = character(0), times_drafted = integer(0))
+        rv$draft_pairs <- data.frame(player_1 = character(0), player_2 = character(0), times_paired = integer(0))
+        rv$total_drafts <- 0
+      })
+    })
     
     # =========================================================================
     # PLAYER NAME CORRECTIONS
@@ -289,7 +414,7 @@ nfl_ffpc_bestball_server <- function(id) {
         rankings <- raw_data %>%
           arrange(ADP) %>%
           mutate(
-            REMOVE = "âœ•",
+            REMOVE = "Ã¢Å“â€¢",
             ADP_RANK = row_number(),
             PLAYER = Name,
             POSITION = Position,
@@ -347,7 +472,7 @@ nfl_ffpc_bestball_server <- function(id) {
                           choices = c("All Teams" = "all", setNames(teams, teams)))
         
         log_debug(">>> Draft board initialized successfully", level = "INFO")
-        showNotification("Rankings loaded! Click âœ• to remove drafted players.", 
+        showNotification("Rankings loaded! Click x to remove drafted players.", 
                          type = "message", duration = 5)
         
       }, error = function(e) {
@@ -431,8 +556,12 @@ nfl_ffpc_bestball_server <- function(id) {
         pick_in_round <- ((overall_pick - 1) %% input$num_teams) + 1
         sprintf("%d.%02d (#%d on board)", round_num, pick_in_round, pick_info$my_picks[1])
       } else {
-        "â€”"
+        "-"
       }
+    })
+    
+    output$drafts_tracked <- renderText({
+      as.character(rv$total_drafts %||% 0)
     })
     
     # =========================================================================
@@ -472,7 +601,7 @@ nfl_ffpc_bestball_server <- function(id) {
             color = NFL_CARD_COLOR,
             div(
               style = "text-align: center; padding: 2rem;",
-              tags$h3("ðŸŽ‰ All players have been drafted!"),
+              tags$h3("Ã°Å¸Å½â€° All players have been drafted!"),
               actionButton(ns("reset_board"), "Start New Draft", class = "btn-primary")
             )
           )
@@ -524,6 +653,15 @@ nfl_ffpc_bestball_server <- function(id) {
         pick_in_round <- ((overall_pick - 1) %% num_teams) + 1
         pick_display <- sprintf("%d.%02d", round_num, pick_in_round)
         
+        # Look up ownership percentage from draft history
+        own_pct <- 0
+        if (!is.null(rv$draft_history) && nrow(rv$draft_history) > 0 && rv$total_drafts > 0) {
+          player_history <- rv$draft_history %>% filter(player == row$PLAYER)
+          if (nrow(player_history) > 0) {
+            own_pct <- round((player_history$times_drafted[1] / rv$total_drafts) * 100, 0)
+          }
+        }
+        
         tags$tr(
           style = row_style,
           
@@ -531,14 +669,12 @@ nfl_ffpc_bestball_server <- function(id) {
           tags$td(
             style = "text-align: center; padding: 0.5rem;",
             tags$button(
-              class = "remove-player-btn",
-              style = "background: var(--bg-white); border: 2px solid var(--outline); border-radius: 50%; 
-               width: 28px; height: 28px; cursor: pointer; font-weight: 700; font-size: 0.9rem;
-               display: flex; align-items: center; justify-content: center;",
+              class = "btn-secondary",
+              style = "padding: 0.2rem 0.4rem; min-width: auto; font-size: 0.7rem; cursor: pointer;",
               onclick = sprintf("Shiny.setInputValue('%s', %s, {priority: 'event'})", 
                                 ns("remove_player"), 
                                 jsonlite::toJSON(row$PLAYER, auto_unbox = TRUE)),
-              "âœ•"
+              icon("times")
             )
           ),
           
@@ -591,6 +727,12 @@ nfl_ffpc_bestball_server <- function(id) {
             span(class = "position-badge", row$POSITION)
           ),
           
+          # Own% from draft history
+          tags$td(
+            style = "text-align: center; font-weight: 600; padding: 0.5rem;",
+            if (own_pct > 0) sprintf("%d%%", own_pct) else "-"
+          ),
+          
           # ADP % Value
           tags$td(
             style = sprintf("text-align: center; font-weight: 600; padding: 0.5rem; 
@@ -630,6 +772,7 @@ nfl_ffpc_bestball_server <- function(id) {
                 tags$th(style = "min-width: 200px; padding: 0.75rem; text-align: left;", "Player"),
                 tags$th(style = "width: 70px; padding: 0.75rem; text-align: center;", "Team"),
                 tags$th(style = "width: 80px; padding: 0.75rem; text-align: center;", "Pos"),
+                tags$th(style = "width: 70px; padding: 0.75rem; text-align: center;", "Own%"),
                 tags$th(style = "width: 100px; padding: 0.75rem; text-align: center; background-color: var(--accent-teal-dark);", "ADP Value"),
                 tags$th(style = "width: 100px; padding: 0.75rem; text-align: center; background-color: var(--accent-teal-dark);", "ETR Value")
               )

@@ -198,7 +198,6 @@ nfl_handbuild_ui <- function(id) {
                         # Team filter + heatmap toggle row
                         div(
                           style = "display: flex; gap: 0.75rem; margin-bottom: 0.75rem; align-items: center;",
-                          # Team dropdown
                           div(
                             class = "pool-team-filter",
                             style = "width: 180px;",
@@ -232,9 +231,7 @@ nfl_handbuild_ui <- function(id) {
                               )
                             )
                           ),
-                          # Spacer
                           div(style = "flex: 1;"),
-                          # Heatmap checkbox - cleaner inline style
                           tags$label(
                             class = "pool-heatmap-label",
                             style = "display: flex; align-items: center; gap: 6px; cursor: pointer; user-select: none; font-size: 0.8rem; font-weight: 600; color: var(--text-secondary);",
@@ -249,173 +246,118 @@ nfl_handbuild_ui <- function(id) {
                         # Player pool list
                         div(
                           class = "player-pool-container",
-                          style = "height: 450px; overflow-y: auto; border: 2px solid var(--outline); border-radius: 8px; background: var(--bg-white);",
-                          # Header row (rendered dynamically to show sort indicators)
+                          style = "height: 500px; overflow-y: auto; border: 2px solid var(--outline); border-radius: 8px; background: var(--bg-white);",
                           uiOutput(ns("player_pool_header")),
-                          # Player rows (rendered dynamically)
                           uiOutput(ns("player_pool"))
-                        ),
-                        # Action buttons
-                        div(
-                          style = "display: flex; gap: 0.5rem; margin-top: 0.75rem;",
-                          actionButton(ns("autocomplete"), "Autocomplete",
-                                       class = "btn-primary",
-                                       style = "flex: 1;"
-                          ),
-                          actionButton(ns("clear_all"), "Clear All",
-                                       class = "btn-secondary",
-                                       style = "flex: 1;"
-                          )
                         )
                  ),
                  
-                 # Right side: Lineup display
+                 # Right side: Lineup display + Variation Options + Action buttons
                  column(5,
-                        uiOutput(ns("lineup_display"))
-                 )
-               )
-             )
-      )
-    ),
-    
-    tags$br(),
-    
-    # ==========================================================================
-    # GENERATE VARIATIONS (Full Width)
-    # ==========================================================================
-    fluidRow(
-      column(12,
-             ui_card(
-               title = "Generate Lineup Variations",
-               color = NFL_CARD_COLOR,
-               
-               fluidRow(
-                 # Left column: Basic settings
-                 column(3,
-                        div(
-                          style = "font-weight: 600; font-size: 0.85rem; margin-bottom: 0.5rem; color: var(--text-secondary);",
-                          "Basic Settings"
-                        ),
-                        numericInput(ns("num_lineups"), "# Lineups",
-                                     value = 10, min = 1, max = 50, step = 1
-                        ),
-                        numericInput(ns("variance_pct"), "Variance %",
-                                     value = 15, min = 0, max = 50, step = 5
-                        ),
-                        div(
-                          style = "font-size: 0.75rem; color: var(--text-muted); margin-top: -0.5rem;",
-                          "Variance reapplied per lineup"
-                        ),
-                        tags$hr(style = "margin: 1rem 0;"),
-                        actionButton(ns("generate"), "Generate Lineups",
-                                     class = "btn-primary",
-                                     style = "width: 100%; height: 50px; font-size: 1rem; font-weight: 700;"
-                        )
-                 ),
-                 
-                 # Right column: Conditional Stacking Rules
-                 column(9,
-                        div(
-                          style = "font-weight: 600; font-size: 0.85rem; margin-bottom: 0.5rem; color: var(--text-secondary);",
-                          "Conditional Stacking Rules"
-                        ),
-                        div(
-                          style = "font-size: 0.8rem; color: var(--text-muted); margin-bottom: 0.75rem;",
-                          "Define stacking rules that apply when specific QBs are in the lineup"
-                        ),
+                        # Current lineup display
+                        uiOutput(ns("lineup_display")),
                         
-                        # Add new rule controls
+                        # =======================================================
+                        # GENERATE VARIATIONS
+                        # =======================================================
                         div(
-                          style = "background: var(--bg-tertiary); padding: 1rem; border-radius: 8px; margin-bottom: 1rem;",
-                          fluidRow(
-                            column(3,
-                                   selectizeInput(ns("rule_qbs"), "If QB is...",
-                                                  choices = c("Loading..." = ""),
-                                                  multiple = TRUE,
-                                                  options = list(placeholder = "Select QB(s)")
-                                   )
+                          style = "margin-top: 1rem; padding: 0.75rem; background: var(--bg-tertiary); border-radius: 8px; border: 1px solid var(--outline);",
+                          
+                          # Section header
+                          div(
+                            style = "font-weight: 700; font-size: 0.85rem; color: var(--text-primary); margin-bottom: 0.5rem;",
+                            "Generate Variations"
+                          ),
+                          
+                          # Completion instructions
+                          textAreaInput(
+                            ns("completion_instructions"),
+                            label = NULL,
+                            value = "",
+                            placeholder = "Describe how to complete lineups (e.g., stack WRs with QB, bring-back from opponent...)",
+                            rows = 2
+                          ),
+                          
+                          # Settings row: # Lineups, Variance, Stacking toggle
+                          div(
+                            style = "display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 0.5rem; margin-top: 0.5rem;",
+                            div(
+                              style = "font-size: 0.75rem;",
+                              numericInput(ns("num_lineups"), "# Lineups", value = 10, min = 1, max = 50, step = 1)
                             ),
-                            column(3,
-                                   div(
-                                     style = "font-size: 0.75rem; font-weight: 600; margin-bottom: 0.25rem;",
-                                     "Same Team Stack"
-                                   ),
-                                   fluidRow(
-                                     column(5,
-                                            numericInput(ns("rule_same_min"), "Min",
-                                                         value = 1, min = 0, max = 4, step = 1
-                                            )
-                                     ),
-                                     column(7,
-                                            checkboxGroupInput(ns("rule_same_pos"), "Positions",
-                                                               choices = c("RB", "WR", "TE"),
-                                                               selected = c("WR", "TE"),
-                                                               inline = TRUE
-                                            )
-                                     )
-                                   )
+                            div(
+                              style = "font-size: 0.75rem;",
+                              numericInput(ns("variance_pct"), "Variance %", value = 15, min = 0, max = 50, step = 5)
                             ),
-                            column(3,
-                                   div(
-                                     style = "font-size: 0.75rem; font-weight: 600; margin-bottom: 0.25rem;",
-                                     "Opponent Stack"
-                                   ),
-                                   fluidRow(
-                                     column(5,
-                                            numericInput(ns("rule_opp_min"), "Min",
-                                                         value = 0, min = 0, max = 3, step = 1
-                                            )
-                                     ),
-                                     column(7,
-                                            checkboxGroupInput(ns("rule_opp_pos"), "Positions",
-                                                               choices = c("RB", "WR", "TE"),
-                                                               selected = c("WR"),
-                                                               inline = TRUE
-                                            )
-                                     )
-                                   )
+                            div(
+                              style = "font-size: 0.75rem;",
+                              selectInput(ns("stack_game"), "Game Stack", choices = c("None" = ""))
+                            )
+                          ),
+                          
+                          # Collapsible advanced stacking rules
+                          tags$details(
+                            style = "margin-top: 0.5rem;",
+                            tags$summary(
+                              style = "font-size: 0.75rem; font-weight: 600; color: var(--text-muted); cursor: pointer; user-select: none;",
+                              "Advanced Stacking Rules"
                             ),
-                            column(3,
-                                   div(
-                                     style = "padding-top: 1.5rem;",
-                                     actionButton(ns("add_rule"), "Add Rule",
-                                                  class = "btn-primary",
-                                                  style = "width: 100%;"
-                                     )
-                                   )
+                            div(
+                              style = "padding: 0.5rem 0;",
+                              # QB selection + Add rule
+                              div(
+                                style = "display: grid; grid-template-columns: 2fr 1fr; gap: 0.5rem; margin-bottom: 0.5rem;",
+                                selectizeInput(ns("rule_qbs"), "If QB is...",
+                                               choices = c("Loading..." = ""),
+                                               multiple = TRUE,
+                                               options = list(placeholder = "Select QB(s)")
+                                ),
+                                div(
+                                  style = "padding-top: 1.5rem;",
+                                  actionButton(ns("add_rule"), "Add", class = "btn-primary btn-sm", style = "width: 100%;")
+                                )
+                              ),
+                              # Same team + Opponent stacks
+                              div(
+                                style = "display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem;",
+                                div(
+                                  div(style = "font-size: 0.7rem; font-weight: 600; color: var(--text-muted);", "Same Team"),
+                                  div(
+                                    style = "display: flex; align-items: center; gap: 0.25rem;",
+                                    numericInput(ns("rule_same_min"), NULL, value = 1, min = 0, max = 4, step = 1, width = "50px"),
+                                    checkboxGroupInput(ns("rule_same_pos"), NULL, choices = c("RB", "WR", "TE"), selected = c("WR", "TE"), inline = TRUE)
+                                  )
+                                ),
+                                div(
+                                  div(style = "font-size: 0.7rem; font-weight: 600; color: var(--text-muted);", "Opponent"),
+                                  div(
+                                    style = "display: flex; align-items: center; gap: 0.25rem;",
+                                    numericInput(ns("rule_opp_min"), NULL, value = 0, min = 0, max = 3, step = 1, width = "50px"),
+                                    checkboxGroupInput(ns("rule_opp_pos"), NULL, choices = c("RB", "WR", "TE"), selected = c("WR"), inline = TRUE)
+                                  )
+                                )
+                              ),
+                              # Min game players
+                              div(
+                                style = "display: flex; align-items: center; gap: 0.5rem; margin-top: 0.5rem;",
+                                span(style = "font-size: 0.7rem; color: var(--text-muted);", "Min players from game:"),
+                                numericInput(ns("min_game_players"), NULL, value = 4, min = 2, max = 6, step = 1, width = "60px")
+                              ),
+                              # Current rules + clear
+                              uiOutput(ns("stacking_rules_display")),
+                              actionButton(ns("clear_rules"), "Clear Rules", class = "btn-secondary btn-sm", style = "width: 100%; margin-top: 0.5rem;")
                             )
                           )
                         ),
                         
-                        # Display current rules
-                        uiOutput(ns("stacking_rules_display")),
-                        
-                        # Game stack option (separate from conditional rules)
-                        tags$hr(style = "margin: 1rem 0; border-style: dashed;"),
+                        # =======================================================
+                        # ACTION BUTTONS
+                        # =======================================================
                         div(
-                          style = "font-size: 0.8rem; font-weight: 600; margin-bottom: 0.5rem; color: var(--text-secondary);",
-                          "Game Stack (Optional)"
-                        ),
-                        fluidRow(
-                          column(6,
-                                 selectInput(ns("stack_game"), "Require players from game",
-                                             choices = c("No game requirement" = "")
-                                 )
-                          ),
-                          column(3,
-                                 numericInput(ns("min_game_players"), "Min players",
-                                              value = 4, min = 2, max = 6, step = 1
-                                 )
-                          ),
-                          column(3,
-                                 div(
-                                   style = "padding-top: 1.65rem;",
-                                   actionButton(ns("clear_rules"), "Clear All Rules",
-                                                class = "btn-secondary",
-                                                style = "width: 100%;"
-                                   )
-                                 )
-                          )
+                          style = "display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 0.5rem; margin-top: 0.75rem;",
+                          actionButton(ns("autocomplete"), "Autocomplete", class = "btn-secondary", style = "font-size: 0.85rem;"),
+                          actionButton(ns("clear_all"), "Clear", class = "btn-secondary", style = "font-size: 0.85rem;"),
+                          actionButton(ns("generate"), "Generate", class = "btn-primary", style = "font-size: 0.85rem; font-weight: 700;")
                         )
                  )
                )
@@ -470,6 +412,7 @@ nfl_handbuild_server <- function(id) {
       position_filter = "all",      # Current position filter for player pool
       team_filter = "all",          # Current team filter for player pool
       pool_sort = list(col = "value", dir = "desc"),  # Player pool sort state
+      completion_instructions = "", # User instructions for lineup generation
       loading = FALSE,
       initialized = FALSE
     )
@@ -792,7 +735,7 @@ nfl_handbuild_server <- function(id) {
           left_join(player_data %>% select(player, blended), by = "player") %>%
           mutate(
             adj_value = blended * (1 + adj_pct / 100),
-            display = sprintf("%s: %.1f Ã¢â€ â€™ %.1f (%+.0f%%)", player, blended, adj_value, adj_pct)
+            display = sprintf("%s: %.1f ÃƒÂ¢Ã¢â‚¬Â Ã¢â‚¬â„¢ %.1f (%+.0f%%)", player, blended, adj_value, adj_pct)
           )
       } else {
         adj_df <- adj_df %>%
@@ -822,8 +765,8 @@ nfl_handbuild_server <- function(id) {
                 type = "button",
                 style = "background: none; border: none; cursor: pointer; padding: 0 0.2rem; font-size: 0.9rem; color: var(--text-muted);",
                 onclick = sprintf("Shiny.setInputValue('%s', '%s', {priority: 'event'})", 
-                                  ns("remove_adj"), adj_df$player[i]),
-                "Ãƒâ€”"
+                                  ns("remove_adj"), gsub("'", "\\\\'", adj_df$player[i])),
+                "x"
               )
             )
           })
@@ -963,7 +906,7 @@ nfl_handbuild_server <- function(id) {
             ),
             
             # Arrow
-            span(style = "color: var(--text-muted); font-size: 1.2rem;", "Ã¢â€ â€™"),
+            span(style = "color: var(--text-muted); font-size: 1.2rem;", "ÃƒÂ¢Ã¢â‚¬Â Ã¢â‚¬â„¢"),
             
             # Stack requirement
             div(
@@ -977,7 +920,7 @@ nfl_handbuild_server <- function(id) {
               style = "background: none; border: none; cursor: pointer; padding: 0.25rem 0.5rem; font-size: 1rem; color: var(--accent-coral);",
               onclick = sprintf("Shiny.setInputValue('%s', '%s', {priority: 'event'})", 
                                 ns("remove_rule"), rule_id),
-              "Ãƒâ€”"
+              "x"
             )
           )
         })
@@ -1361,7 +1304,7 @@ nfl_handbuild_server <- function(id) {
       # Helper for sort indicator
       sort_indicator <- function(col) {
         if (sort_col == col) {
-          if (sort_dir == "desc") " ▼" else " ▲"
+          if (sort_dir == "desc") " â–¼" else " â–²"
         } else {
           ""
         }
@@ -1571,9 +1514,11 @@ nfl_handbuild_server <- function(id) {
         
         # Wrap clickable rows in an actionButton-style div with onclick
         if (clickable) {
+          # Escape apostrophes in player names for JavaScript
+          escaped_name <- gsub("'", "\\\\'", p$player)
           tags$div(
             onclick = sprintf("Shiny.setInputValue('%s', '%s', {priority: 'event'})", 
-                              session$ns("add_player_click"), p$player),
+                              session$ns("add_player_click"), escaped_name),
             row_content
           )
         } else {
@@ -1782,6 +1727,9 @@ nfl_handbuild_server <- function(id) {
       adjustments <- rv$projection_adjustments
       stacking_rules <- rv$stacking_rules
       
+      # Capture completion instructions for display with results
+      rv$completion_instructions <- input$completion_instructions %||% ""
+      
       showNotification("Generating lineups...", type = "message", id = "gen_notif", duration = NULL)
       
       tryCatch({
@@ -1940,7 +1888,7 @@ nfl_handbuild_server <- function(id) {
             div(
               style = sprintf("font-weight: 700; font-size: 0.9rem; color: %s;",
                               if (empty_slots == 0) "var(--text-muted)" else if (avg_salary_left < 10) "var(--accent-red)" else "var(--text-primary)"),
-              if (empty_slots > 0) sprintf("$%.1f", avg_salary_left) else "—"
+              if (empty_slots > 0) sprintf("$%.1f", avg_salary_left) else "â€”"
             )
           )
         ),
@@ -2015,10 +1963,28 @@ nfl_handbuild_server <- function(id) {
       # Get locked players for opacity styling
       locked_players <- get_locked_players()
       
+      # Get completion instructions
+      completion_instructions <- rv$completion_instructions
+      
       ui_card(
         title = sprintf("Generated Lineups (%d)%s", length(lineups), 
-                        if (has_adjustments) " Ã¢â‚¬â€ Projections Adjusted" else ""),
+                        if (has_adjustments) " - Projections Adjusted" else ""),
         color = NFL_CARD_COLOR,
+        
+        # Show completion instructions if provided
+        if (!is.null(completion_instructions) && nchar(trimws(completion_instructions)) > 0) {
+          div(
+            style = "background: var(--bg-tertiary); border-left: 3px solid var(--accent-plum); padding: 0.75rem 1rem; margin-bottom: 1rem; border-radius: 0 6px 6px 0;",
+            div(
+              style = "font-size: 0.7rem; text-transform: uppercase; font-weight: 600; color: var(--text-muted); margin-bottom: 0.25rem;",
+              "Completion Instructions"
+            ),
+            div(
+              style = "font-size: 0.85rem; color: var(--text-secondary); font-style: italic;",
+              completion_instructions
+            )
+          )
+        },
         
         # Summary stats
         div(
@@ -2039,7 +2005,7 @@ nfl_handbuild_server <- function(id) {
             style = "text-align: center;",
             div(style = "font-size: 0.75rem; text-transform: uppercase; color: var(--text-muted);", "Optimal"),
             div(style = "font-size: 1.25rem; font-weight: 700; color: var(--accent-teal);", 
-                if (optimal_proj > 0) sprintf("%.1f", optimal_proj) else "Ã¢â‚¬â€")
+                if (optimal_proj > 0) sprintf("%.1f", optimal_proj) else "--")
           ),
           div(
             style = "text-align: center;",
@@ -2048,7 +2014,7 @@ nfl_handbuild_server <- function(id) {
               style = sprintf("font-size: 1.25rem; font-weight: 700; color: %s;",
                               if (optimal_proj > 0) "var(--accent-coral)" else "var(--text-muted)"
               ),
-              if (optimal_proj > 0) sprintf("%+.1f", best_proj - optimal_proj) else "Ã¢â‚¬â€"
+              if (optimal_proj > 0) sprintf("%+.1f", best_proj - optimal_proj) else "--"
             )
           )
         ),

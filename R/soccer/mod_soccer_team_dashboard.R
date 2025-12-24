@@ -146,10 +146,15 @@ soccer_team_dashboard_ui <- function(id) {
                                   "xG Against (per game)" = "xg_against_pg",
                                   "xG Difference (per game)" = "xg_diff_pg"
                                 ),
-                                "Opponent-Adjusted" = c(
+                                "Opponent-Adjusted (Offense)" = c(
                                   "Goals vs Opponent Avg" = "goals_vs_opp_avg",
                                   "Shots vs Opponent Avg" = "shots_vs_opp_avg",
                                   "xG vs Opponent Avg" = "xg_vs_opp_avg"
+                                ),
+                                "Opponent-Adjusted (Defense)" = c(
+                                  "Goals Against vs Opp Avg" = "goals_against_vs_opp_avg",
+                                  "Shots Against vs Opp Avg" = "shots_against_vs_opp_avg",
+                                  "xG Against vs Opp Avg" = "xg_against_vs_opp_avg"
                                 ),
                                 "Advanced" = c(
                                   "xG Analysis" = "xg_scatter",
@@ -164,7 +169,8 @@ soccer_team_dashboard_ui <- function(id) {
                selectInput(ns("comparison_view"), "View",
                            choices = c(
                              "Chart" = "chart",
-                             "Table" = "table"
+                             "Table" = "table",
+                             "Ranking" = "ranking"
                            ),
                            selected = "chart"
                )
@@ -174,14 +180,18 @@ soccer_team_dashboard_ui <- function(id) {
       
       tags$br(),
       
-      # Conditional output - chart or table
+      # Conditional output - chart, table, or ranking
       conditionalPanel(
         condition = sprintf("input['%s'] == 'chart'", ns("comparison_view")),
-        plotOutput(ns("league_chart"), height = "600px")
+        uiOutput(ns("league_chart_container"))
       ),
       conditionalPanel(
         condition = sprintf("input['%s'] == 'table'", ns("comparison_view")),
         uiOutput(ns("league_table"))
+      ),
+      conditionalPanel(
+        condition = sprintf("input['%s'] == 'ranking'", ns("comparison_view")),
+        uiOutput(ns("league_ranking"))
       )
     )
   )
@@ -662,6 +672,200 @@ soccer_team_dashboard_server <- function(id) {
     # LEAGUE COMPARISON CHART
     # =========================================================================
     
+    # Dynamic container that switches between chart types with appropriate axis labels
+    output$league_chart_container <- renderUI({
+      metric <- input$chart_metric
+      
+      # Check chart type
+      is_scatter <- metric %in% c("xg_scatter", "shot_quality_scatter", "pythag_scatter")
+      is_diverging <- grepl("diff|vs_opp", metric)
+      
+      if (is_scatter) {
+        # Get chart title/subtitle and axis labels based on metric
+        chart_info <- switch(
+          metric,
+          "xg_scatter" = list(
+            title = "xG For vs Against", 
+            subtitle = "Expected goals created and conceded per game",
+            y_label = "BETTER OFFENCE",
+            x_label = "BETTER DEFENCE"
+          ),
+          "shot_quality_scatter" = list(
+            title = "Shot Volume vs Quality", 
+            subtitle = "Shots taken per game vs expected goals generated",
+            y_label = "HIGHER QUALITY",
+            x_label = "MORE SHOTS"
+          ),
+          "pythag_scatter" = list(
+            title = "Expected vs Actual Performance", 
+            subtitle = "Pythagorean win % based on goals vs xG",
+            y_label = "BETTER RESULTS",
+            x_label = "HIGHER EXPECTED"
+          ),
+          list(title = "", subtitle = "", y_label = "", x_label = "")
+        )
+        
+        # Scatter chart with external axis labels
+        div(
+          style = "width: 100%; box-sizing: border-box;",
+          
+          # Chart title and subtitle - aligned with inputs above
+          div(
+            style = "padding: 0 0 16px 0;",
+            div(
+              style = "font-family: var(--font-display, 'Fjalla One'), sans-serif; font-size: 20px; color: var(--text-primary, #3B3226); font-weight: 400; margin-bottom: 4px;",
+              chart_info$title
+            ),
+            div(
+              style = "font-family: var(--font-main, 'Source Sans Pro'), sans-serif; font-size: 13px; color: var(--text-muted, #7A7A7A);",
+              chart_info$subtitle
+            )
+          ),
+          
+          # Main content area with Y-axis label and plot
+          div(
+            style = "display: flex; align-items: center; width: 100%;",
+            
+            # Y-axis label (left side, rotated)
+            div(
+              style = "flex-shrink: 0; width: 50px; display: flex; align-items: center; justify-content: center;",
+              div(
+                style = "transform: rotate(-90deg); transform-origin: center; white-space: nowrap;",
+                span(
+                  style = "font-family: 'Fjalla One', sans-serif; font-size: 16px; color: #666; font-weight: 400;",
+                  chart_info$y_label,
+                  span(style = "font-size: 20px; margin-left: 6px; vertical-align: middle;", HTML("&#8594;"))
+                )
+              )
+            ),
+            
+            # Plot area (constrained)
+            div(
+              style = "flex: 1; min-width: 0; padding-right: 50px;",
+              plotOutput(ns("league_chart"), height = "500px", width = "100%")
+            )
+          ),
+          
+          # X-axis label below
+          div(
+            style = "display: flex; justify-content: center; padding: 8px 50px 0 50px;",
+            span(
+              style = "font-family: 'Fjalla One', sans-serif; font-size: 16px; color: #666; font-weight: 400;",
+              chart_info$x_label,
+              span(style = "font-size: 20px; margin-left: 6px; vertical-align: middle;", HTML("&#8594;"))
+            )
+          )
+        )
+      } else if (is_diverging) {
+        # Diverging bar chart with labels above showing positive/negative meaning
+        div(
+          # Labels above the chart - positioned around center
+          div(
+            style = "display: flex; justify-content: center; align-items: center; padding: 0 0 12px 0;",
+            # Left label (negative direction) - right-aligned to be near center
+            div(
+              style = "flex: 1; text-align: right; padding-right: 20px;",
+              htmlOutput(ns("diverging_left_label"), inline = TRUE)
+            ),
+            # Right label (positive direction) - left-aligned to be near center
+            div(
+              style = "flex: 1; text-align: left; padding-left: 20px;",
+              htmlOutput(ns("diverging_right_label"), inline = TRUE)
+            )
+          ),
+          # Plot
+          plotOutput(ns("league_chart"), height = "600px")
+        )
+      } else {
+        # Standard bar chart - with axis label above
+        # Get label based on metric
+        axis_label <- switch(
+          metric,
+          "goals_for_pg" = "MORE GOALS",
+          "goals_against_pg" = "MORE CONCEDED",
+          "shots_for_pg" = "MORE SHOTS",
+          "shots_against_pg" = "MORE FACED",
+          "xg_for_pg" = "HIGHER XG",
+          "xg_against_pg" = "HIGHER XG AGAINST",
+          "HIGHER"
+        )
+        
+        div(
+          # Axis label above the chart - right aligned
+          div(
+            style = "display: flex; justify-content: flex-end; padding: 0 0 12px 0;",
+            span(
+              style = "font-family: 'Fjalla One', sans-serif; font-size: 16px; color: #666; font-weight: 400;",
+              axis_label,
+              span(style = "font-size: 20px; margin-left: 6px; vertical-align: middle;", HTML("&#8594;"))
+            )
+          ),
+          # Plot
+          plotOutput(ns("league_chart"), height = "600px")
+        )
+      }
+    })
+    
+    # Diverging chart left label (negative/worse direction)
+    output$diverging_left_label <- renderUI({
+      metric <- input$chart_metric
+      
+      # Determine meaningful context based on metric type
+      label_text <- switch(
+        metric,
+        # Opponent-adjusted offense
+        "goals_vs_opp_avg" = "FEWER GOALS",
+        "shots_vs_opp_avg" = "FEWER SHOTS",
+        "xg_vs_opp_avg" = "LOWER XG",
+        # Opponent-adjusted defense
+        "goals_against_vs_opp_avg" = "FEWER CONCEDED",
+        "shots_against_vs_opp_avg" = "FEWER FACED",
+        "xg_against_vs_opp_avg" = "LOWER XG AGAINST",
+        # Difference metrics
+        "goal_diff_pg" = "NEGATIVE GD",
+        "xg_diff_pg" = "NEGATIVE XGD",
+        # Default
+        "LOWER"
+      )
+      
+      HTML(paste0(
+        '<span style="font-family: var(--font-display, \'Fjalla One\'), sans-serif; font-size: 16px; color: var(--text-secondary, #5C4E3D); font-weight: 400; display: inline-flex; align-items: center;">',
+        '<span style="font-size: 22px; line-height: 1; margin-right: 8px;">←</span>',
+        '<span style="line-height: 1;">', label_text, '</span>',
+        '</span>'
+      ))
+    })
+    
+    # Diverging chart right label (positive/better direction)
+    output$diverging_right_label <- renderUI({
+      metric <- input$chart_metric
+      
+      # Determine meaningful context based on metric type
+      label_text <- switch(
+        metric,
+        # Opponent-adjusted offense
+        "goals_vs_opp_avg" = "MORE GOALS",
+        "shots_vs_opp_avg" = "MORE SHOTS",
+        "xg_vs_opp_avg" = "HIGHER XG",
+        # Opponent-adjusted defense
+        "goals_against_vs_opp_avg" = "MORE CONCEDED",
+        "shots_against_vs_opp_avg" = "MORE FACED",
+        "xg_against_vs_opp_avg" = "HIGHER XG AGAINST",
+        # Difference metrics
+        "goal_diff_pg" = "POSITIVE GD",
+        "xg_diff_pg" = "POSITIVE XGD",
+        # Default
+        "HIGHER"
+      )
+      
+      HTML(paste0(
+        '<span style="font-family: var(--font-display, \'Fjalla One\'), sans-serif; font-size: 16px; color: var(--text-secondary, #5C4E3D); font-weight: 400; display: inline-flex; align-items: center;">',
+        '<span style="line-height: 1;">', label_text, '</span>',
+        '<span style="font-size: 22px; line-height: 1; margin-left: 8px;">→</span>',
+        '</span>'
+      ))
+    })
+    
     output$league_chart <- renderPlot({
       log_debug(">>> Rendering league comparison chart", level = "DEBUG")
       
@@ -697,7 +901,7 @@ soccer_team_dashboard_server <- function(id) {
       table_data <- stats_df %>%
         arrange(desc(xg_diff_pg)) %>%
         select(
-          team, matches, logo_path,
+          logo_path, team, matches,
           goals_for_pg, goals_against_pg, goal_diff_pg,
           xg_for_pg, xg_against_pg, xg_diff_pg,
           pythag_pct, xpythag_pct, luck_factor
@@ -712,22 +916,27 @@ soccer_team_dashboard_server <- function(id) {
         compact = TRUE,
         theme = app_reactable_theme(),
         columns = list(
-          team = reactable::colDef(
-            name = "Team",
-            minWidth = 140,
-            sticky = "left",
-            cell = function(value, index) {
-              logo <- table_data$logo_path[index]
-              htmltools::div(
-                style = "display: flex; align-items: center; gap: 8px;",
-                if (!is.null(logo) && !is.na(logo) && logo != "") {
-                  htmltools::tags$img(src = logo, style = "width:20px; height:20px;")
-                },
-                value
-              )
+          logo_path = reactable::colDef(
+            name = "",
+            maxWidth = 40,
+            sortable = FALSE,
+            cell = function(value) {
+              if (!is.null(value) && !is.na(value) && value != "") {
+                htmltools::tags$img(
+                  src = value, 
+                  style = "width:20px; height:20px; object-fit:contain;",
+                  onerror = "this.style.display='none';"
+                )
+              } else {
+                ""
+              }
             }
           ),
-          logo_path = reactable::colDef(show = FALSE),
+          team = reactable::colDef(
+            name = "Team",
+            minWidth = 120,
+            sticky = "left"
+          ),
           matches = reactable::colDef(name = "MP", maxWidth = 50),
           goals_for_pg = reactable::colDef(name = "GF/G", format = reactable::colFormat(digits = 2)),
           goals_against_pg = reactable::colDef(name = "GA/G", format = reactable::colFormat(digits = 2)),
@@ -742,6 +951,132 @@ soccer_team_dashboard_server <- function(id) {
       )
     })
     
+    # =========================================================================
+    # LEAGUE RANKING TABLE
+    # =========================================================================
+    
+    output$league_ranking <- renderUI({
+      log_debug(">>> Rendering league ranking table", level = "DEBUG")
+      
+      req(input$league)
+      
+      stats_df <- all_team_stats()
+      req(stats_df, nrow(stats_df) > 0)
+      
+      n_teams <- nrow(stats_df)
+      
+      # Calculate ranks for each metric (1 = best)
+      ranking_data <- stats_df %>%
+        mutate(
+          # Higher is better - rank descending
+          goals_for_rank = rank(-goals_for_pg, ties.method = "min"),
+          xg_for_rank = rank(-xg_for_pg, ties.method = "min"),
+          xg_vs_opp_rank = rank(-xg_vs_opp_avg, ties.method = "min"),
+          pythag_rank = rank(-pythag_pct, ties.method = "min"),
+          xpythag_rank = rank(-xpythag_pct, ties.method = "min"),
+          
+          # Lower is better - rank ascending
+          goals_against_rank = rank(goals_against_pg, ties.method = "min"),
+          xg_against_rank = rank(xg_against_pg, ties.method = "min"),
+          xg_against_vs_opp_rank = rank(xg_against_vs_opp_avg, ties.method = "min")
+        ) %>%
+        arrange(xpythag_rank) %>%
+        select(
+          logo_path, team,
+          goals_for_rank, goals_against_rank,
+          xg_for_rank, xg_against_rank,
+          xg_vs_opp_rank, xg_against_vs_opp_rank,
+          pythag_rank, xpythag_rank
+        )
+      
+      # Helper function for rank cell styling
+      rank_cell <- function(value, n_teams) {
+        if (is.na(value)) return("")
+        # Color gradient: green (1st) to red (last)
+        pct <- (value - 1) / (n_teams - 1)
+        if (value <= 3) {
+          bg_color <- "rgba(163, 190, 140, 0.3)"  # sage/green for top 3
+        } else if (value >= n_teams - 2) {
+          bg_color <- "rgba(191, 97, 106, 0.3)"   # coral/red for bottom 3
+        } else {
+          bg_color <- "transparent"
+        }
+        htmltools::div(
+          style = sprintf("background: %s; padding: 4px 8px; border-radius: 4px; text-align: center; font-weight: 500;", bg_color),
+          value
+        )
+      }
+      
+      reactable::reactable(
+        ranking_data,
+        sortable = TRUE,
+        defaultPageSize = 20,
+        striped = TRUE,
+        highlight = TRUE,
+        compact = TRUE,
+        theme = app_reactable_theme(),
+        columns = list(
+          logo_path = reactable::colDef(
+            name = "",
+            maxWidth = 40,
+            sortable = FALSE,
+            cell = function(value) {
+              if (!is.null(value) && !is.na(value) && value != "") {
+                htmltools::tags$img(
+                  src = value, 
+                  style = "width:20px; height:20px; object-fit:contain;",
+                  onerror = "this.style.display='none';"
+                )
+              } else {
+                ""
+              }
+            }
+          ),
+          team = reactable::colDef(name = "Team", minWidth = 120, sticky = "left"),
+          goals_for_rank = reactable::colDef(
+            name = "GF", 
+            maxWidth = 60,
+            cell = function(value) rank_cell(value, n_teams)
+          ),
+          goals_against_rank = reactable::colDef(
+            name = "GA",
+            maxWidth = 60,
+            cell = function(value) rank_cell(value, n_teams)
+          ),
+          xg_for_rank = reactable::colDef(
+            name = "xGF",
+            maxWidth = 60,
+            cell = function(value) rank_cell(value, n_teams)
+          ),
+          xg_against_rank = reactable::colDef(
+            name = "xGA",
+            maxWidth = 60,
+            cell = function(value) rank_cell(value, n_teams)
+          ),
+          xg_vs_opp_rank = reactable::colDef(
+            name = "xG+/-",
+            maxWidth = 70,
+            cell = function(value) rank_cell(value, n_teams)
+          ),
+          xg_against_vs_opp_rank = reactable::colDef(
+            name = "xGA+/-",
+            maxWidth = 70,
+            cell = function(value) rank_cell(value, n_teams)
+          ),
+          pythag_rank = reactable::colDef(
+            name = "Pyth%",
+            maxWidth = 70,
+            cell = function(value) rank_cell(value, n_teams)
+          ),
+          xpythag_rank = reactable::colDef(
+            name = "xPyth%",
+            maxWidth = 70,
+            cell = function(value) rank_cell(value, n_teams)
+          )
+        )
+      )
+    })
+    
   })
 }
 
@@ -751,17 +1086,17 @@ soccer_team_dashboard_server <- function(id) {
 
 #' Render bar chart for league comparison
 render_bar_chart <- function(stats_df, metric, selected_teams) {
-  # Determine if higher is better (for sorting direction and color)
+  # Determine if higher is better (for color coding)
   higher_is_better <- !grepl("_against_", metric)
   
   # Check if values can be negative (for axis handling)
   can_be_negative <- grepl("diff|vs_opp", metric)
   
-  # Prepare data for plotting
+  # Prepare data for plotting - always sort high to low (descending)
   plot_data <- stats_df %>%
     select(team, value = !!sym(metric)) %>%
     filter(!is.na(value)) %>%
-    arrange(if (higher_is_better) desc(value) else value) %>%
+    arrange(desc(value)) %>%
     mutate(
       rank = row_number(),
       is_selected = team %in% selected_teams,
@@ -788,20 +1123,20 @@ render_bar_chart <- function(stats_df, metric, selected_teams) {
     # DIVERGING bar chart - team names inside, aligned based on value sign
     p <- ggplot(plot_data, aes(x = team, y = value, fill = is_selected)) +
       geom_col(width = 0.7, color = APP_COLORS$primary, linewidth = 0.5) +
-      # Value labels (outside the bar)
+      # Value labels (outside the bar) - same size as team names
       geom_text(
         aes(label = label_format(value),
             hjust = ifelse(value >= 0, -0.2, 1.2)),
-        size = 3,
+        size = 5.5,
         fontface = ifelse(plot_data$is_selected, "bold", "plain"),
         color = APP_COLORS$primary
       ) +
-      # Team name labels - positioned on opposite side of bar from value (size increased ~66%)
+      # Team name labels - positioned on opposite side of bar from value (+10% from previous)
       geom_text(
         aes(label = team,
             y = ifelse(value >= 0, -0.02, 0.02),
             hjust = ifelse(value >= 0, 1, 0)),
-        size = 5,
+        size = 5.5,
         fontface = ifelse(plot_data$is_selected, "bold", "plain"),
         color = APP_COLORS$primary
       ) +
@@ -814,26 +1149,48 @@ render_bar_chart <- function(stats_df, metric, selected_teams) {
       theme_app_bar() +
       theme(
         axis.text.y = element_blank(),
-        axis.text.x = element_text(margin = margin(b = 8)),
-        axis.text.x.top = element_text(margin = margin(b = 8))
+        axis.text.x = element_text(size = 16, margin = margin(b = 8)),
+        axis.text.x.top = element_text(size = 16, margin = margin(b = 8))
       )
     
-    # Add baseline and expand for labels, x-axis at top
+    # Calculate symmetric axis limits (same range on both sides of 0)
+    max_abs_value <- max(abs(plot_data$value), na.rm = TRUE)
+    # Add padding for labels (20% on each side)
+    axis_limit <- max_abs_value * 1.2
+    
+    # Add baseline and symmetric limits, x-axis at top
     p <- p + 
       geom_hline(yintercept = 0, color = APP_COLORS$primary, linewidth = 0.8) +
-      scale_y_continuous(expand = expansion(mult = c(0.35, 0.35)), position = "right")
+      scale_y_continuous(
+        limits = c(-axis_limit, axis_limit),
+        expand = c(0, 0),
+        position = "right"
+      )
     
   } else {
     # STANDARD bar chart (all positive or all negative)
+    # Create fontface vector for labels
+    team_fontfaces <- ifelse(plot_data$is_selected, "bold", "plain")
+    
     p <- ggplot(plot_data, aes(x = team, y = value, fill = is_selected)) +
       # Add baseline at 0 (same style as diverging)
       geom_hline(yintercept = 0, color = APP_COLORS$primary, linewidth = 0.8) +
       geom_col(width = 0.7, color = APP_COLORS$primary, linewidth = 0.5) +
+      # Value labels (outside the bar)
       geom_text(
         aes(label = label_format(value)),
         hjust = ifelse(plot_data$value >= 0, -0.2, 1.2),
-        size = 3,
-        fontface = ifelse(plot_data$is_selected, "bold", "plain"),
+        size = 5.5,
+        fontface = team_fontfaces,
+        color = APP_COLORS$primary
+      ) +
+      # Team name labels (at y=0, right-aligned)
+      geom_text(
+        aes(label = team, y = 0),
+        hjust = 1,
+        nudge_y = -0.02 * max(abs(plot_data$value), na.rm = TRUE),
+        size = 5.5,
+        fontface = team_fontfaces,
         color = APP_COLORS$primary
       ) +
       scale_fill_manual(
@@ -844,13 +1201,9 @@ render_bar_chart <- function(stats_df, metric, selected_teams) {
       labs(x = NULL, y = NULL) +
       theme_app_bar() +
       theme(
-        axis.text.y = element_text(
-          size = 9, 
-          color = APP_COLORS$secondary,
-          face = ifelse(levels(plot_data$team) %in% selected_teams, "bold", "plain")
-        ),
-        axis.text.x = element_text(margin = margin(b = 8)),
-        axis.text.x.top = element_text(margin = margin(b = 8))
+        axis.text.y = element_blank(),  # Hide default axis labels
+        axis.text.x = element_text(size = 16, margin = margin(b = 8)),
+        axis.text.x.top = element_text(size = 16, margin = margin(b = 8))
       )
     
     # Expand y axis to fit labels, position at top (right after coord_flip)
@@ -858,11 +1211,11 @@ render_bar_chart <- function(stats_df, metric, selected_teams) {
     all_negative <- all(plot_data$value <= 0, na.rm = TRUE)
     
     if (all_positive) {
-      p <- p + scale_y_continuous(expand = expansion(mult = c(0.02, 0.15)), position = "right")
+      p <- p + scale_y_continuous(expand = expansion(mult = c(0.25, 0.15)), position = "right")
     } else if (all_negative) {
-      p <- p + scale_y_continuous(expand = expansion(mult = c(0.15, 0.02)), position = "right")
+      p <- p + scale_y_continuous(expand = expansion(mult = c(0.15, 0.25)), position = "right")
     } else {
-      p <- p + scale_y_continuous(expand = expansion(mult = c(0.15, 0.15)), position = "right")
+      p <- p + scale_y_continuous(expand = expansion(mult = c(0.25, 0.25)), position = "right")
     }
   }
   
@@ -931,7 +1284,7 @@ render_scatter_chart <- function(stats_df, metric, selected_teams) {
       # Axis setup - reversed x, no expansion
       scale_x_reverse(limits = c(x_max, x_min), expand = c(0, 0)) +
       scale_y_continuous(limits = c(y_min, y_max), expand = c(0, 0)) +
-      labs(x = "xG Against (per game) Ã¢â€ Â Better Defense", y = "xG For (per game)")
+      labs(x = NULL, y = NULL)
     
   } else if (metric == "shot_quality_scatter") {
     # Shot Quality: Volume (shots per game) vs Total xG - for team's own shots only
@@ -983,7 +1336,7 @@ render_scatter_chart <- function(stats_df, metric, selected_teams) {
                color = APP_COLORS$frost, hjust = 0, vjust = 0) +
       scale_x_continuous(limits = c(x_min, x_max), expand = c(0, 0)) +
       scale_y_continuous(limits = c(y_min, y_max), expand = c(0, 0)) +
-      labs(x = "Shots Per Game Ã¢â€ â€™", y = "xG Per Game")
+      labs(x = NULL, y = NULL)
     
   } else if (metric == "pythag_scatter") {
     # Pythagorean vs xPythagorean
@@ -1030,7 +1383,7 @@ render_scatter_chart <- function(stats_df, metric, selected_teams) {
         labels = function(x) paste0(x, "%"),
         expand = c(0, 0)
       ) +
-      labs(x = "xPythagorean Win %", y = "Pythagorean Win %")
+      labs(x = NULL, y = NULL)
   }
   
   p + theme_app_scatter()

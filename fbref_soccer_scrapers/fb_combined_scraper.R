@@ -17,6 +17,8 @@ library(dplyr)
 library(stringr)
 library(purrr)
 library(googlesheets4)
+library(googledrive)
+library(arrow)
 library(chromote)
 
 ################################################################################
@@ -50,6 +52,10 @@ SHEETS_CONFIG <- list(
     sheet_name = "Team_Goals"
   )
 )
+
+# Google Drive folder for Parquet files (fast loading for Shiny app)
+DRIVE_FOLDER_ID <- "1APlkMnjX3RjxPOzEnYWP5DYYCH_AcUM8"
+EXPORT_PARQUET_TO_DRIVE <- TRUE  # Set FALSE to skip Parquet export
 
 LEAGUE_CODES <- c(
   "Premier-League" = "9",
@@ -102,7 +108,11 @@ SCHEMA_PLAYER_MATCH_STATS <- c(
   # Ball control (from Possession)
   "miscontrols", "dispossessed", "passes_received", "progressive_passes_received",
   # Reference
-  "match_url"
+  "match_url",
+  # Possession percentages (existing in Sheet)
+  "touches_poss", "take_ons_poss", "take_ons_won_poss", "carries_poss", "progressive_carries_poss",
+  # New stats
+  "fouls", "fouled", "offsides", "crosses", "tackles_won", "own_goals", "pens_won", "pens_conceded"
 )
 
 SCHEMA_SHOTS <- c(
@@ -131,12 +141,9 @@ enforce_schema <- function(df, schema) {
     }
   }
   
-  # Order columns: schema first, then extras alphabetically
-  extra_cols <- sort(setdiff(names(df), schema))
-  final_order <- c(intersect(schema, names(df)), extra_cols)
-  
+  # STRICT: Only keep schema columns, in schema order
   df <- df %>% 
-    select(all_of(final_order)) %>%
+    select(all_of(schema)) %>%
     mutate(across(everything(), as.character))
   
   return(df)
@@ -263,7 +270,7 @@ get_existing_urls_for_league <- function(league, cache) {
 init_backup_dir <- function() {
   if (SAVE_LOCAL_BACKUP && !dir.exists(BACKUP_DIR)) {
     dir.create(BACKUP_DIR, recursive = TRUE)
-    message(sprintf("✓ Created backup directory: %s", BACKUP_DIR))
+    message(sprintf("[OK] Created backup directory: %s", BACKUP_DIR))
   }
 }
 
@@ -275,7 +282,7 @@ save_local_backup <- function(data, data_type, league) {
   
   tryCatch({
     write.csv(data, filename, row.names = FALSE)
-    message(sprintf("    💾 Backup: %s", basename(filename)))
+    message(sprintf("    [SAVE] Backup: %s", basename(filename)))
     return(TRUE)
   }, error = function(e) FALSE)
 }
@@ -302,7 +309,7 @@ init_browser <- function() {
     userAgent = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
   )
   
-  message("✓ Browser initialized")
+  message("[OK] Browser initialized")
   return(b)
 }
 
@@ -326,7 +333,7 @@ fetch_page <- function(url, browser, wait_time = 10, max_retries = 3) {
   
   for (attempt in 1:max_retries) {
     if (!is_browser_alive(browser)) {
-      message("  ⚠️ Browser session lost, reinitializing...")
+      message("  [WARN] Browser session lost, reinitializing...")
       tryCatch({ browser$close() }, error = function(e) {})
       Sys.sleep(2)
       browser <<- init_browser()
@@ -341,13 +348,13 @@ fetch_page <- function(url, browser, wait_time = 10, max_retries = 3) {
       
       title <- page %>% html_node("title") %>% html_text()
       if (!is.na(title) && grepl("Just a moment", title, ignore.case = TRUE)) {
-        message(sprintf("  ⚠️ Cloudflare (attempt %d/%d)", attempt, max_retries))
+        message(sprintf("  [WARN] Cloudflare (attempt %d/%d)", attempt, max_retries))
         Sys.sleep(10)
         return(NULL)
       }
       return(page)
     }, error = function(e) {
-      message(sprintf("  ⚠️ Fetch error: %s", e$message))
+      message(sprintf("  [WARN] Fetch error: %s", e$message))
       return(NULL)
     })
     
@@ -355,7 +362,7 @@ fetch_page <- function(url, browser, wait_time = 10, max_retries = 3) {
     if (attempt < max_retries) Sys.sleep(5)
   }
   
-  message("  ✗ Failed to fetch page")
+  message("  [ERROR] Failed to fetch page")
   return(NULL)
 }
 
@@ -370,7 +377,7 @@ write_to_google_sheet <- function(data, sheet_id, sheet_name, schema = NULL, dat
     data <- enforce_schema(data, schema)
   }
   
-  message(sprintf("  📤 Writing %d %s to %s...", nrow(data), data_type, sheet_name))
+  message(sprintf("  >> Writing %d %s to %s...", nrow(data), data_type, sheet_name))
   
   tryCatch({
     sheet_info <- gs4_get(sheet_id)
@@ -396,10 +403,10 @@ write_to_google_sheet <- function(data, sheet_id, sheet_name, schema = NULL, dat
       sheet_append(data, ss = sheet_id, sheet = sheet_name)
     }
     
-    message(sprintf("    ✓ Write successful (%d rows)", nrow(data)))
+    message(sprintf("    [OK] Write successful (%d rows)", nrow(data)))
     return(TRUE)
   }, error = function(e) {
-    message(sprintf("    ✗ Error: %s", e$message))
+    message(sprintf("    [ERROR] Error: %s", e$message))
     return(FALSE)
   })
 }
@@ -476,7 +483,7 @@ scrape_league_match_urls <- function(league, season, browser) {
       score_text <- row %>% html_node("td[data-stat='score'] a") %>% html_text(trim = TRUE)
       home_goals <- NA; away_goals <- NA
       if (!is.na(score_text) && score_text != "") {
-        score_parts <- str_split(score_text, "[–\\-—]")[[1]]
+        score_parts <- str_split(score_text, "[---]")[[1]]
         if (length(score_parts) == 2) {
           home_goals <- as.integer(str_trim(score_parts[1]))
           away_goals <- as.integer(str_trim(score_parts[2]))
@@ -498,7 +505,7 @@ scrape_league_match_urls <- function(league, season, browser) {
     })
     
     match_data <- match_data %>% filter(!is.na(match_url))
-    message(sprintf("✓ Found %d completed matches", nrow(match_data)))
+    message(sprintf("[OK] Found %d completed matches", nrow(match_data)))
     return(match_data)
     
   }, error = function(e) {
@@ -524,7 +531,7 @@ scrape_match_all_data <- function(match_url, match_info, league, browser, existi
   )
   
   if (length(data_needed) == 0) {
-    message("    ⏭️ All data exists - skipping")
+    message("    [SKIP] All data exists - skipping")
     return(list(player_stats = NULL, shots = NULL, success = TRUE))
   }
   
@@ -572,12 +579,12 @@ scrape_match_all_data <- function(match_url, match_info, league, browser, existi
     counts <- c()
     if (!is.null(results$player_stats)) counts <- c(counts, sprintf("Players: %d", nrow(results$player_stats)))
     if (!is.null(results$shots)) counts <- c(counts, sprintf("Shots: %d", nrow(results$shots)))
-    if (length(counts) > 0) message(sprintf("    ✓ %s", paste(counts, collapse = ", ")))
+    if (length(counts) > 0) message(sprintf("    [OK] %s", paste(counts, collapse = ", ")))
     
     return(results)
     
   }, error = function(e) {
-    message(sprintf("    ✗ Parse error: %s", e$message))
+    message(sprintf("    [ERROR] Parse error: %s", e$message))
     return(list(player_stats = NULL, shots = NULL, success = FALSE))
   })
 }
@@ -785,7 +792,7 @@ process_league <- function(league, season, browser, url_cache) {
   all_matches <- scrape_league_match_urls(league, season, browser)
   
   if (is.null(all_matches) || nrow(all_matches) == 0) {
-    message("✗ No matches found")
+    message("[ERROR] No matches found")
     return(list(matches_processed = 0, matches_failed = 0))
   }
   
@@ -807,7 +814,7 @@ process_league <- function(league, season, browser, url_cache) {
       SCHEMA_TEAM_GOALS,
       "team goals"
     )
-    message(sprintf("✓ Wrote %d team goal records", nrow(team_goals_df)))
+    message(sprintf("[OK] Wrote %d team goal records", nrow(team_goals_df)))
   }
   
   # Filter matches needing page visits
@@ -815,7 +822,7 @@ process_league <- function(league, season, browser, url_cache) {
     filter(!match_url %in% existing_urls$complete)
   
   if (nrow(new_matches) == 0) {
-    message("✓ All matches up to date!")
+    message("[OK] All matches up to date!")
     return(list(matches_processed = 0, matches_failed = 0,
                 player_count = 0, shots_count = 0,
                 team_goals_count = nrow(new_team_goals)))
@@ -871,11 +878,11 @@ process_league <- function(league, season, browser, url_cache) {
       batch_shots <- list()
       batch_count <- 0
       
-      message(sprintf("  📊 Progress: %d/%d matches", i, nrow(new_matches)))
+      message(sprintf("  >> Progress: %d/%d matches", i, nrow(new_matches)))
     }
   }
   
-  message(sprintf("\n✓ %s COMPLETE: %d processed, %d failed", league, total_processed, total_failed))
+  message(sprintf("\n[OK] %s COMPLETE: %d processed, %d failed", league, total_processed, total_failed))
   
   return(list(
     matches_processed = total_processed,
@@ -884,6 +891,114 @@ process_league <- function(league, season, browser, url_cache) {
     shots_count = total_shots,
     team_goals_count = nrow(new_team_goals)
   ))
+}
+
+################################################################################
+# PARQUET EXPORT TO GOOGLE DRIVE (for fast Shiny app loading)
+################################################################################
+
+#' Upload data frame to Google Drive as Parquet
+upload_parquet_to_drive <- function(data, name, folder_id = DRIVE_FOLDER_ID) {
+  message(sprintf("  Uploading %s.parquet...", name))
+  
+  # Write to temp file
+  # Flatten any list columns (Google Sheets sometimes returns these)
+  if (any(sapply(data, is.list))) {
+    data <- data %>%
+      mutate(across(where(is.list), ~sapply(., function(x) if(length(x) == 0) NA else x[[1]])))
+  }
+  
+  temp_file <- tempfile(fileext = ".parquet")
+  arrow::write_parquet(data, temp_file)
+  
+  file_size <- file.size(temp_file) / 1024 / 1024
+  message(sprintf("    Size: %.2f MB (%d rows)", file_size, nrow(data)))
+  
+  # Check if file already exists
+  existing <- drive_find(
+    q = sprintf("'%s' in parents and name = '%s.parquet'", folder_id, name),
+    n_max = 1
+  )
+  
+  if (nrow(existing) > 0) {
+    result <- drive_update(existing$id, media = temp_file)
+    message(sprintf("    [OK] Updated existing file"))
+  } else {
+    result <- drive_upload(
+      temp_file,
+      path = as_id(folder_id),
+      name = paste0(name, ".parquet"),
+      overwrite = FALSE
+    )
+    # Make publicly accessible
+    drive_share(result$id, role = "reader", type = "anyone")
+    message(sprintf("    [OK] Created new file (ID: %s)", result$id))
+  }
+  
+  unlink(temp_file)
+  return(result$id)
+}
+
+#' Export all Google Sheets data to Parquet files on Google Drive
+export_to_parquet <- function() {
+  if (!EXPORT_PARQUET_TO_DRIVE) {
+    message("\n[SKIP] Parquet export disabled (EXPORT_PARQUET_TO_DRIVE = FALSE)")
+    return(NULL)
+  }
+  
+  message("\n================================================================================")
+  message("EXPORTING TO PARQUET (Google Drive - for fast Shiny app loading)")
+  message("================================================================================\n")
+  
+  # Authenticate with Drive separately (needs write permissions)
+  message("Authenticating with Google Drive...")
+  drive_auth()
+  message("[OK] Google Drive authenticated\n")
+  
+  file_ids <- list()
+  
+  tryCatch({
+    # 1. Player Match Stats
+    message("Reading Player_Match_Stats from Google Sheets...")
+    player_data <- read_sheet(
+      SHEETS_CONFIG$player_match_stats$sheet_id,
+      sheet = SHEETS_CONFIG$player_match_stats$sheet_name
+    ) %>% as.data.frame()
+    file_ids$player_match_stats <- upload_parquet_to_drive(player_data, "player_match_stats")
+    
+    # 2. Shot Data
+    message("\nReading Shot_Data from Google Sheets...")
+    shot_data <- read_sheet(
+      SHEETS_CONFIG$shots$sheet_id,
+      sheet = SHEETS_CONFIG$shots$sheet_name
+    ) %>% as.data.frame()
+    file_ids$shots <- upload_parquet_to_drive(shot_data, "shots")
+    
+    # 3. Team Goals
+    message("\nReading Team_Goals from Google Sheets...")
+    team_goals <- read_sheet(
+      SHEETS_CONFIG$team_goals$sheet_id,
+      sheet = SHEETS_CONFIG$team_goals$sheet_name
+    ) %>% as.data.frame()
+    file_ids$team_goals <- upload_parquet_to_drive(team_goals, "team_goals")
+    
+    message("\n================================================================================")
+    message("[OK] PARQUET EXPORT COMPLETE")
+    message("================================================================================")
+    message(sprintf("Files at: https://drive.google.com/drive/folders/%s", DRIVE_FOLDER_ID))
+    message("")
+    message("Update soccer_config.R with these IDs (if first time):")
+    message(sprintf('  player_match_stats = "%s"', file_ids$player_match_stats))
+    message(sprintf('  shots = "%s"', file_ids$shots))
+    message(sprintf('  team_goals = "%s"', file_ids$team_goals))
+    message("================================================================================\n")
+    
+  }, error = function(e) {
+    message(sprintf("\n[ERROR] Parquet export failed: %s", e$message))
+    message("Sheets data is still intact - you can retry export later\n")
+  })
+  
+  return(file_ids)
 }
 
 ################################################################################
@@ -898,12 +1013,12 @@ main <- function() {
   message(sprintf("Leagues: %s", paste(LEAGUES_TO_SCRAPE, collapse = ", ")))
   message(sprintf("Season: %s", SEASON))
   message("")
-  message("📊 OUTPUT SHEETS:")
-  message("   • Player_Match_Stats: Combined Summary + Possession (NEW!)")
-  message("   • Shot_Data: Individual shots")
-  message("   • Team_Goals: Match scores")
+  message(">> OUTPUT SHEETS:")
+  message("    * Player_Match_Stats: Combined Summary + Possession (NEW!)")
+  message("    * Shot_Data: Individual shots")
+  message("    * Team_Goals: Match scores")
   message("")
-  message(sprintf("⚙️ Settings: Batch %d, Rate limit %ds", BATCH_SIZE, RATE_LIMIT_DELAY))
+  message(sprintf("[CFG] Settings: Batch %d, Rate limit %ds", BATCH_SIZE, RATE_LIMIT_DELAY))
   message("================================================================================")
   
   init_backup_dir()
@@ -915,7 +1030,7 @@ main <- function() {
   message("\nAuthenticating with Google Sheets...")
   tryCatch({
     gs4_auth()
-    message("✓ Authenticated")
+    message("[OK] Authenticated")
   }, error = function(e) {
     close_browser(browser)
     stop("Auth failed: ", e$message)
@@ -935,7 +1050,7 @@ main <- function() {
       if (!is.null(result)) all_results[[league]] <- result
       
       if (league != LEAGUES_TO_SCRAPE[length(LEAGUES_TO_SCRAPE)]) {
-        message(sprintf("\n⏸ Pausing %ds...", LEAGUE_DELAY))
+        message(sprintf("\n[PAUSE] Pausing %ds...", LEAGUE_DELAY))
         Sys.sleep(LEAGUE_DELAY)
       }
     }
@@ -950,7 +1065,7 @@ main <- function() {
   
   for (league in names(all_results)) {
     r <- all_results[[league]]
-    message(sprintf("✓ %s: %d matches, %d players, %d shots, %d goals",
+    message(sprintf("[OK] %s: %d matches, %d players, %d shots, %d goals",
                     league, r$matches_processed, r$player_count, r$shots_count, r$team_goals_count))
   }
   
@@ -964,6 +1079,9 @@ main <- function() {
                   SHEETS_CONFIG$team_goals$sheet_id))
   message("================================================================================\n")
   
+  # Export to Parquet for fast Shiny app loading
+  export_to_parquet()
+  
   return(all_results)
 }
 
@@ -971,4 +1089,8 @@ main <- function() {
 # RUN
 ################################################################################
 
+# To run ONLY the Parquet export (for existing data), uncomment this line:
+# gs4_auth(); export_to_parquet()
+
+# To run the full scraper + Parquet export:
 result <- main()

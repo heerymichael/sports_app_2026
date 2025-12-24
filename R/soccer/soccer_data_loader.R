@@ -22,6 +22,60 @@ init_google_sheets <- function() {
 }
 
 # =============================================================================
+# GOOGLE DRIVE LOADING (FAST - Parquet files)
+# =============================================================================
+
+#' Check if googledrive package is available
+has_googledrive <- function() {
+  requireNamespace("googledrive", quietly = TRUE)
+}
+
+#' Download and read Parquet file from Google Drive
+#' @param file_id Google Drive file ID
+#' @param data_type Type of data for cache path naming
+#' @return Data frame or NULL if failed
+load_from_google_drive <- function(file_id, data_type) {
+  if (is.null(file_id) || !USE_GOOGLE_DRIVE) {
+    return(NULL)
+  }
+  
+  if (!has_googledrive() || !has_arrow()) {
+    log_debug("googledrive or arrow package not available", level = "WARN")
+    return(NULL)
+  }
+  
+  log_debug(sprintf("Loading %s from Google Drive...", data_type), level = "INFO")
+  
+  tryCatch({
+    # Deauth for public files
+    googledrive::drive_deauth()
+    
+    # Create temp file for download
+    temp_file <- tempfile(fileext = ".parquet")
+    
+    # Download from Drive
+    googledrive::drive_download(
+      googledrive::as_id(file_id),
+      path = temp_file,
+      overwrite = TRUE
+    )
+    
+    # Read Parquet
+    data <- arrow::read_parquet(temp_file)
+    
+    # Clean up temp file
+    unlink(temp_file)
+    
+    log_debug(sprintf("Loaded %d rows from Google Drive", nrow(data)), level = "INFO")
+    return(as.data.frame(data))
+    
+  }, error = function(e) {
+    log_debug(sprintf("Google Drive load failed: %s", e$message), level = "WARN")
+    return(NULL)
+  })
+}
+
+# =============================================================================
 # PARQUET CACHE FUNCTIONS
 # =============================================================================
 
@@ -101,7 +155,7 @@ load_from_cache_v2 <- function(data_type) {
 # =============================================================================
 
 #' Load Player Match Stats (Combined Summary + Possession)
-#' @param force_refresh If TRUE, bypass cache and load from Google Sheets
+#' @param force_refresh If TRUE, bypass cache and reload from source
 #' @return Data frame with combined player match statistics
 load_player_match_stats <- function(force_refresh = FALSE) {
   log_debug("========================================", level = "INFO")
@@ -109,7 +163,8 @@ load_player_match_stats <- function(force_refresh = FALSE) {
   
   cache_path <- get_cache_path_v2("player_stats")
   
-  # Check cache first
+  
+  # 1. Check cache first (fastest - instant)
   if (!force_refresh && is_cache_valid_v2(cache_path)) {
     log_debug("Using cached player stats data", level = "INFO")
     data <- load_from_cache_v2("player_stats")
@@ -120,8 +175,22 @@ load_player_match_stats <- function(force_refresh = FALSE) {
     }
   }
   
-  # Load from Google Sheets
-  log_debug("Loading player stats from Google Sheets...", level = "INFO")
+  # 2. Try Google Drive Parquet (fast - ~5-15 seconds)
+  drive_id <- SOCCER_DRIVE_IDS$player_match_stats
+  if (!is.null(drive_id)) {
+    data <- load_from_google_drive(drive_id, "player_stats")
+    if (!is.null(data)) {
+      # Normalize team names
+      data <- normalize_team_columns(data, c("team", "squad", "home_team", "away_team"))
+      # Save to cache for next time
+      save_to_cache_v2(data, "player_stats")
+      log_debug("========================================", level = "INFO")
+      return(data)
+    }
+  }
+  
+  # 3. Fall back to Google Sheets (slow - ~3 minutes)
+  log_debug("Loading player stats from Google Sheets (slow)...", level = "INFO")
   
   tryCatch({
     data <- googlesheets4::read_sheet(
@@ -132,6 +201,17 @@ load_player_match_stats <- function(force_refresh = FALSE) {
     
     # Normalize team names
     data <- normalize_team_columns(data, c("team", "squad", "home_team", "away_team"))
+    
+    # Coerce numeric columns (Google Sheets often returns character)
+    numeric_cols <- c("minutes", "goals", "assists", "shots", "xg", "sca", "gca", 
+                      "touches", "progressive_passes", "progressive_carries",
+                      "touches_att_3rd", "touches_att_pen_area", "progressive_passes_received",
+                      "gameweek")
+    for (col in numeric_cols) {
+      if (col %in% names(data)) {
+        data[[col]] <- as.numeric(data[[col]])
+      }
+    }
     
     log_debug(sprintf("Loaded %d rows from Google Sheets", nrow(data)), level = "INFO")
     
@@ -155,7 +235,7 @@ load_player_match_stats <- function(force_refresh = FALSE) {
 }
 
 #' Load Shot Data (with caching)
-#' @param force_refresh If TRUE, bypass cache and load from Google Sheets
+#' @param force_refresh If TRUE, bypass cache and reload from source
 #' @return Data frame with individual shot data
 load_shot_data <- function(force_refresh = FALSE) {
   log_debug("========================================", level = "INFO")
@@ -163,13 +243,12 @@ load_shot_data <- function(force_refresh = FALSE) {
   
   cache_path <- get_cache_path_v2("shots")
   
-  # Check cache first
+  # 1. Check cache first (fastest)
   if (!force_refresh && is_cache_valid_v2(cache_path)) {
     log_debug("Using cached shot data", level = "INFO")
     data <- load_from_cache_v2("shots")
     if (!is.null(data)) {
       log_debug(sprintf("Loaded %d rows from cache", nrow(data)), level = "INFO")
-      # Log leagues present in cached data
       if ("league" %in% names(data)) {
         leagues_in_data <- unique(data$league)
         log_debug("Leagues in cached data:", paste(leagues_in_data, collapse = ", "), level = "INFO")
@@ -179,8 +258,22 @@ load_shot_data <- function(force_refresh = FALSE) {
     }
   }
   
-  # Load from Google Sheets
-  log_debug("Loading shot data from Google Sheets...", level = "INFO")
+  # 2. Try Google Drive Parquet (fast)
+  drive_id <- SOCCER_DRIVE_IDS$shots
+  if (!is.null(drive_id)) {
+    data <- load_from_google_drive(drive_id, "shots")
+    if (!is.null(data)) {
+      # Normalize team names
+      data <- normalize_team_columns(data, c("squad", "home_team", "away_team"))
+      # Save to cache
+      save_to_cache_v2(data, "shots")
+      log_debug("========================================", level = "INFO")
+      return(data)
+    }
+  }
+  
+  # 3. Fall back to Google Sheets (slow)
+  log_debug("Loading shot data from Google Sheets (slow)...", level = "INFO")
   
   tryCatch({
     data <- googlesheets4::read_sheet(
@@ -191,6 +284,14 @@ load_shot_data <- function(force_refresh = FALSE) {
     
     # Normalize team names
     data <- normalize_team_columns(data, c("squad", "home_team", "away_team"))
+    
+    # Coerce numeric columns (Google Sheets often returns character)
+    numeric_cols <- c("xg_shot", "minute", "gameweek")
+    for (col in numeric_cols) {
+      if (col %in% names(data)) {
+        data[[col]] <- as.numeric(data[[col]])
+      }
+    }
     
     log_debug(sprintf("Loaded %d rows from Google Sheets", nrow(data)), level = "INFO")
     
@@ -219,7 +320,7 @@ load_shot_data <- function(force_refresh = FALSE) {
 }
 
 #' Load Team Goals Data (with caching)
-#' @param force_refresh If TRUE, bypass cache and load from Google Sheets
+#' @param force_refresh If TRUE, bypass cache and reload from source
 #' @return Data frame with match results
 load_team_goals <- function(force_refresh = FALSE) {
   log_debug("========================================", level = "INFO")
@@ -227,7 +328,7 @@ load_team_goals <- function(force_refresh = FALSE) {
   
   cache_path <- get_cache_path_v2("team_goals")
   
-  # Check cache first
+  # 1. Check cache first (fastest)
   if (!force_refresh && is_cache_valid_v2(cache_path)) {
     log_debug("Using cached team goals data", level = "INFO")
     data <- load_from_cache_v2("team_goals")
@@ -238,7 +339,21 @@ load_team_goals <- function(force_refresh = FALSE) {
     }
   }
   
-  # Load from Google Sheets
+  # 2. Try Google Drive Parquet (fast)
+  drive_id <- SOCCER_DRIVE_IDS$team_goals
+  if (!is.null(drive_id)) {
+    data <- load_from_google_drive(drive_id, "team_goals")
+    if (!is.null(data)) {
+      # Normalize team names
+      data <- normalize_team_columns(data, c("home_team", "away_team"))
+      # Save to cache
+      save_to_cache_v2(data, "team_goals")
+      log_debug("========================================", level = "INFO")
+      return(data)
+    }
+  }
+  
+  # 3. Fall back to Google Sheets (slow)
   log_debug("Loading team goals from Google Sheets...", level = "INFO")
   
   tryCatch({
@@ -250,6 +365,27 @@ load_team_goals <- function(force_refresh = FALSE) {
     
     # Normalize team names
     data <- normalize_team_columns(data, c("home_team", "away_team"))
+    
+    # Coerce numeric columns (Google Sheets often returns character or list)
+    numeric_cols <- c("home_goals", "away_goals", "gameweek")
+    for (col in numeric_cols) {
+      if (col %in% names(data)) {
+        # Handle list columns from Google Sheets
+        if (is.list(data[[col]])) {
+          data[[col]] <- sapply(data[[col]], function(x) if(length(x) == 0) NA else as.numeric(x[[1]]))
+        } else {
+          data[[col]] <- as.numeric(data[[col]])
+        }
+      }
+    }
+    
+    # Ensure character columns are not lists
+    char_cols <- c("home_team", "away_team", "league", "match_date")
+    for (col in char_cols) {
+      if (col %in% names(data) && is.list(data[[col]])) {
+        data[[col]] <- sapply(data[[col]], function(x) if(length(x) == 0) NA_character_ else as.character(x[[1]]))
+      }
+    }
     
     log_debug(sprintf("Loaded %d rows from Google Sheets", nrow(data)), level = "INFO")
     
@@ -353,10 +489,13 @@ get_league_teams <- function(data, league) {
   teams <- data %>%
     filter(league == league_data_name) %>%
     pull(!!sym(team_col)) %>%
-    unique() %>%
-    sort()
+    unique()
+  
+  # Normalize team names for consistency with stats calculations
+  teams <- normalize_team_names(teams)
   
   teams <- teams[!is.na(teams) & teams != ""]
+  teams <- sort(unique(teams))
   
   return(teams)
 }

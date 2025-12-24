@@ -286,10 +286,15 @@ calculate_all_team_stats <- function(shot_data, league, timeframe = "season", te
       xg_per_shot_for = round(xg_for / pmax(shots_for, 1), 3),
       xg_per_shot_against = round(xg_against / pmax(shots_against, 1), 3),
       
-      # Opponent-adjusted (vs league average)
+      # Opponent-adjusted (vs league average) - Offensive
       goals_vs_opp_avg = round(goals_for_pg - league_avgs$goals_pg, 2),
       shots_vs_opp_avg = round(shots_for_pg - league_avgs$shots_pg, 2),
       xg_vs_opp_avg = round(xg_for_pg - league_avgs$xg_pg, 2),
+      
+      # Opponent-adjusted (vs league average) - Defensive (negative = better defense)
+      goals_against_vs_opp_avg = round(goals_against_pg - league_avgs$goals_pg, 2),
+      shots_against_vs_opp_avg = round(shots_against_pg - league_avgs$shots_pg, 2),
+      xg_against_vs_opp_avg = round(xg_against_pg - league_avgs$xg_pg, 2),
       
       # Pythagorean win %
       pythag_pct = round(
@@ -538,87 +543,93 @@ calculate_game_by_game_stats <- function(shot_data, league, selected_team, team_
 # =============================================================================
 
 #' Get player statistics for a team
-#' @param shooting_data Shooting summary data
+#' @param player_data Combined player match stats data
 #' @param shot_data Individual shot data
-#' @param possession_data Possession data
 #' @param league League name (display format)
 #' @param team Team name
 #' @return Data frame with player stats
-get_player_stats <- function(shooting_data, shot_data, possession_data, league, team) {
+get_player_stats <- function(player_data, shot_data, league, team) {
   log_debug("========================================", level = "INFO")
   log_debug("get_player_stats() for", team, "in", league, level = "INFO")
   
   league_data_name <- LEAGUE_DATA_NAMES[league]
   if (is.na(league_data_name)) league_data_name <- league
   
-  # For Premier League, use the detailed shooting summary if available
-  if (league == "Premier League" && !is.null(shooting_data)) {
-    log_debug("Using EPL shooting summary data", level = "INFO")
-    
-    player_stats <- shooting_data %>%
-      filter(league == league_data_name, team == !!team) %>%
-      group_by(player, position) %>%
-      summarise(
-        matches = n(),
-        minutes = sum(minutes, na.rm = TRUE),
-        goals = sum(goals, na.rm = TRUE),
-        assists = sum(assists, na.rm = TRUE),
-        shots = sum(shots, na.rm = TRUE),
-        xg = sum(xg, na.rm = TRUE),
-        sca = sum(sca, na.rm = TRUE),
-        gca = sum(gca, na.rm = TRUE),
-        touches = sum(touches, na.rm = TRUE),
-        progressive_passes = sum(progressive_passes, na.rm = TRUE),
-        progressive_carries = sum(progressive_carries, na.rm = TRUE),
-        .groups = "drop"
-      ) %>%
-      mutate(
-        mins_per_match = round(minutes / matches, 0),
-        progressive_actions = progressive_passes + progressive_carries
-      )
-    
-  } else {
-    log_debug("Building player stats from shot + possession data", level = "INFO")
-    
-    # Aggregate from shot data
+  # Normalize team name for matching
+  team_normalized <- normalize_team_names(team)
+  
+  # Check which team column exists in player_data
+  team_col <- if ("team" %in% names(player_data)) "team" else if ("squad" %in% names(player_data)) "squad" else NULL
+  
+  if (is.null(team_col)) {
+    log_debug("No team column found in player_data", level = "WARN")
+    return(data.frame())
+  }
+  
+  # Use combined player data
+  log_debug("Using combined player match stats", level = "INFO")
+  
+  # Filter first, then coerce types (Google Sheets often returns character)
+  filtered_data <- player_data %>%
+    filter(league == league_data_name, !!sym(team_col) == team_normalized)
+  
+  if (nrow(filtered_data) == 0) {
+    log_debug("No data found for team:", team_normalized, level = "WARN")
+    return(data.frame())
+  }
+  
+  # Coerce numeric columns
+  numeric_cols <- c("minutes", "goals", "assists", "shots", "xg", "sca", "gca", 
+                    "touches", "progressive_passes", "progressive_carries")
+  for (col in numeric_cols) {
+    if (col %in% names(filtered_data)) {
+      filtered_data[[col]] <- as.numeric(filtered_data[[col]])
+    }
+  }
+  
+  player_stats <- filtered_data %>%
+    group_by(player, position) %>%
+    summarise(
+      matches = n(),
+      minutes = sum(minutes, na.rm = TRUE),
+      goals = sum(goals, na.rm = TRUE),
+      assists = if ("assists" %in% names(.)) sum(assists, na.rm = TRUE) else NA_integer_,
+      shots = if ("shots" %in% names(.)) sum(shots, na.rm = TRUE) else 0L,
+      xg = if ("xg" %in% names(.)) sum(xg, na.rm = TRUE) else 0,
+      sca = if ("sca" %in% names(.)) sum(sca, na.rm = TRUE) else NA_integer_,
+      gca = if ("gca" %in% names(.)) sum(gca, na.rm = TRUE) else NA_integer_,
+      touches = if ("touches" %in% names(.)) sum(touches, na.rm = TRUE) else NA_integer_,
+      progressive_passes = if ("progressive_passes" %in% names(.)) sum(progressive_passes, na.rm = TRUE) else 0L,
+      progressive_carries = if ("progressive_carries" %in% names(.)) sum(progressive_carries, na.rm = TRUE) else 0L,
+      .groups = "drop"
+    ) %>%
+    mutate(
+      mins_per_match = round(minutes / pmax(matches, 1), 0),
+      progressive_actions = progressive_passes + progressive_carries
+    )
+  
+  # Supplement with shot data if available
+  if (!is.null(shot_data) && nrow(shot_data) > 0) {
     shot_stats <- shot_data %>%
-      filter(league == league_data_name, team == !!team) %>%
+      filter(league == league_data_name, team == team_normalized) %>%
       group_by(player) %>%
       summarise(
-        goals = sum(outcome == "Goal", na.rm = TRUE),
-        shots = n(),
-        xg = sum(xg_shot, na.rm = TRUE),
+        shot_goals = sum(outcome == "Goal", na.rm = TRUE),
+        shot_count = n(),
+        shot_xg = sum(xg_shot, na.rm = TRUE),
         .groups = "drop"
       )
     
-    # Get possession stats
-    poss_stats <- possession_data %>%
-      filter(league == league_data_name, squad == !!team) %>%
-      group_by(player, position) %>%
-      summarise(
-        matches = n(),
-        minutes = sum(minutes, na.rm = TRUE),
-        touches = sum(touches, na.rm = TRUE),
-        touches_att_3rd = sum(touches_att_3rd, na.rm = TRUE),
-        touches_att_pen_area = sum(touches_att_pen_area, na.rm = TRUE),
-        progressive_carries = sum(progressive_carries, na.rm = TRUE),
-        progressive_passes_received = sum(progressive_passes_received, na.rm = TRUE),
-        .groups = "drop"
-      ) %>%
-      mutate(mins_per_match = round(minutes / matches, 0))
-    
-    # Join them
-    player_stats <- poss_stats %>%
-      left_join(shot_stats, by = "player") %>%
-      mutate(
-        goals = coalesce(goals, 0L),
-        shots = coalesce(shots, 0L),
-        xg = coalesce(xg, 0),
-        progressive_actions = progressive_carries + progressive_passes_received,
-        assists = NA_integer_,
-        sca = NA_integer_,
-        gca = NA_integer_
-      )
+    # Use shot data to fill in missing values
+    if (nrow(shot_stats) > 0) {
+      player_stats <- player_stats %>%
+        left_join(shot_stats, by = "player") %>%
+        mutate(
+          shots = coalesce(shots, shot_count, 0L),
+          xg = coalesce(xg, shot_xg, 0)
+        ) %>%
+        select(-any_of(c("shot_goals", "shot_count", "shot_xg")))
+    }
   }
   
   log_debug("Player stats calculated:", nrow(player_stats), "players", level = "INFO")
@@ -637,7 +648,7 @@ get_player_stats <- function(shooting_data, shot_data, possession_data, league, 
 #' @param league League name (display format)
 #' @param team Team name (NULL for all teams in league)
 #' @return Data frame with set piece header specialists
-get_set_piece_specialists <- function(shot_data, possession_data, league, team = NULL) {
+get_set_piece_specialists <- function(shot_data, player_data, league, team = NULL) {
   log_debug("========================================", level = "INFO")
   log_debug("get_set_piece_specialists() for", league, level = "INFO")
   
@@ -654,18 +665,21 @@ get_set_piece_specialists <- function(shot_data, possession_data, league, team =
     )
   
   if (!is.null(team)) {
+    team_normalized <- normalize_team_names(team)
     set_piece_shots <- set_piece_shots %>%
-      filter(team == !!team)
+      filter(team == team_normalized)
   }
   
   # Get headers specifically
   set_piece_headers <- set_piece_shots %>%
     filter(body_part == "Head")
   
-  # Get position info from possession data
-  player_positions <- possession_data %>%
+  # Get position info from player data
+  team_col <- if ("team" %in% names(player_data)) "team" else if ("squad" %in% names(player_data)) "squad" else "team"
+  
+  player_positions <- player_data %>%
     filter(league == league_data_name) %>%
-    distinct(player, position, squad) %>%
+    distinct(player, position, !!sym(team_col)) %>%
     group_by(player) %>%
     slice(1) %>%
     ungroup()

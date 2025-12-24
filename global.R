@@ -148,10 +148,16 @@ source("R/soccer/soccer_data_loader.R")    # Google Sheets loading
 cat("[STARTUP]     soccer_data_loader.R loaded\n")
 source("R/soccer/soccer_transforms.R")     # Calculation functions
 cat("[STARTUP]     soccer_transforms.R loaded\n")
+source("R/soccer/soccer_fanteam_loader.R") # FanTeam data loading
+cat("[STARTUP]     soccer_fanteam_loader.R loaded\n")
+source("R/soccer/soccer_fanteam_matching.R") # Player name matching
+cat("[STARTUP]     soccer_fanteam_matching.R loaded\n")
 source("R/soccer/mod_soccer_team_dashboard.R")    # Team dashboard module
 cat("[STARTUP]     mod_soccer_team_dashboard.R loaded\n")
 source("R/soccer/mod_soccer_player_dashboard.R")  # Player dashboard module
 cat("[STARTUP]     mod_soccer_player_dashboard.R loaded\n")
+source("R/soccer/mod_soccer_fanteam_contests.R")  # FanTeam contests module
+cat("[STARTUP]     mod_soccer_fanteam_contests.R loaded\n")
 # source("R/soccer/mod_soccer_projections.R")     # Future
 # source("R/soccer/mod_soccer_performance.R")     # Future
 cat("[STARTUP]   Soccer modules loaded\n")

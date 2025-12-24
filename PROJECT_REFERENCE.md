@@ -44,7 +44,7 @@ This document contains detailed examples, templates, and architecture documentat
 ### Header Styling
 - **Background**: Full-width `--bg-secondary` (#E5E9F0)
 - **No borders or shadows**
-- **Sport nav icons**: NFL/Soccer 38×38px, Golf 32×32px
+- **Sport nav icons**: NFL/Soccer 38Ã—38px, Golf 32Ã—32px
 - **Labels**: Weight 800, uppercase, 1.5px letter-spacing, 0.85rem
 - **States**: Active full opacity + colored underline, Inactive 0.6 opacity
 
@@ -54,45 +54,45 @@ This document contains detailed examples, templates, and architecture documentat
 
 ```
 sports_analytics/
-├── app.R                        # Main app entry point
-├── global.R                     # Global setup, source order
-├── app_themes.R                 # Centralized themes
-├── styles.css                   # All CSS
-├── app.js                       # JavaScript enhancements
-│
-├── R/
-│   ├── config/sports_config.R   # Sport definitions
-│   ├── utils/
-│   │   ├── helpers.R            # log_debug(), formatting
-│   │   ├── data_loader.R        # Load CSVs
-│   │   └── player_headshots.R   # NFL headshots
-│   ├── modules/
-│   │   ├── mod_sport_nav.R
-│   │   ├── mod_section_nav.R
-│   │   └── mod_page_container.R
-│   ├── components/
-│   │   ├── ui_value_box.R
-│   │   └── ui_card.R
-│   ├── nfl/
-│   │   ├── nfl_config.R
-│   │   ├── nfl_optimizer.R
-│   │   ├── nfl_ui_helpers.R
-│   │   └── mod_nfl_*.R
-│   └── soccer/
-│       ├── soccer_config.R
-│       ├── soccer_cache.R
-│       ├── soccer_data_loader.R
-│       ├── soccer_transforms.R
-│       └── mod_soccer_*.R
-│
-├── data/
-│   ├── cache/                   # Soccer RDS cache
-│   ├── projections/2025/
-│   └── fanteam_salaries/2025/
-│
-└── www/
-    ├── nfl_logos/               # {TEAM}.webp, {TEAM}.png
-    └── soccer_logos/{League}/   # Team SVGs
+â”œâ”€â”€ app.R                        # Main app entry point
+â”œâ”€â”€ global.R                     # Global setup, source order
+â”œâ”€â”€ app_themes.R                 # Centralized themes
+â”œâ”€â”€ styles.css                   # All CSS
+â”œâ”€â”€ app.js                       # JavaScript enhancements
+â”‚
+â”œâ”€â”€ R/
+â”‚   â”œâ”€â”€ config/sports_config.R   # Sport definitions
+â”‚   â”œâ”€â”€ utils/
+â”‚   â”‚   â”œâ”€â”€ helpers.R            # log_debug(), formatting
+â”‚   â”‚   â”œâ”€â”€ data_loader.R        # Load CSVs
+â”‚   â”‚   â””â”€â”€ player_headshots.R   # NFL headshots
+â”‚   â”œâ”€â”€ modules/
+â”‚   â”‚   â”œâ”€â”€ mod_sport_nav.R
+â”‚   â”‚   â”œâ”€â”€ mod_section_nav.R
+â”‚   â”‚   â””â”€â”€ mod_page_container.R
+â”‚   â”œâ”€â”€ components/
+â”‚   â”‚   â”œâ”€â”€ ui_value_box.R
+â”‚   â”‚   â””â”€â”€ ui_card.R
+â”‚   â”œâ”€â”€ nfl/
+â”‚   â”‚   â”œâ”€â”€ nfl_config.R
+â”‚   â”‚   â”œâ”€â”€ nfl_optimizer.R
+â”‚   â”‚   â”œâ”€â”€ nfl_ui_helpers.R
+â”‚   â”‚   â””â”€â”€ mod_nfl_*.R
+â”‚   â””â”€â”€ soccer/
+â”‚       â”œâ”€â”€ soccer_config.R
+â”‚       â”œâ”€â”€ soccer_cache.R
+â”‚       â”œâ”€â”€ soccer_data_loader.R
+â”‚       â”œâ”€â”€ soccer_transforms.R
+â”‚       â””â”€â”€ mod_soccer_*.R
+â”‚
+â”œâ”€â”€ data/
+â”‚   â”œâ”€â”€ cache/                   # Soccer RDS cache
+â”‚   â”œâ”€â”€ projections/2025/
+â”‚   â””â”€â”€ fanteam_salaries/2025/
+â”‚
+â””â”€â”€ www/
+    â”œâ”€â”€ nfl_logos/               # {TEAM}.webp, {TEAM}.png
+    â””â”€â”€ soccer_logos/{League}/   # Team SVGs
 ```
 
 ---
@@ -138,14 +138,14 @@ tags$button(class = "btn btn-refresh-subtle", "Refresh")
 ### req() vs return() Pattern
 
 ```r
-# ❌ WRONG - Breaks reactive chain
+# âŒ WRONG - Breaks reactive chain
 observe({
   season <- input$season
   if (is.null(season) || season == "") return()
   # ... load data
 })
 
-# ✅ CORRECT - Maintains reactive dependency
+# âœ… CORRECT - Maintains reactive dependency
 observe({
   season <- input$season
   week <- input$week
@@ -206,6 +206,44 @@ selectizeInput(ns("team"), "Team",
       }
     }")
   )
+)
+```
+
+### Dropdown Component Choice: selectizeInput vs pickerInput
+
+**These are different libraries with different CSS requirements.**
+
+| Component | Library | Use Case | CSS Section |
+|-----------|---------|----------|-------------|
+| `selectizeInput` | selectize.js | Single selection, custom rendering (logos) | `.selectize-*` |
+| `pickerInput` | bootstrap-select | Multi-select (e.g., compare 2 teams) | `.bootstrap-select` |
+
+**Why this matters:**
+- They render completely different HTML structures
+- Checkmarks, carets, and spacing need separate CSS rules
+- Styling one does NOT affect the other
+
+**Current usage:**
+- **NFL**: `selectizeInput` for team filter (single select with logos)
+- **Soccer Team Dashboard**: `pickerInput` for team comparison (multi-select, max 2)
+
+**pickerInput with Team Logos (Soccer):**
+```r
+shinyWidgets::pickerInput(ns("team"), "Team(s)",
+  choices = teams,
+  selected = default_team,
+  multiple = TRUE,
+  options = shinyWidgets::pickerOptions(
+    maxOptions = 2,
+    noneSelectedText = "Select team(s)"
+  )
+)
+
+# Update with logo content:
+shinyWidgets::updatePickerInput(session, "team",
+  choices = teams,
+  selected = default_team,
+  choicesOpt = list(content = team_content)  # HTML with <img> tags
 )
 ```
 
@@ -333,10 +371,10 @@ rule <- list(
 ### Data Flow
 
 ```
-Google Sheets → soccer_data_loader.R (with caching) → reactiveValues
-                         ↓
+Google Sheets â†’ soccer_data_loader.R (with caching) â†’ reactiveValues
+                         â†“
               soccer_transforms.R (calculations)
-                         ↓
+                         â†“
         mod_soccer_team_dashboard.R  |  mod_soccer_player_dashboard.R
 ```
 
@@ -394,9 +432,9 @@ SPORTS ANALYTICS APP - STARTUP
 ## Heatmap Color Scales
 
 ### Diverging (Value Column)
-- Below midpoint: Coral (#D08770) → White
+- Below midpoint: Coral (#D08770) â†’ White
 - At midpoint: White
-- Above midpoint: White → Teal (#8FBCBB)
+- Above midpoint: White â†’ Teal (#8FBCBB)
 
 ### Sequential (Projection/Salary)
 - Low: White

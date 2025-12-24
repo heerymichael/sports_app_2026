@@ -6,7 +6,7 @@ Multi-sport fantasy analytics platform (NFL, Soccer, Golf) with "Stabilo Illustr
 
 ---
 
-## ⚠️ CRITICAL RULES
+## âš ï¸ CRITICAL RULES
 
 These rules are non-negotiable. Violating them creates inconsistency and technical debt.
 
@@ -48,8 +48,8 @@ These rules are non-negotiable. Violating them creates inconsistency and technic
 
 | # | Rule |
 |---|------|
-| 15 | **Source NFL files in order**: config → optimizer → ui_helpers → modules |
-| 16 | **Source Soccer files in order**: config → cache → loader → transforms → modules |
+| 15 | **Source NFL files in order**: config â†’ optimizer â†’ ui_helpers â†’ modules |
+| 16 | **Source Soccer files in order**: config â†’ cache â†’ loader â†’ transforms â†’ modules |
 | 17 | **Use nfl_optimizer.R** for lineup optimization, don't duplicate LP code |
 | 18 | **Use nfl_ui_helpers.R** components for consistent UI across NFL modules |
 
@@ -67,8 +67,8 @@ These rules are non-negotiable. Violating them creates inconsistency and technic
 | `theme_app_timeseries()` | Time series charts |
 | `theme_app_scatter()` | Scatter plots |
 | `theme_app_bar()` | Horizontal bar charts |
-| `get_sequential_heatmap_style(value, min, max)` | White → Teal heatmaps |
-| `get_diverging_heatmap_style(value, mid, min, max)` | Coral ← White → Teal |
+| `get_sequential_heatmap_style(value, min, max)` | White â†’ Teal heatmaps |
+| `get_diverging_heatmap_style(value, mid, min, max)` | Coral â† White â†’ Teal |
 
 ### Available CSS Classes (styles.css)
 
@@ -81,7 +81,7 @@ These rules are non-negotiable. Violating them creates inconsistency and technic
 | Lineup Card | `.lineup-card` | `--compact` |
 | Stat Box | `.stat-mini` | `__value--primary`, `__value--success` |
 | Tables | `.data-table` | `.projections-table`, `.draft-board-table` |
-| Buttons | `.btn-refresh-subtle` | — |
+| Buttons | `.btn-refresh-subtle` | â€” |
 
 ### APP_COLORS Palette (R code)
 
@@ -127,9 +127,22 @@ These rules are non-negotiable. Violating them creates inconsistency and technic
 | soccer_config.R | `normalize_team_names(names)` | Normalize variants |
 | soccer_config.R | `get_soccer_team_logo(name)` | Logo path |
 | soccer_cache.R | `is_cache_valid(path, hours)` | Check cache validity |
-| soccer_data_loader.R | `load_shooting_summary(refresh)` | Load shooting data |
+| soccer_data_loader.R | `load_shot_data(refresh)` | Load shot-level data |
+| soccer_data_loader.R | `get_league_teams(data, league)` | Get teams for dropdown |
 | soccer_transforms.R | `calculate_team_stats(...)` | Single team stats |
 | soccer_transforms.R | `calculate_all_team_stats(...)` | League comparison |
+
+> **CRITICAL: Team Name Normalization**
+> 
+> FBref data contains inconsistent team names (e.g., "Manchester Utd" vs "Manchester United").
+> **All team name comparisons MUST use normalized names** to ensure:
+> - Dropdown selections match stats calculations
+> - Team logos display correctly
+> - Highlighting works in charts
+> 
+> Key pattern: `get_league_teams()` normalizes names before populating dropdowns,
+> `calculate_all_team_stats()` uses normalized names internally, and
+> `get_soccer_team_logo()` normalizes before lookup. This ensures consistency.
 
 ---
 
@@ -162,7 +175,7 @@ Before writing ANY code, verify:
 
 ## Common Mistakes to Avoid
 
-| ❌ Wrong | ✅ Correct |
+| âŒ Wrong | âœ… Correct |
 |----------|-----------|
 | `return()` in observer | `req()` for validation |
 | `selectize = FALSE` | Default selectize |
