@@ -414,7 +414,7 @@ nfl_ffpc_bestball_server <- function(id) {
         rankings <- raw_data %>%
           arrange(ADP) %>%
           mutate(
-            REMOVE = "Ã¢Å“â€¢",
+            REMOVE = "ÃƒÂ¢Ã…â€œÃ¢â‚¬Â¢",
             ADP_RANK = row_number(),
             PLAYER = Name,
             POSITION = Position,
@@ -601,7 +601,7 @@ nfl_ffpc_bestball_server <- function(id) {
             color = NFL_CARD_COLOR,
             div(
               style = "text-align: center; padding: 2rem;",
-              tags$h3("Ã°Å¸Å½â€° All players have been drafted!"),
+              tags$h3("ÃƒÂ°Ã…Â¸Ã…Â½Ã¢â‚¬Â° All players have been drafted!"),
               actionButton(ns("reset_board"), "Start New Draft", class = "btn-primary")
             )
           )
@@ -700,31 +700,27 @@ nfl_ffpc_bestball_server <- function(id) {
             )
           ),
           
-          # Player with headshot
+          # Player with headshot, team, and position
           tags$td(
             style = "padding: 0.5rem;",
             div(
               style = "display: flex; align-items: center; gap: 0.75rem;",
               create_headshot_html(row$headshot_url, row$team_bg_color, "small", row$POSITION, row$TEAM),
               div(
-                style = "font-weight: 600;",
-                row$PLAYER
+                div(
+                  style = "font-weight: 700; font-size: 1rem; line-height: 1.2;",
+                  row$PLAYER
+                ),
+                div(
+                  style = "font-size: 0.75rem; color: var(--text-muted); line-height: 1.2;",
+                  sprintf("%s ", row$TEAM),
+                  tags$span(
+                    style = "font-weight: 700;",
+                    row$POSITION
+                  )
+                )
               )
             )
-          ),
-          
-          # Team
-          tags$td(
-            style = paste0("text-align: center; font-weight: 600; padding: 0.5rem;",
-                           if (team_filter != "all" && row$TEAM == team_filter) 
-                             " background-color: var(--accent-sky);" else ""),
-            row$TEAM
-          ),
-          
-          # Position
-          tags$td(
-            style = "text-align: center; padding: 0.5rem;",
-            span(class = "position-badge", row$POSITION)
           ),
           
           # Own% from draft history
@@ -769,9 +765,7 @@ nfl_ffpc_bestball_server <- function(id) {
                 tags$th(style = "width: 50px; padding: 0.75rem; text-align: center;", ""),
                 tags$th(style = "width: 70px; padding: 0.75rem; text-align: center;", "Pick"),
                 tags$th(style = "width: 130px; padding: 0.75rem; text-align: center;", "ADP"),
-                tags$th(style = "min-width: 200px; padding: 0.75rem; text-align: left;", "Player"),
-                tags$th(style = "width: 70px; padding: 0.75rem; text-align: center;", "Team"),
-                tags$th(style = "width: 80px; padding: 0.75rem; text-align: center;", "Pos"),
+                tags$th(style = "min-width: 250px; padding: 0.75rem; text-align: left;", "Player"),
                 tags$th(style = "width: 70px; padding: 0.75rem; text-align: center;", "Own%"),
                 tags$th(style = "width: 100px; padding: 0.75rem; text-align: center; background-color: var(--accent-teal-dark);", "ADP Value"),
                 tags$th(style = "width: 100px; padding: 0.75rem; text-align: center; background-color: var(--accent-teal-dark);", "ETR Value")

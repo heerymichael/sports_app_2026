@@ -51,6 +51,12 @@ load_week_data <- function(season, week, slate = "main") {
       sprintf("fanteam_salaries/week_%d_late.csv", week),
       sprintf("fanteam_salaries/week_%d_fumble.csv", week)
     )
+  } else if (slate %in% c("two_game_slate", "three_game_slate")) {
+    # Custom slate files (e.g., week_15_two_game_slate.csv)
+    salary_paths_to_try <- c(
+      sprintf("data/fanteam_salaries/%s/week_%d_%s.csv", season, week, slate),
+      sprintf("fanteam_salaries/week_%d_%s.csv", week, slate)
+    )
   } else {
     salary_paths_to_try <- c(
       sprintf("data/fanteam_salaries/%s/week_%d_main.csv", season, week),
@@ -323,6 +329,257 @@ get_available_slates <- function(season, week) {
     }
   }
   
+  # Check for custom slates (two_game_slate, three_game_slate, etc.)
+  custom_slate_patterns <- c(
+    "two_game_slate",
+    "three_game_slate"
+  )
+  
+  for (slate_name in custom_slate_patterns) {
+    custom_paths <- c(
+      sprintf("data/fanteam_salaries/%s/week_%d_%s.csv", season, week, slate_name),
+      sprintf("fanteam_salaries/week_%d_%s.csv", week, slate_name)
+    )
+    
+    for (path in custom_paths) {
+      if (file.exists(path)) {
+        slates <- c(slates, slate_name)
+        log_debug("  Custom slate available:", slate_name, "at:", path, level = "DEBUG")
+        break
+      }
+    }
+  }
+  
   log_debug("Available slates:", paste(slates, collapse = ", "), level = "DEBUG")
   return(slates)
+}
+
+#' Get display label for slate
+#' @param slate Slate identifier
+#' @return Human-readable label
+get_slate_label <- function(slate) {
+  labels <- c(
+    "main" = "Main",
+    "late" = "Late",
+    "two_game_slate" = "2-Game",
+    "three_game_slate" = "3-Game"
+  )
+  
+  if (slate %in% names(labels)) {
+    return(labels[[slate]])
+  }
+  
+  # Convert snake_case to Title Case as fallback
+  gsub("_", " ", tools::toTitleCase(slate))
+}
+
+#' Get unmatched players - those with projections but not in salary data
+#' @param season Year
+#' @param week Week number
+#' @param slate Slate type
+#' @param min_projection Minimum projection threshold (default 3)
+#' @return Data frame of unmatched players with their projections
+get_unmatched_players <- function(season, week, slate = "main", min_projection = 3) {
+  log_debug("get_unmatched_players() for season:", season, "week:", week, "slate:", slate, level = "INFO")
+  
+  # Load projections
+  proj_file <- NULL
+  proj_paths_to_try <- c(
+    sprintf("data/projections/%s/week_%d_projections.csv", season, week),
+    sprintf("projections/week_%d_projections.csv", week)
+  )
+  
+  for (path in proj_paths_to_try) {
+    if (file.exists(path)) {
+      proj_file <- path
+      break
+    }
+  }
+  
+  if (is.null(proj_file)) {
+    log_debug("Projections file not found", level = "WARN")
+    return(NULL)
+  }
+  
+  projections <- tryCatch({
+    read_csv(proj_file, show_col_types = FALSE, locale = locale(encoding = "UTF-8")) %>% 
+      clean_names() %>%
+      {
+        if ("pos" %in% names(.)) {
+          select(., player, team, pos, full_ppr_proj, dk_ceiling) %>%
+            rename(position = pos, full = full_ppr_proj, ceiling = dk_ceiling)
+        } else {
+          select(., player, team, position, full, dk_ceiling) %>%
+            rename(ceiling = dk_ceiling)
+        }
+      } %>%
+      filter(position != "K") %>%
+      mutate(
+        team = if_else(team == "LA", "LAR", team),
+        player = if_else(player == "LA DST", "LAR DST", player),
+        blended = (full + ceiling) / 2
+      )
+  }, error = function(e) {
+    log_debug("Error reading projections:", e$message, level = "ERROR")
+    return(NULL)
+  })
+  
+  if (is.null(projections)) return(NULL)
+  
+  # Load salaries
+  salary_file <- NULL
+  if (slate == "late") {
+    salary_paths_to_try <- c(
+      sprintf("data/fanteam_salaries/%s/week_%d_late.csv", season, week),
+      sprintf("data/fanteam_salaries/%s/week_%d_fumble.csv", season, week),
+      sprintf("fanteam_salaries/week_%d_late.csv", week),
+      sprintf("fanteam_salaries/week_%d_fumble.csv", week)
+    )
+  } else if (slate %in% c("two_game_slate", "three_game_slate")) {
+    salary_paths_to_try <- c(
+      sprintf("data/fanteam_salaries/%s/week_%d_%s.csv", season, week, slate),
+      sprintf("fanteam_salaries/week_%d_%s.csv", week, slate)
+    )
+  } else {
+    salary_paths_to_try <- c(
+      sprintf("data/fanteam_salaries/%s/week_%d_main.csv", season, week),
+      sprintf("fanteam_salaries/week_%d_main.csv", week)
+    )
+  }
+  
+  for (path in salary_paths_to_try) {
+    if (file.exists(path)) {
+      salary_file <- path
+      break
+    }
+  }
+  
+  if (is.null(salary_file)) {
+    log_debug("Salary file not found", level = "WARN")
+    return(NULL)
+  }
+  
+  # Get teams in this slate (for filtering projections to slate teams only)
+  salaries <- tryCatch({
+    read_csv(salary_file, show_col_types = FALSE, locale = locale(encoding = "UTF-8")) %>% 
+      clean_names() %>% 
+      filter(lineup != "refuted") %>%
+      filter(position != "kicker") %>%
+      mutate(name = str_remove(name, regex("\\s+Jr\\.?$", ignore_case = TRUE))) %>% 
+      mutate(name = str_remove(name, regex("\\s+Sr\\.?$", ignore_case = TRUE))) %>% 
+      mutate(player = paste0(f_name, " ", name)) %>% 
+      rename(salary = price, team = club) %>% 
+      select(player, team, position, salary) %>% 
+      mutate(position = case_when(
+        position == "quarterback" ~ "QB",
+        position == "running_back" ~ "RB",
+        position == "wide_receiver" ~ "WR",
+        position == "tight_end" ~ "TE",
+        position == "defense_special" ~ "DST",
+        TRUE ~ position
+      )) %>% 
+      mutate(player = case_when(
+        position == "DST" ~ paste0(team, " ", position),
+        TRUE ~ player
+      )) %>% 
+      # Apply same name corrections as in load_week_data
+      mutate(player = case_when(
+        player == "Amon-Ra St. Brown" ~ "Amon-Ra St Brown",
+        player == "A.J. Brown" ~ "AJ Brown",
+        player == "J.K. Dobbins" ~ "JK Dobbins",
+        player == "Kenneth Walker III" ~ "Kenneth Walker",
+        player == "Luther Burden III" ~ "Luther Burden",
+        player == "DeMario Douglas" ~ "Demario Douglas",
+        player == "Calvin Austin III" ~ "Calvin Austin",
+        player == "Hollywood Brown" ~ "Marquise Brown",
+        player == "KaVontae Turpin" ~ "Kavontae Turpin",
+        player == "Ollie Gordon II" ~ "Ollie Gordon",
+        player == "T.J. Hockenson" ~ "TJ Hockenson",
+        TRUE ~ player
+      ))
+  }, error = function(e) {
+    log_debug("Error reading salaries:", e$message, level = "ERROR")
+    return(NULL)
+  })
+  
+  if (is.null(salaries)) return(NULL)
+  
+  # Get teams in the slate
+  slate_teams <- unique(salaries$team)
+  log_debug("Teams in slate:", paste(slate_teams, collapse = ", "), level = "DEBUG")
+  
+  # Filter projections to only teams in this slate
+  projections_in_slate <- projections %>%
+    filter(team %in% slate_teams)
+  
+  # Get salary player names for matching
+  salary_players <- salaries$player
+  
+  # Find unmatched players with projections >= threshold
+  unmatched <- projections_in_slate %>%
+    filter(blended >= min_projection) %>%
+    filter(!player %in% salary_players) %>%
+    arrange(desc(blended)) %>%
+    select(player, team, position, full, ceiling, blended)
+  
+  log_debug("Found", nrow(unmatched), "unmatched players with projection >=", min_projection, level = "INFO")
+  
+  return(unmatched)
+}
+
+#' Get teams in a slate
+#' @param season Year
+#' @param week Week number
+#' @param slate Slate type
+#' @return Vector of team abbreviations in the slate
+get_slate_teams <- function(season, week, slate = "main") {
+  log_debug("get_slate_teams() for season:", season, "week:", week, "slate:", slate, level = "DEBUG")
+  
+  # Determine salary file path
+  salary_file <- NULL
+  if (slate == "late") {
+    salary_paths_to_try <- c(
+      sprintf("data/fanteam_salaries/%s/week_%d_late.csv", season, week),
+      sprintf("data/fanteam_salaries/%s/week_%d_fumble.csv", season, week),
+      sprintf("fanteam_salaries/week_%d_late.csv", week),
+      sprintf("fanteam_salaries/week_%d_fumble.csv", week)
+    )
+  } else if (slate %in% c("two_game_slate", "three_game_slate")) {
+    salary_paths_to_try <- c(
+      sprintf("data/fanteam_salaries/%s/week_%d_%s.csv", season, week, slate),
+      sprintf("fanteam_salaries/week_%d_%s.csv", week, slate)
+    )
+  } else {
+    salary_paths_to_try <- c(
+      sprintf("data/fanteam_salaries/%s/week_%d_main.csv", season, week),
+      sprintf("fanteam_salaries/week_%d_main.csv", week)
+    )
+  }
+  
+  for (path in salary_paths_to_try) {
+    if (file.exists(path)) {
+      salary_file <- path
+      break
+    }
+  }
+  
+  if (is.null(salary_file)) {
+    log_debug("Salary file not found for slate:", slate, level = "WARN")
+    return(character(0))
+  }
+  
+  teams <- tryCatch({
+    read_csv(salary_file, show_col_types = FALSE, locale = locale(encoding = "UTF-8")) %>% 
+      clean_names() %>%
+      filter(lineup != "refuted") %>%
+      pull(club) %>%
+      unique() %>%
+      sort()
+  }, error = function(e) {
+    log_debug("Error reading salary file:", e$message, level = "ERROR")
+    return(character(0))
+  })
+  
+  log_debug("Teams in slate:", paste(teams, collapse = ", "), level = "DEBUG")
+  return(teams)
 }

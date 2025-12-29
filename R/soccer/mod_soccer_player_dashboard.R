@@ -29,33 +29,37 @@ soccer_player_dashboard_ui <- function(id) {
       
       fluidRow(
         column(3,
-               selectInput(ns("league"), "League",
-                           choices = c("Loading..." = ""),
-                           selected = NULL
+               shinyWidgets::pickerInput(ns("league"), "League",
+                                         choices = c("Loading..." = ""),
+                                         selected = NULL,
+                                         options = shinyWidgets::pickerOptions(
+                                           liveSearch = FALSE,
+                                           size = 10
+                                         )
                )
         ),
-        column(3,
+        column(4,
                shinyWidgets::pickerInput(ns("team"), "Team(s)",
-                                         choices = c("Select league first"),
-                                         selected = NULL,
+                                         choices = c("All Teams" = "ALL", "Select league first"),
+                                         selected = "ALL",
                                          multiple = TRUE,
                                          options = shinyWidgets::pickerOptions(
-                                           actionsBox = FALSE,
-                                           liveSearch = FALSE,
-                                           maxOptions = 2,
+                                           actionsBox = TRUE,
+                                           liveSearch = TRUE,
+                                           maxOptions = 5,
                                            noneSelectedText = "Select team(s)",
-                                           selectedTextFormat = "count > 1",
+                                           selectedTextFormat = "count > 2",
                                            countSelectedText = "{0} teams"
                                          )
                )
         ),
-        column(6,
+        column(5,
                div(style = "padding-top: 25px; display: flex; flex-direction: column; align-items: flex-end; gap: 0.25rem;",
                    tags$button(
                      id = ns("refresh_data"),
                      class = "btn btn-refresh-subtle",
                      type = "button",
-                     "↻ Refresh"
+                     "Refresh"
                    ),
                    uiOutput(ns("cache_status"))
                )
@@ -74,42 +78,14 @@ soccer_player_dashboard_ui <- function(id) {
       fluidRow(
         column(2,
                selectInput(ns("player_view"), "View",
-                           choices = c("Per Game" = "per_game", "By Gameweek" = "by_gameweek"),
-                           selected = "per_game"
-               )
-        ),
-        column(2,
-               conditionalPanel(
-                 condition = sprintf("input['%s'] == 'by_gameweek'", ns("player_view")),
-                 selectInput(ns("gameweek_metric"), "Metric",
-                             choices = c(
-                               "Goals" = "goals",
-                               "xG" = "xg",
-                               "Shots" = "shots",
-                               "Minutes" = "minutes"
-                             ),
-                             selected = "xg"
-                 )
-               )
-        ),
-        column(3,
-               shinyWidgets::pickerInput(ns("player_team_filter"), "Team Filter",
-                                         choices = c("All Teams"),
-                                         selected = NULL,
-                                         multiple = TRUE,
-                                         options = shinyWidgets::pickerOptions(
-                                           actionsBox = TRUE,
-                                           liveSearch = TRUE,
-                                           noneSelectedText = "All Teams",
-                                           selectedTextFormat = "count > 2",
-                                           countSelectedText = "{0} teams"
-                                         )
+                           choices = c("Per 90 Table" = "per_90", "Whole Season Table" = "totals", "Plots" = "plots"),
+                           selected = "per_90"
                )
         ),
         column(3,
                shinyWidgets::pickerInput(ns("player_position_filter"), "Position Filter",
-                                         choices = c("FW", "MF", "DF", "GK"),
-                                         selected = c("FW", "MF", "DF"),
+                                         choices = c("FWD", "MID", "DEF", "GK"),
+                                         selected = c("FWD", "MID", "DEF"),
                                          multiple = TRUE,
                                          options = shinyWidgets::pickerOptions(
                                            actionsBox = TRUE,
@@ -118,8 +94,13 @@ soccer_player_dashboard_ui <- function(id) {
                )
         ),
         column(2,
-               div(style = "padding-top: 25px;",
-                   checkboxInput(ns("show_all_teams"), "Show all league teams", value = FALSE)
+               numericInput(ns("min_games"), "Min Games",
+                            value = 3, min = 1, max = 38, step = 1
+               )
+        ),
+        column(2,
+               numericInput(ns("min_minutes"), "Min Minutes",
+                            value = 90, min = 0, max = 3000, step = 30
                )
         )
       ),
@@ -257,9 +238,21 @@ soccer_player_dashboard_server <- function(id) {
       if (length(leagues) > 0) {
         default_league <- if ("Premier League" %in% leagues) "Premier League" else leagues[1]
         
-        updateSelectInput(session, "league",
-                          choices = setNames(leagues, leagues),
-                          selected = default_league
+        # Build HTML content for each league (logo + name)
+        league_content <- sapply(leagues, function(lg) {
+          logo_path <- get_league_logo(lg)
+          if (!is.null(logo_path)) {
+            sprintf('<img src="%s" style="width:20px; height:20px; margin-right:8px; vertical-align:middle; object-fit:contain;"> %s', 
+                    logo_path, lg)
+          } else {
+            lg
+          }
+        }, USE.NAMES = FALSE)
+        
+        shinyWidgets::updatePickerInput(session, "league",
+                                        choices = leagues,
+                                        selected = default_league,
+                                        choicesOpt = list(content = league_content)
         )
       }
     })
@@ -278,34 +271,27 @@ soccer_player_dashboard_server <- function(id) {
       log_debug("Teams available:", length(teams), level = "INFO")
       
       if (length(teams) > 0) {
+        # Add "All Teams" option at the start
+        all_teams_choices <- c("All Teams" = "ALL", setNames(teams, teams))
+        
         # Build HTML content for each team (logo + name)
-        team_content <- sapply(teams, function(team) {
-          logo_path <- get_soccer_team_logo(team)
-          if (!is.null(logo_path)) {
-            sprintf('<img src="%s" style="width:20px; height:20px; margin-right:8px; vertical-align:middle; object-fit:contain;"> %s', 
-                    logo_path, team)
-          } else {
-            team
-          }
-        }, USE.NAMES = FALSE)
-        
-        # Default to Manchester United for Premier League, else first team
-        default_team <- if (input$league == "Premier League" && "Manchester United" %in% teams) {
-          "Manchester United"
-        } else {
-          teams[1]
-        }
-        
-        shinyWidgets::updatePickerInput(session, "team",
-                                        choices = teams,
-                                        selected = default_team,
-                                        choicesOpt = list(content = team_content)
+        team_content <- c(
+          '<span style="font-weight: 600;">All Teams</span>',  # All Teams option
+          sapply(teams, function(team) {
+            logo_path <- get_soccer_team_logo(team)
+            if (!is.null(logo_path)) {
+              sprintf('<img src="%s" style="width:20px; height:20px; margin-right:8px; vertical-align:middle; object-fit:contain;"> %s', 
+                      logo_path, team)
+            } else {
+              team
+            }
+          }, USE.NAMES = FALSE)
         )
         
-        # Also update player team filter with logos
-        shinyWidgets::updatePickerInput(session, "player_team_filter",
-                                        choices = teams,
-                                        selected = NULL,
+        # Default to All Teams
+        shinyWidgets::updatePickerInput(session, "team",
+                                        choices = all_teams_choices,
+                                        selected = "ALL",
                                         choicesOpt = list(content = team_content)
         )
       }
@@ -323,35 +309,62 @@ soccer_player_dashboard_server <- function(id) {
       
       view_type <- input$player_view
       
-      # Determine which teams to show
-      if (input$show_all_teams) {
+      # Handle plots view with placeholder
+      if (view_type == "plots") {
+        return(
+          div(
+            style = "padding: 3rem; text-align: center; background: var(--bg-tertiary); border-radius: 8px;",
+            tags$h4(style = "color: var(--text-muted); margin-bottom: 1rem;", "Player Statistics Plots"),
+            tags$p(style = "color: var(--text-muted);", "Coming soon - visualizations for player performance metrics"),
+            tags$div(
+              style = "display: flex; justify-content: center; gap: 2rem; margin-top: 2rem; flex-wrap: wrap;",
+              div(
+                style = "padding: 1.5rem; background: var(--bg-secondary); border-radius: 6px; min-width: 200px;",
+                tags$p(style = "font-weight: 600; margin-bottom: 0.5rem;", "xG vs Goals Scatter"),
+                tags$p(style = "font-size: 0.85rem; color: var(--text-muted);", "Compare expected vs actual output")
+              ),
+              div(
+                style = "padding: 1.5rem; background: var(--bg-secondary); border-radius: 6px; min-width: 200px;",
+                tags$p(style = "font-weight: 600; margin-bottom: 0.5rem;", "Touch Heatmaps"),
+                tags$p(style = "font-size: 0.85rem; color: var(--text-muted);", "Attacking third & penalty box involvement")
+              ),
+              div(
+                style = "padding: 1.5rem; background: var(--bg-secondary); border-radius: 6px; min-width: 200px;",
+                tags$p(style = "font-weight: 600; margin-bottom: 0.5rem;", "Progressive Actions"),
+                tags$p(style = "font-size: 0.85rem; color: var(--text-muted);", "Ball progression by player")
+              )
+            )
+          )
+        )
+      }
+      
+      # Determine which teams to show based on main team filter
+      if (is.null(input$team) || length(input$team) == 0 || "ALL" %in% input$team) {
         teams_to_show <- get_league_teams(rv$player_data, input$league)
-      } else if (!is.null(input$player_team_filter) && length(input$player_team_filter) > 0) {
-        teams_to_show <- input$player_team_filter
-      } else if (!is.null(input$team) && length(input$team) > 0) {
-        teams_to_show <- input$team
       } else {
-        return(div(class = "text-muted", "Select a team to view player statistics"))
+        teams_to_show <- input$team
+      }
+      
+      if (length(teams_to_show) == 0) {
+        return(div(class = "text-muted", "No teams available for this league"))
       }
       
       # Position filter
       position_filter <- input$player_position_filter
       if (is.null(position_filter) || length(position_filter) == 0) {
-        position_filter <- c("FW", "MF", "DF", "GK")
+        position_filter <- c("FWD", "MID", "DEF", "GK")
       }
       
-      if (view_type == "per_game") {
-        render_player_stats_per_game(
-          rv$player_data, rv$shot_data,
-          input$league, teams_to_show, position_filter
-        )
-      } else {
-        render_player_stats_by_gameweek(
-          rv$player_data, rv$shot_data,
-          input$league, teams_to_show, position_filter,
-          input$gameweek_metric
-        )
-      }
+      # Min games and minutes filters
+      min_games <- if (!is.null(input$min_games)) input$min_games else 1
+      min_minutes <- if (!is.null(input$min_minutes)) input$min_minutes else 0
+      
+      render_player_stats_table(
+        rv$player_data, rv$shot_data,
+        input$league, teams_to_show, position_filter,
+        view_type,  # "per_90" or "totals"
+        min_games, min_minutes
+      )
     })
     
     # =========================================================================
@@ -489,22 +502,27 @@ soccer_player_dashboard_server <- function(id) {
 # PLAYER STATS HELPER FUNCTIONS - UPDATED
 # =============================================================================
 
-#' Render per-game player stats table
+#' Render player stats table with Total/Per 90 toggle
 #' @param player_data Combined player match stats
 #' @param shot_data Individual shot data
 #' @param league League name
 #' @param teams Vector of team names
-#' @param position_filter Vector of positions to include
-render_player_stats_per_game <- function(player_data, shot_data,
-                                         league, teams, position_filter) {
-  log_debug(">>> render_player_stats_per_game for", length(teams), "teams", level = "DEBUG")
+#' @param position_filter Vector of positions to include (FWD, MID, DEF, GK)
+#' @param view_type "per_90" or "totals"
+#' @param min_games Minimum games played filter
+#' @param min_minutes Minimum minutes played filter
+render_player_stats_table <- function(player_data, shot_data,
+                                      league, teams, position_filter, view_type = "per_90",
+                                      min_games = 1, min_minutes = 0) {
+  log_debug(">>> render_player_stats_table for", length(teams), "teams, view:", view_type, level = "DEBUG")
   
   # Gather stats for all requested teams
   all_players <- lapply(teams, function(t) {
     stats <- get_player_stats(player_data, shot_data, league, t)
     if (nrow(stats) > 0) {
       stats$team <- t
-      stats$logo_path <- get_soccer_team_logo(t)
+      logo <- get_soccer_team_logo(t)
+      stats$logo_path <- if (!is.null(logo) && !is.na(logo)) logo else ""
     }
     stats
   })
@@ -515,25 +533,132 @@ render_player_stats_per_game <- function(player_data, shot_data,
     return(div(class = "text-muted", "No player data available"))
   }
   
-  # Filter by position
+  # Filter by position (now using simplified positions: FWD, MID, DEF, GK)
   combined <- combined %>%
-    filter(grepl(paste(position_filter, collapse = "|"), position, ignore.case = TRUE) | 
-             is.na(position))
+    filter(position %in% position_filter | is.na(position))
+  
+  if (nrow(combined) == 0) {
+    return(div(class = "text-muted", "No players match the selected position filter"))
+  }
+  
+  # Apply min games and min minutes filters
+  combined <- combined %>%
+    filter(matches >= min_games, minutes >= min_minutes)
+  
+  if (nrow(combined) == 0) {
+    return(div(class = "text-muted", 
+               sprintf("No players with at least %d games and %d minutes", min_games, min_minutes)))
+  }
   
   # Calculate per-90 stats
   combined <- combined %>%
     mutate(
       goals_p90 = round(goals / pmax(minutes, 1) * 90, 2),
       xg_p90 = round(xg / pmax(minutes, 1) * 90, 2),
-      shots_p90 = round(shots / pmax(minutes, 1) * 90, 2)
+      shots_p90 = round(shots / pmax(minutes, 1) * 90, 2),
+      sca_p90 = round(sca / pmax(minutes, 1) * 90, 2),
+      gca_p90 = round(gca / pmax(minutes, 1) * 90, 2),
+      att3rd_p90 = round(touches_att_3rd / pmax(minutes, 1) * 90, 1),
+      pen_box_p90 = round(touches_att_pen / pmax(minutes, 1) * 90, 2),
+      prog_actions_p90 = round(progressive_actions / pmax(minutes, 1) * 90, 1)
     ) %>%
-    arrange(desc(xg)) %>%
-    head(100)
+    arrange(desc(xg))
   
-  # Build reactable
-  reactable::reactable(
-    combined %>% select(player, team, logo_path, position, matches, minutes, 
-                        goals, xg, shots, goals_p90, xg_p90, shots_p90),
+  log_debug(">>> Player stats table has", nrow(combined), "rows after filtering", level = "DEBUG")
+  
+  # Create a copy for cell rendering (closure issue fix)
+  display_data <- combined
+  
+  # Common column definitions
+  # Team logo column - first column
+  team_col <- reactable::colDef(
+    name = "",
+    width = 55,
+    cell = function(value, index) {
+      logo <- display_data$logo_path[index]
+      if (!is.null(logo) && !is.na(logo) && logo != "") {
+        htmltools::tags$img(
+          src = logo, 
+          style = "width: 24px; height: 24px; object-fit: contain;",
+          onerror = "this.style.display='none'"
+        )
+      } else {
+        ""
+      }
+    }
+  )
+  
+  # Player column with position in gray - 215px
+  player_col <- reactable::colDef(
+    name = "Player", 
+    width = 215,
+    cell = function(value, index) {
+      pos <- display_data$position[index]
+      pos_text <- if (!is.na(pos) && pos != "") pos else ""
+      htmltools::tagList(
+        htmltools::tags$span(style = "font-weight: 600;", value),
+        htmltools::tags$span(style = "color: #9ca3af; font-size: 0.75rem; font-weight: 500; margin-left: 6px;", pos_text)
+      )
+    }
+  )
+  
+  # Build columns based on view type
+  # Standard width for all stat columns
+  stat_width <- 70
+  
+  if (view_type == "per_90") {
+    # Per 90 view - show rate stats and mins per match
+    display_data <- display_data %>% 
+      select(team, logo_path, player, position, matches, apps_60, apps_90, mins_per_match, 
+             goals_p90, xg_p90, shots_p90, sca_p90, gca_p90, att3rd_p90, pen_box_p90, prog_actions_p90)
+    
+    col_defs <- list(
+      team = team_col,
+      logo_path = reactable::colDef(show = FALSE),
+      player = player_col,
+      position = reactable::colDef(show = FALSE),
+      matches = reactable::colDef(name = "MP", width = stat_width, align = "center"),
+      apps_60 = reactable::colDef(name = "60+", width = stat_width, align = "center"),
+      apps_90 = reactable::colDef(name = "90", width = stat_width, align = "center"),
+      mins_per_match = reactable::colDef(name = "M/G", width = stat_width, align = "center"),
+      goals_p90 = reactable::colDef(name = "G", width = stat_width, align = "center", format = reactable::colFormat(digits = 2)),
+      xg_p90 = reactable::colDef(name = "xG", width = stat_width, align = "center", format = reactable::colFormat(digits = 2)),
+      shots_p90 = reactable::colDef(name = "Sh", width = stat_width, align = "center", format = reactable::colFormat(digits = 2)),
+      sca_p90 = reactable::colDef(name = "SCA", width = stat_width + 10, align = "center", format = reactable::colFormat(digits = 2)),
+      gca_p90 = reactable::colDef(name = "GCA", width = stat_width + 10, align = "center", format = reactable::colFormat(digits = 2)),
+      att3rd_p90 = reactable::colDef(name = "A3rd", width = stat_width + 10, align = "center", format = reactable::colFormat(digits = 1)),
+      pen_box_p90 = reactable::colDef(name = "Pen", width = stat_width + 5, align = "center", format = reactable::colFormat(digits = 2)),
+      prog_actions_p90 = reactable::colDef(name = "Prg", width = stat_width + 5, align = "center", format = reactable::colFormat(digits = 1))
+    )
+  } else {
+    # Totals view - show cumulative stats
+    display_data <- display_data %>% 
+      select(team, logo_path, player, position, matches, apps_60, apps_90, minutes, 
+             goals, xg, shots, sca, gca, touches_att_3rd, touches_att_pen, progressive_actions)
+    
+    col_defs <- list(
+      team = team_col,
+      logo_path = reactable::colDef(show = FALSE),
+      player = player_col,
+      position = reactable::colDef(show = FALSE),
+      matches = reactable::colDef(name = "MP", width = stat_width, align = "center"),
+      apps_60 = reactable::colDef(name = "60+", width = stat_width, align = "center"),
+      apps_90 = reactable::colDef(name = "90", width = stat_width, align = "center"),
+      minutes = reactable::colDef(name = "Mins", width = stat_width, align = "center"),
+      goals = reactable::colDef(name = "G", width = stat_width, align = "center"),
+      xg = reactable::colDef(name = "xG", width = stat_width, align = "center", format = reactable::colFormat(digits = 2)),
+      shots = reactable::colDef(name = "Sh", width = stat_width, align = "center"),
+      sca = reactable::colDef(name = "SCA", width = stat_width, align = "center"),
+      gca = reactable::colDef(name = "GCA", width = stat_width, align = "center"),
+      touches_att_3rd = reactable::colDef(name = "A3rd", width = stat_width, align = "center"),
+      touches_att_pen = reactable::colDef(name = "Pen", width = stat_width, align = "center"),
+      progressive_actions = reactable::colDef(name = "Prg", width = stat_width, align = "center")
+    )
+  }
+  
+  # Build the table
+  table <- reactable::reactable(
+    display_data,
     searchable = TRUE,
     sortable = TRUE,
     defaultPageSize = 25,
@@ -543,32 +668,38 @@ render_player_stats_per_game <- function(player_data, shot_data,
     highlight = TRUE,
     compact = TRUE,
     theme = app_reactable_theme(),
-    columns = list(
-      player = reactable::colDef(name = "Player", minWidth = 140, sticky = "left"),
-      team = reactable::colDef(
-        name = "Team",
-        minWidth = 50,
-        cell = function(value, index) {
-          logo <- combined$logo_path[index]
-          if (!is.null(logo) && !is.na(logo) && logo != "") {
-            htmltools::tags$img(src = logo, style = "width:20px; height:20px; vertical-align:middle;")
-          } else {
-            ""
-          }
-        }
-      ),
-      logo_path = reactable::colDef(show = FALSE),
-      position = reactable::colDef(name = "Pos", maxWidth = 60),
-      matches = reactable::colDef(name = "MP", maxWidth = 50),
-      minutes = reactable::colDef(name = "Mins", maxWidth = 60),
-      goals = reactable::colDef(name = "G", maxWidth = 50),
-      xg = reactable::colDef(name = "xG", format = reactable::colFormat(digits = 2)),
-      shots = reactable::colDef(name = "Sh", maxWidth = 50),
-      goals_p90 = reactable::colDef(name = "G/90", format = reactable::colFormat(digits = 2)),
-      xg_p90 = reactable::colDef(name = "xG/90", format = reactable::colFormat(digits = 2)),
-      shots_p90 = reactable::colDef(name = "Sh/90", format = reactable::colFormat(digits = 2))
-    )
+    columns = col_defs
   )
+  
+  # Legend for abbreviations
+  legend <- div(
+    style = "margin-top: 0.75rem; padding: 0.5rem 0.75rem; background: var(--bg-tertiary); border-radius: 6px; font-size: 0.75rem; color: var(--text-muted);",
+    tags$span(style = "font-weight: 600; margin-right: 0.5rem;", "Legend:"),
+    tags$span("MP = Matches Played"),
+    tags$span(style = "margin: 0 0.4rem;", "Â·"),
+    tags$span("60+ = Games â‰¥60 mins"),
+    tags$span(style = "margin: 0 0.4rem;", "Â·"),
+    tags$span("90 = Full games"),
+    tags$span(style = "margin: 0 0.4rem;", "Â·"),
+    tags$span("M/G = Mins per game"),
+    tags$span(style = "margin: 0 0.4rem;", "Â·"),
+    tags$span("xG = Expected Goals"),
+    tags$span(style = "margin: 0 0.4rem;", "Â·"),
+    tags$span("Sh = Shots"),
+    tags$span(style = "margin: 0 0.4rem;", "Â·"),
+    tags$span("SCA = Shot Creating Actions"),
+    tags$span(style = "margin: 0 0.4rem;", "Â·"),
+    tags$span("GCA = Goal Creating Actions"),
+    tags$span(style = "margin: 0 0.4rem;", "Â·"),
+    tags$span("A3rd = Attacking Third Touches"),
+    tags$span(style = "margin: 0 0.4rem;", "Â·"),
+    tags$span("Pen = Penalty Box Touches"),
+    tags$span(style = "margin: 0 0.4rem;", "Â·"),
+    tags$span("Prg = Progressive Actions (passes + carries)")
+  )
+  
+  # Return table with legend
+  tagList(table, legend)
 }
 
 #' Render player stats by gameweek
@@ -576,7 +707,7 @@ render_player_stats_per_game <- function(player_data, shot_data,
 #' @param shot_data Individual shot data
 #' @param league League name
 #' @param teams Vector of team names
-#' @param position_filter Vector of positions to include
+#' @param position_filter Vector of positions to include (FWD, MID, DEF, GK)
 #' @param metric Metric to display
 render_player_stats_by_gameweek <- function(player_data, shot_data,
                                             league, teams, position_filter, metric) {
@@ -589,7 +720,9 @@ render_player_stats_by_gameweek <- function(player_data, shot_data,
   if (!is.null(player_data) && nrow(player_data) > 0) {
     player_gw <- player_data %>%
       filter(league == league_data_name) %>%
-      filter(team %in% teams | length(teams) == 0)
+      filter(team %in% teams | length(teams) == 0) %>%
+      # Add simplified position
+      mutate(position_simple = simplify_position(position))
   } else {
     # Fallback: Aggregate from shot data
     player_gw <- shot_data %>%
@@ -601,29 +734,34 @@ render_player_stats_by_gameweek <- function(player_data, shot_data,
         shots = n(),
         xg = sum(xg_shot, na.rm = TRUE),
         .groups = "drop"
-      )
+      ) %>%
+      mutate(position_simple = NA_character_)
   }
   
   if (nrow(player_gw) == 0) {
     return(div(class = "text-muted", "No gameweek data available"))
   }
   
-  # Get position info (already in combined data)
-  if (!"position" %in% names(player_gw)) {
+  # Get position info if not present (use most common position per player)
+  if (!"position_simple" %in% names(player_gw) || all(is.na(player_gw$position_simple))) {
     player_positions <- player_data %>%
       filter(league == league_data_name) %>%
-      distinct(player, position) %>%
+      mutate(position_simple = simplify_position(position)) %>%
+      group_by(player, position_simple) %>%
+      summarise(pos_minutes = sum(as.numeric(minutes), na.rm = TRUE), .groups = "drop") %>%
       group_by(player) %>%
-      slice(1) %>%
-      ungroup()
+      slice_max(pos_minutes, n = 1, with_ties = FALSE) %>%
+      ungroup() %>%
+      select(player, position_simple)
     
     player_gw <- player_gw %>%
+      select(-any_of("position_simple")) %>%
       left_join(player_positions, by = "player")
   }
   
+  # Filter by position using simplified positions
   player_gw <- player_gw %>%
-    filter(grepl(paste(position_filter, collapse = "|"), position, ignore.case = TRUE) | 
-             is.na(position))
+    filter(position_simple %in% position_filter | is.na(position_simple))
   
   # Get logo paths
   team_logos <- setNames(

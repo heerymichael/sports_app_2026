@@ -42,8 +42,12 @@ nfl_handbuild_ui <- function(id) {
     c("No weeks" = "")
   }
   
-  slate_choices <- c("Main" = "main", "Late" = "late")[c("main", "late") %in% slates]
-  if (length(slate_choices) == 0) slate_choices <- c("Main" = "main")
+  # Build slate choices with proper labels for all available slates
+  slate_choices <- if (length(slates) > 0) {
+    setNames(slates, sapply(slates, get_slate_label))
+  } else {
+    c("Main" = "main")
+  }
   
   tagList(
     # Page header
@@ -76,7 +80,7 @@ nfl_handbuild_ui <- function(id) {
         column(3,
                selectInput(ns("slate"), "Slate",
                            choices = slate_choices,
-                           selected = "main"
+                           selected = slates[1]
                )
         ),
         column(3,
@@ -84,7 +88,10 @@ nfl_handbuild_ui <- function(id) {
                             value = 130, min = 50, max = 200, step = 0.1
                )
         )
-      )
+      ),
+      
+      # Unmatched players alert
+      uiOutput(ns("unmatched_alert"))
     ),
     
     tags$br(),
@@ -181,6 +188,7 @@ nfl_handbuild_ui <- function(id) {
                title = "Build Your Lineup",
                color = NFL_CARD_COLOR,
                
+               # Row with Player Pool and Lineup side by side
                fluidRow(
                  # Left side: Player Pool
                  column(7,
@@ -243,32 +251,37 @@ nfl_handbuild_ui <- function(id) {
                             "Heatmap"
                           )
                         ),
-                        # Player pool list
+                        # Player pool list - height matches lineup display
                         div(
                           class = "player-pool-container",
-                          style = "height: 500px; overflow-y: auto; border: 2px solid var(--outline); border-radius: 8px; background: var(--bg-white);",
+                          style = "height: 485px; overflow-y: auto; border: 2px solid var(--outline); border-radius: 8px; background: var(--bg-white);",
                           uiOutput(ns("player_pool_header")),
                           uiOutput(ns("player_pool"))
                         )
                  ),
                  
-                 # Right side: Lineup display + Variation Options + Action buttons
+                 # Right side: Lineup display only (no generate variations here)
                  column(5,
                         # Current lineup display
-                        uiOutput(ns("lineup_display")),
-                        
-                        # =======================================================
-                        # GENERATE VARIATIONS
-                        # =======================================================
-                        div(
-                          style = "margin-top: 1rem; padding: 0.75rem; background: var(--bg-tertiary); border-radius: 8px; border: 1px solid var(--outline);",
-                          
-                          # Section header
-                          div(
-                            style = "font-weight: 700; font-size: 0.85rem; color: var(--text-primary); margin-bottom: 0.5rem;",
-                            "Generate Variations"
-                          ),
-                          
+                        uiOutput(ns("lineup_display"))
+                 )
+               ),
+               
+               # =======================================================
+               # GENERATE VARIATIONS - Full width below
+               # =======================================================
+               div(
+                 style = "margin-top: 1rem; padding: 0.75rem; background: var(--bg-tertiary); border-radius: 8px; border: 1px solid var(--outline);",
+                 
+                 # Section header
+                 div(
+                   style = "font-weight: 700; font-size: 0.85rem; color: var(--text-primary); margin-bottom: 0.5rem;",
+                   "Generate Variations"
+                 ),
+                 
+                 # Two column layout: Instructions left, Settings right
+                 fluidRow(
+                   column(6,
                           # Completion instructions
                           textAreaInput(
                             ns("completion_instructions"),
@@ -276,11 +289,12 @@ nfl_handbuild_ui <- function(id) {
                             value = "",
                             placeholder = "Describe how to complete lineups (e.g., stack WRs with QB, bring-back from opponent...)",
                             rows = 2
-                          ),
-                          
-                          # Settings row: # Lineups, Variance, Stacking toggle
+                          )
+                   ),
+                   column(6,
+                          # Settings row: # Lineups, Variance, Game Stack
                           div(
-                            style = "display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 0.5rem; margin-top: 0.5rem;",
+                            style = "display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 0.5rem;",
                             div(
                               style = "font-size: 0.75rem;",
                               numericInput(ns("num_lineups"), "# Lineups", value = 10, min = 1, max = 50, step = 1)
@@ -293,17 +307,21 @@ nfl_handbuild_ui <- function(id) {
                               style = "font-size: 0.75rem;",
                               selectInput(ns("stack_game"), "Game Stack", choices = c("None" = ""))
                             )
-                          ),
-                          
-                          # Collapsible advanced stacking rules
-                          tags$details(
-                            style = "margin-top: 0.5rem;",
-                            tags$summary(
-                              style = "font-size: 0.75rem; font-weight: 600; color: var(--text-muted); cursor: pointer; user-select: none;",
-                              "Advanced Stacking Rules"
-                            ),
-                            div(
-                              style = "padding: 0.5rem 0;",
+                          )
+                   )
+                 ),
+                 
+                 # Collapsible advanced stacking rules
+                 tags$details(
+                   style = "margin-top: 0.5rem;",
+                   tags$summary(
+                     style = "font-size: 0.75rem; font-weight: 600; color: var(--text-muted); cursor: pointer; user-select: none;",
+                     "Advanced Stacking Rules"
+                   ),
+                   div(
+                     style = "padding: 0.5rem 0;",
+                     fluidRow(
+                       column(6,
                               # QB selection + Add rule
                               div(
                                 style = "display: grid; grid-template-columns: 2fr 1fr; gap: 0.5rem; margin-bottom: 0.5rem;",
@@ -316,49 +334,45 @@ nfl_handbuild_ui <- function(id) {
                                   style = "padding-top: 1.5rem;",
                                   actionButton(ns("add_rule"), "Add", class = "btn-primary btn-sm", style = "width: 100%;")
                                 )
-                              ),
-                              # Same team + Opponent stacks
+                              )
+                       ),
+                       column(3,
+                              # Same team stack
+                              div(style = "font-size: 0.7rem; font-weight: 600; color: var(--text-muted);", "Same Team"),
                               div(
-                                style = "display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem;",
-                                div(
-                                  div(style = "font-size: 0.7rem; font-weight: 600; color: var(--text-muted);", "Same Team"),
-                                  div(
-                                    style = "display: flex; align-items: center; gap: 0.25rem;",
-                                    numericInput(ns("rule_same_min"), NULL, value = 1, min = 0, max = 4, step = 1, width = "50px"),
-                                    checkboxGroupInput(ns("rule_same_pos"), NULL, choices = c("RB", "WR", "TE"), selected = c("WR", "TE"), inline = TRUE)
-                                  )
-                                ),
-                                div(
-                                  div(style = "font-size: 0.7rem; font-weight: 600; color: var(--text-muted);", "Opponent"),
-                                  div(
-                                    style = "display: flex; align-items: center; gap: 0.25rem;",
-                                    numericInput(ns("rule_opp_min"), NULL, value = 0, min = 0, max = 3, step = 1, width = "50px"),
-                                    checkboxGroupInput(ns("rule_opp_pos"), NULL, choices = c("RB", "WR", "TE"), selected = c("WR"), inline = TRUE)
-                                  )
-                                )
-                              ),
-                              # Min game players
+                                style = "display: flex; align-items: center; gap: 0.25rem;",
+                                numericInput(ns("rule_same_min"), NULL, value = 1, min = 0, max = 4, step = 1, width = "50px"),
+                                checkboxGroupInput(ns("rule_same_pos"), NULL, choices = c("RB", "WR", "TE"), selected = c("WR", "TE"), inline = TRUE)
+                              )
+                       ),
+                       column(3,
+                              # Opponent stack
+                              div(style = "font-size: 0.7rem; font-weight: 600; color: var(--text-muted);", "Opponent"),
                               div(
-                                style = "display: flex; align-items: center; gap: 0.5rem; margin-top: 0.5rem;",
-                                span(style = "font-size: 0.7rem; color: var(--text-muted);", "Min players from game:"),
-                                numericInput(ns("min_game_players"), NULL, value = 4, min = 2, max = 6, step = 1, width = "60px")
-                              ),
-                              # Current rules + clear
-                              uiOutput(ns("stacking_rules_display")),
-                              actionButton(ns("clear_rules"), "Clear Rules", class = "btn-secondary btn-sm", style = "width: 100%; margin-top: 0.5rem;")
-                            )
-                          )
-                        ),
-                        
-                        # =======================================================
-                        # ACTION BUTTONS
-                        # =======================================================
-                        div(
-                          style = "display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 0.5rem; margin-top: 0.75rem;",
-                          actionButton(ns("autocomplete"), "Autocomplete", class = "btn-secondary", style = "font-size: 0.85rem;"),
-                          actionButton(ns("clear_all"), "Clear", class = "btn-secondary", style = "font-size: 0.85rem;"),
-                          actionButton(ns("generate"), "Generate", class = "btn-primary", style = "font-size: 0.85rem; font-weight: 700;")
-                        )
+                                style = "display: flex; align-items: center; gap: 0.25rem;",
+                                numericInput(ns("rule_opp_min"), NULL, value = 0, min = 0, max = 3, step = 1, width = "50px"),
+                                checkboxGroupInput(ns("rule_opp_pos"), NULL, choices = c("RB", "WR", "TE"), selected = c("WR"), inline = TRUE)
+                              )
+                       )
+                     ),
+                     # Min game players + current rules
+                     div(
+                       style = "display: flex; align-items: center; gap: 0.5rem; margin-top: 0.5rem;",
+                       span(style = "font-size: 0.7rem; color: var(--text-muted);", "Min players from game:"),
+                       numericInput(ns("min_game_players"), NULL, value = 4, min = 2, max = 6, step = 1, width = "60px"),
+                       div(style = "flex: 1;"),
+                       actionButton(ns("clear_rules"), "Clear Rules", class = "btn-secondary btn-sm")
+                     ),
+                     uiOutput(ns("stacking_rules_display"))
+                   )
+                 ),
+                 
+                 # Action buttons - full width row
+                 div(
+                   style = "display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 0.5rem; margin-top: 0.75rem;",
+                   actionButton(ns("autocomplete"), "Autocomplete", class = "btn-secondary", style = "font-size: 0.85rem;"),
+                   actionButton(ns("clear_all"), "Clear", class = "btn-secondary", style = "font-size: 0.85rem;"),
+                   actionButton(ns("generate"), "Generate", class = "btn-primary", style = "font-size: 0.85rem; font-weight: 700;")
                  )
                )
              )
@@ -413,9 +427,39 @@ nfl_handbuild_server <- function(id) {
       team_filter = "all",          # Current team filter for player pool
       pool_sort = list(col = "value", dir = "desc"),  # Player pool sort state
       completion_instructions = "", # User instructions for lineup generation
+      unmatched_players = NULL,     # Players with projections but no salary data
       loading = FALSE,
       initialized = FALSE
     )
+    
+    # =========================================================================
+    # UPDATE SLATE CHOICES WHEN WEEK CHANGES
+    # =========================================================================
+    
+    observeEvent(c(input$season, input$week), {
+      req(input$season, input$week)
+      req(input$season != "", input$week != "")
+      req(input$season != "No data", input$week != "No weeks")
+      
+      log_debug(">>> Updating slates for season:", input$season, "week:", input$week, level = "INFO")
+      
+      slates <- get_available_slates(input$season, as.numeric(input$week))
+      
+      if (length(slates) > 0) {
+        slate_choices <- setNames(slates, sapply(slates, get_slate_label))
+        
+        # Preserve current selection if still valid
+        current_slate <- isolate(input$slate)
+        new_selected <- if (!is.null(current_slate) && current_slate %in% slates) {
+          current_slate
+        } else {
+          slates[1]
+        }
+        
+        updateSelectInput(session, "slate", choices = slate_choices, selected = new_selected)
+        log_debug(">>> Updated slate choices:", paste(names(slate_choices), collapse = ", "), level = "INFO")
+      }
+    }, ignoreInit = FALSE)
     
     # =========================================================================
     # DATA LOADING
@@ -559,6 +603,19 @@ nfl_handbuild_server <- function(id) {
             WR1 = NULL, WR2 = NULL, WR3 = NULL,
             TE = NULL, FLEX = NULL, DST = NULL
           )
+          
+          # Check for unmatched players
+          unmatched <- tryCatch({
+            get_unmatched_players(season, as.numeric(week), slate, min_projection = 3)
+          }, error = function(e) {
+            log_debug(">>> Error checking unmatched players:", e$message, level = "WARN")
+            NULL
+          })
+          
+          rv$unmatched_players <- unmatched
+          if (!is.null(unmatched) && nrow(unmatched) > 0) {
+            log_debug(">>> Found", nrow(unmatched), "unmatched players with projection >= 3", level = "INFO")
+          }
         } else {
           log_debug(">>> No data returned", level = "WARN")
         }
@@ -599,31 +656,6 @@ nfl_handbuild_server <- function(id) {
                           selected = NULL
         )
         log_debug(">>> No weeks available for this season", level = "WARN")
-      }
-    }, ignoreInit = TRUE)
-    
-    # =========================================================================
-    # UPDATE SLATES when week changes
-    # =========================================================================
-    observeEvent(input$week, {
-      log_debug(">>> Week changed to:", input$week, level = "INFO")
-      
-      # Skip if empty
-      if (is.null(input$season) || input$season == "" ||
-          is.null(input$week) || input$week == "") {
-        log_debug(">>> Season or week empty, skipping slate update", level = "DEBUG")
-        return()
-      }
-      
-      slates <- get_available_slates(input$season, as.numeric(input$week))
-      log_debug(">>> Slates found:", paste(slates, collapse = ", "), level = "INFO")
-      
-      if (length(slates) > 0) {
-        slate_choices <- c("Main" = "main", "Late" = "late")[c("main", "late") %in% slates]
-        updateSelectInput(session, "slate",
-                          choices = slate_choices,
-                          selected = if ("main" %in% slates) "main" else slates[1]
-        )
       }
     }, ignoreInit = TRUE)
     
@@ -735,7 +767,7 @@ nfl_handbuild_server <- function(id) {
           left_join(player_data %>% select(player, blended), by = "player") %>%
           mutate(
             adj_value = blended * (1 + adj_pct / 100),
-            display = sprintf("%s: %.1f ÃƒÂ¢Ã¢â‚¬Â Ã¢â‚¬â„¢ %.1f (%+.0f%%)", player, blended, adj_value, adj_pct)
+            display = sprintf("%s: %.1f ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ %.1f (%+.0f%%)", player, blended, adj_value, adj_pct)
           )
       } else {
         adj_df <- adj_df %>%
@@ -770,6 +802,79 @@ nfl_handbuild_server <- function(id) {
               )
             )
           })
+        )
+      )
+    })
+    
+    # Unmatched players alert
+    output$unmatched_alert <- renderUI({
+      unmatched <- rv$unmatched_players
+      
+      if (is.null(unmatched) || nrow(unmatched) == 0) {
+        return(NULL)
+      }
+      
+      # Create collapsible alert with player list
+      div(
+        style = "margin-top: 1rem; padding: 0.75rem; background: rgba(232, 131, 121, 0.1); border: 1px solid var(--accent-coral); border-radius: 8px;",
+        
+        # Header with count
+        div(
+          style = "display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.5rem;",
+          tags$span(style = "font-size: 1.1rem;", HTML("&#9888;")),
+          tags$span(
+            style = "font-weight: 700; color: var(--accent-coral); font-size: 0.85rem;",
+            sprintf("%d Unmatched Player%s", nrow(unmatched), if(nrow(unmatched) > 1) "s" else "")
+          ),
+          tags$span(
+            style = "font-size: 0.8rem; color: var(--text-muted);",
+            HTML("(projection &#8805; 3pts but not in salary file)")
+          )
+        ),
+        
+        # Collapsible player list
+        tags$details(
+          style = "cursor: pointer;",
+          tags$summary(
+            style = "font-size: 0.8rem; color: var(--text-secondary); font-weight: 600; user-select: none;",
+            "View players"
+          ),
+          div(
+            style = "margin-top: 0.5rem; max-height: 200px; overflow-y: auto;",
+            tags$table(
+              style = "width: 100%; font-size: 0.8rem; border-collapse: collapse;",
+              tags$thead(
+                tags$tr(
+                  style = "border-bottom: 1px solid var(--outline);",
+                  tags$th(style = "text-align: left; padding: 0.25rem 0.5rem; font-weight: 600;", "Player"),
+                  tags$th(style = "text-align: left; padding: 0.25rem 0.5rem; font-weight: 600;", "Team"),
+                  tags$th(style = "text-align: left; padding: 0.25rem 0.5rem; font-weight: 600;", "Pos"),
+                  tags$th(style = "text-align: right; padding: 0.25rem 0.5rem; font-weight: 600;", "Proj")
+                )
+              ),
+              tags$tbody(
+                lapply(1:min(nrow(unmatched), 20), function(i) {
+                  tags$tr(
+                    style = if(i %% 2 == 0) "background: rgba(0,0,0,0.02);" else "",
+                    tags$td(style = "padding: 0.25rem 0.5rem;", unmatched$player[i]),
+                    tags$td(style = "padding: 0.25rem 0.5rem;", unmatched$team[i]),
+                    tags$td(style = "padding: 0.25rem 0.5rem;", unmatched$position[i]),
+                    tags$td(style = "padding: 0.25rem 0.5rem; text-align: right; font-weight: 600;", 
+                            sprintf("%.1f", unmatched$blended[i]))
+                  )
+                }),
+                if (nrow(unmatched) > 20) {
+                  tags$tr(
+                    tags$td(
+                      colspan = 4,
+                      style = "padding: 0.25rem 0.5rem; font-style: italic; color: var(--text-muted);",
+                      sprintf("... and %d more", nrow(unmatched) - 20)
+                    )
+                  )
+                }
+              )
+            )
+          )
         )
       )
     })
@@ -906,7 +1011,7 @@ nfl_handbuild_server <- function(id) {
             ),
             
             # Arrow
-            span(style = "color: var(--text-muted); font-size: 1.2rem;", "ÃƒÂ¢Ã¢â‚¬Â Ã¢â‚¬â„¢"),
+            span(style = "color: var(--text-muted); font-size: 1.2rem;", "ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢"),
             
             # Stack requirement
             div(
@@ -1304,7 +1409,7 @@ nfl_handbuild_server <- function(id) {
       # Helper for sort indicator
       sort_indicator <- function(col) {
         if (sort_col == col) {
-          if (sort_dir == "desc") " â–¼" else " â–²"
+          if (sort_dir == "desc") " Ã¢â€“Â¼" else " Ã¢â€“Â²"
         } else {
           ""
         }
@@ -1863,13 +1968,22 @@ nfl_handbuild_server <- function(id) {
       avg_salary_left <- if (empty_slots > 0) stats$remaining_salary / empty_slots else 0
       
       tagList(
-        # Summary row - 3 column header
+        # Summary row - 4 column header with remaining integrated
         div(
-          style = "display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.4rem; margin-bottom: 0.5rem; padding: 0.5rem; background: var(--bg-tertiary); border-radius: 6px; border: 2px solid var(--outline);",
+          style = "display: grid; grid-template-columns: repeat(4, 1fr); gap: 0.4rem; margin-bottom: 0.5rem; padding: 0.4rem 0.5rem; background: var(--bg-tertiary); border-radius: 6px; border: 2px solid var(--outline);",
           div(
             style = "text-align: center;",
             div(style = "font-size: 0.6rem; text-transform: uppercase; color: var(--text-muted); letter-spacing: 0.5px;", "Salary Used"),
             div(style = "font-weight: 700; font-size: 0.9rem;", sprintf("$%.1f", stats$total_salary))
+          ),
+          div(
+            style = "text-align: center;",
+            div(style = "font-size: 0.6rem; text-transform: uppercase; color: var(--text-muted); letter-spacing: 0.5px;", "Remaining"),
+            div(
+              style = sprintf("font-weight: 700; font-size: 0.9rem; color: %s;",
+                              if (stats$remaining_salary < 0) "var(--accent-coral)" else "var(--accent-teal)"),
+              sprintf("$%.1f (%d/9)", stats$remaining_salary, stats$filled_count)
+            )
           ),
           div(
             style = "text-align: center;",
@@ -1887,16 +2001,10 @@ nfl_handbuild_server <- function(id) {
             div(style = "font-size: 0.6rem; text-transform: uppercase; color: var(--text-muted); letter-spacing: 0.5px;", "Avg $/Player"),
             div(
               style = sprintf("font-weight: 700; font-size: 0.9rem; color: %s;",
-                              if (empty_slots == 0) "var(--text-muted)" else if (avg_salary_left < 10) "var(--accent-red)" else "var(--text-primary)"),
-              if (empty_slots > 0) sprintf("$%.1f", avg_salary_left) else "â€”"
+                              if (empty_slots == 0) "var(--text-muted)" else if (avg_salary_left < 10) "var(--accent-coral)" else "var(--text-primary)"),
+              if (empty_slots > 0) sprintf("$%.1f", avg_salary_left) else HTML("&mdash;")
             )
           )
-        ),
-        
-        # Remaining budget bar
-        div(
-          style = "text-align: center; margin-bottom: 0.5rem; padding: 0.4rem; background: var(--accent-teal-light); border-radius: 4px; font-size: 0.8rem; font-weight: 600;",
-          sprintf("Remaining: $%.1f (%d/9)", stats$remaining_salary, stats$filled_count)
         ),
         
         # Slots
@@ -2005,7 +2113,7 @@ nfl_handbuild_server <- function(id) {
             style = "text-align: center;",
             div(style = "font-size: 0.75rem; text-transform: uppercase; color: var(--text-muted);", "Optimal"),
             div(style = "font-size: 1.25rem; font-weight: 700; color: var(--accent-teal);", 
-                if (optimal_proj > 0) sprintf("%.1f", optimal_proj) else "--")
+                if (optimal_proj > 0) sprintf("%.1f", optimal_proj) else "--Â")
           ),
           div(
             style = "text-align: center;",
@@ -2014,7 +2122,7 @@ nfl_handbuild_server <- function(id) {
               style = sprintf("font-size: 1.25rem; font-weight: 700; color: %s;",
                               if (optimal_proj > 0) "var(--accent-coral)" else "var(--text-muted)"
               ),
-              if (optimal_proj > 0) sprintf("%+.1f", best_proj - optimal_proj) else "--"
+              if (optimal_proj > 0) sprintf("%+.1f", best_proj - optimal_proj) else "--Â"
             )
           )
         ),

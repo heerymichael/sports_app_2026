@@ -1,15 +1,22 @@
 ################################################################################
 # NotOnlyFPL FanTeam STATS SCRAPER
 # 
-# Scrapes paginated tables from NotOnlyFPL FanTeam stats pages:
-#   1. Stats Overall (season totals) -> stats_overview worksheet
-#   2. Stats by GW (gameweek breakdown) -> gameweek_stats worksheet
+# Scrapes the Stats Overall page from NotOnlyFPL:
+#   https://www.notonlyfpl.co.uk/FanTeam/statsoverall
+#
+# OUTPUT SHEETS:
+#   1. stats_overview - Full season totals (replaced each run)
+#   2. gameweek_detail - Individual GW stats filtered via slider (INCREMENTAL)
+#
+# The Stats Overall page has a Gameweek Range slider. This script:
+#   - First scrapes with full range for season totals
+#   - Then filters to each individual GW to get per-week stats
+#   - Only scrapes new GWs not already in the gameweek_detail sheet
 #
 # USES CHROMOTE: Handles JavaScript-rendered pages
-# FULL REPLACE: Clears and rewrites entire sheets each run
 #
 # Target Google Sheet:
-#   https://docs.google.com/spreadsheets/d/1FQGMXsrjdgqo8KsHE1_ODd4KyB-h7SDWA2OpgVaOCLk/
+#   https://docs.google.com/spreadsheets/d/1EM_Xiqy5Kyvc-AlvpfLT7yjLl_7vcVbBgmj3GwNuIKg/
 ################################################################################
 
 library(rvest)
@@ -19,6 +26,9 @@ library(purrr)
 library(googlesheets4)
 library(chromote)
 
+# Helper for NULL coalescing
+`%||%` <- function(a, b) if (is.null(a)) b else a
+
 ################################################################################
 # CONFIGURATION
 ################################################################################
@@ -27,19 +37,21 @@ library(chromote)
 RATE_LIMIT_DELAY <- 3  # seconds between page requests
 PAGE_LOAD_WAIT <- 5    # seconds to wait for page to render
 
-# URLs to scrape
+# URL to scrape (Stats Overall page with GW slider)
+STATS_URL <- "https://www.notonlyfpl.co.uk/FanTeam/statsoverall"
+
+# For backwards compatibility
 URLS <- list(
-  stats_overview = "https://www.notonlyfpl.co.uk/FanTeam/statsoverall",
-  gameweek_stats = "https://www.notonlyfpl.co.uk/FanTeam/statsbygw"
+  stats_overview = STATS_URL
 )
 
 # Google Sheet configuration
-GOOGLE_SHEET_ID <- "1FQGMXsrjdgqo8KsHE1_ODd4KyB-h7SDWA2OpgVaOCLk"
+GOOGLE_SHEET_ID <- "1EM_Xiqy5Kyvc-AlvpfLT7yjLl_7vcVbBgmj3GwNuIKg"
 
 # Worksheet names in the Google Sheet
 SHEET_NAMES <- list(
   stats_overview = "stats_overview",
-  gameweek_stats = "gameweek_stats"
+  gameweek_detail = "gameweek_detail"
 )
 
 ################################################################################
@@ -163,8 +175,27 @@ write_to_google_sheet <- function(data, sheet_id, sheet_name, replace = TRUE) {
       Sys.sleep(1)
       range_write(ss = sheet_id, sheet = sheet_name, data = data, range = "A1", col_names = TRUE)
     } else {
-      # Append
-      sheet_append(data, ss = sheet_id, sheet = sheet_name)
+      # Append - but first check if columns match
+      message(sprintf("    Appending to: %s", sheet_name))
+      
+      # Read existing headers
+      existing_headers <- tryCatch({
+        existing_data <- read_sheet(sheet_id, sheet = sheet_name, n_max = 1, col_types = "c")
+        names(existing_data)
+      }, error = function(e) NULL)
+      
+      # If columns don't match or sheet is empty, do full replace instead
+      if (is.null(existing_headers) || !setequal(names(data), existing_headers)) {
+        message("    Note: Column mismatch or empty sheet - doing full replace instead")
+        range_clear(ss = sheet_id, sheet = sheet_name)
+        Sys.sleep(1)
+        range_write(ss = sheet_id, sheet = sheet_name, data = data, range = "A1", col_names = TRUE)
+      } else {
+        # Columns match - safe to append
+        # Reorder columns to match existing sheet
+        data <- data[, existing_headers]
+        sheet_append(data, ss = sheet_id, sheet = sheet_name)
+      }
     }
     
     message("    ✓ Write successful")
@@ -239,36 +270,21 @@ extract_table_from_page <- function(page) {
 }
 
 get_pagination_info <- function(browser) {
-  # Try to find pagination info from the page
-  # Look for common patterns like "1-50 of 500"
-  
+  # Look for "Page X of Y" format used by NotOnlyFPL
   result <- tryCatch({
     info <- browser$Runtime$evaluate(
       "(() => {
-        // Look for pagination text
-        const elements = document.querySelectorAll('*');
-        for (let el of elements) {
-          const text = el.textContent;
-          if (text && text.match(/\\d+[–-]\\d+\\s+of\\s+\\d+/i)) {
-            return text.match(/\\d+[–-]\\d+\\s+of\\s+(\\d+)/i)[1];
-          }
+        // Look for 'Page X of Y' text
+        const body = document.body.innerText;
+        const match = body.match(/Page\\s+(\\d+)\\s+of\\s+(\\d+)/i);
+        if (match) {
+          return { current: parseInt(match[1]), total: parseInt(match[2]) };
         }
-        
-        // Look for MUI pagination
-        const muiPagination = document.querySelector('.MuiTablePagination-displayedRows');
-        if (muiPagination) {
-          const match = muiPagination.textContent.match(/of\\s+(\\d+)/i);
-          if (match) return match[1];
-        }
-        
         return null;
       })()"
     )$result$value
     
-    if (!is.null(result)) {
-      return(as.integer(result))
-    }
-    return(NULL)
+    return(info)
     
   }, error = function(e) {
     return(NULL)
@@ -278,33 +294,26 @@ get_pagination_info <- function(browser) {
 }
 
 click_next_page <- function(browser) {
-  # Try to click the next page button
-  # Returns TRUE if successful, FALSE if no next page
-  
+  # Click the "Next" button - specific to NotOnlyFPL's simple pagination
   result <- tryCatch({
     clicked <- browser$Runtime$evaluate(
       "(() => {
-        // MUI Next Button
-        const muiNext = document.querySelector('button[aria-label=\"Go to next page\"]');
-        if (muiNext && !muiNext.disabled) {
-          muiNext.click();
-          return true;
+        // Find button with 'Next' text
+        const buttons = document.querySelectorAll('button');
+        for (const btn of buttons) {
+          if (btn.textContent.trim() === 'Next' && !btn.disabled) {
+            btn.click();
+            return true;
+          }
         }
         
-        // Generic next button patterns
-        const nextSelectors = [
-          'button[aria-label=\"Next page\"]',
-          'button[aria-label=\"next page\"]',
-          '.pagination-next:not(.disabled)',
-          'a[rel=\"next\"]',
-          'button.next:not(:disabled)',
-          '[class*=\"next\"]:not(.disabled)'
-        ];
-        
-        for (const selector of nextSelectors) {
-          const btn = document.querySelector(selector);
-          if (btn && !btn.disabled && btn.offsetParent !== null) {
-            btn.click();
+        // Also try links or divs that act as buttons
+        const allElements = document.querySelectorAll('a, div, span');
+        for (const el of allElements) {
+          if (el.textContent.trim() === 'Next' && 
+              el.style.pointerEvents !== 'none' &&
+              !el.classList.contains('disabled')) {
+            el.click();
             return true;
           }
         }
@@ -320,6 +329,462 @@ click_next_page <- function(browser) {
   })
   
   return(result)
+}
+
+is_last_page <- function(browser) {
+  # Check if we're on the last page by comparing current vs total
+  info <- get_pagination_info(browser)
+  if (!is.null(info) && !is.null(info$current) && !is.null(info$total)) {
+    return(info$current >= info$total)
+  }
+  return(FALSE)
+}
+
+################################################################################
+# GAMEWEEK FILTERING FUNCTIONS
+################################################################################
+
+#' Get the maximum gameweek available from the slider
+get_max_gameweek <- function(browser) {
+  message("  Auto-detecting current max gameweek from slider...")
+  
+  result <- tryCatch({
+    max_gw <- browser$Runtime$evaluate(
+      "(() => {
+        // The slider shows badges with '1' and '17' (or current max)
+        // We need to find the highest number displayed near 'Gameweek Range'
+        
+        // Method 1: Find the second badge/number indicator (the max value)
+        // Look for elements that contain ONLY a number 1-38
+        const candidates = [];
+        const walker = document.createTreeWalker(
+          document.body,
+          NodeFilter.SHOW_TEXT,
+          null,
+          false
+        );
+        
+        let node;
+        while (node = walker.nextNode()) {
+          const text = node.textContent.trim();
+          // Check if it's just a number between 1-38
+          if (/^\\d{1,2}$/.test(text)) {
+            const num = parseInt(text);
+            if (num >= 1 && num <= 38) {
+              candidates.push(num);
+            }
+          }
+        }
+        
+        // The max gameweek should be the highest small number found
+        // Filter out things like years (2024, 2025) or large IDs
+        if (candidates.length > 0) {
+          const maxFound = Math.max(...candidates);
+          if (maxFound >= 1 && maxFound <= 38) {
+            return maxFound;
+          }
+        }
+        
+        // Method 2: Check aria-valuemax on any slider elements
+        const sliderElements = document.querySelectorAll('[role=\"slider\"], .rc-slider-handle, input[type=\"range\"]');
+        for (const el of sliderElements) {
+          const max = el.getAttribute('aria-valuemax') || el.getAttribute('max');
+          if (max) {
+            const maxNum = parseInt(max);
+            if (maxNum >= 1 && maxNum <= 38) return maxNum;
+          }
+        }
+        
+        // Method 3: Parse 'Gameweek Range:' section specifically
+        const gwLabel = Array.from(document.querySelectorAll('*')).find(
+          el => el.textContent.includes('Gameweek Range')
+        );
+        if (gwLabel) {
+          const parent = gwLabel.parentElement || gwLabel;
+          const nums = parent.innerText.match(/\\b(\\d{1,2})\\b/g);
+          if (nums) {
+            const validNums = nums.map(n => parseInt(n)).filter(n => n >= 1 && n <= 38);
+            if (validNums.length > 0) return Math.max(...validNums);
+          }
+        }
+        
+        return null;  // Return null if detection fails
+      })()"
+    )$result$value
+    
+    if (!is.null(max_gw) && max_gw >= 1 && max_gw <= 38) {
+      message(sprintf("  ✓ Detected current max gameweek: %d", max_gw))
+      return(as.integer(max_gw))
+    } else {
+      message("  ⚠️  Could not detect max gameweek from slider")
+      return(NULL)
+    }
+    
+  }, error = function(e) {
+    message(sprintf("  ⚠️  Error detecting max gameweek: %s", e$message))
+    return(NULL)
+  })
+  
+  return(result)
+}
+
+#' Set the gameweek filter to a specific single gameweek
+set_gameweek_filter <- function(browser, gameweek) {
+  message(sprintf("  Setting filter to GW%d...", gameweek))
+  
+  # First, try to detect what kind of slider is on the page
+  slider_info <- tryCatch({
+    browser$Runtime$evaluate(
+      "(() => {
+        const info = {
+          rangeInputs: document.querySelectorAll('input[type=\"range\"]').length,
+          roleSliders: document.querySelectorAll('[role=\"slider\"]').length,
+          rcSlider: document.querySelectorAll('.rc-slider-handle').length,
+          muiSlider: document.querySelectorAll('.MuiSlider-thumb').length
+        };
+        return info;
+      })()"
+    )$result$value
+  }, error = function(e) NULL)
+  
+  if (!is.null(slider_info)) {
+    message(sprintf("    Slider detection: range=%d, role=%d, rc=%d, mui=%d",
+                    slider_info$rangeInputs %||% 0, 
+                    slider_info$roleSliders %||% 0,
+                    slider_info$rcSlider %||% 0,
+                    slider_info$muiSlider %||% 0))
+  }
+  
+  result <- tryCatch({
+    # Try to set the slider value
+    success <- browser$Runtime$evaluate(
+      sprintf("(() => {
+        const targetGW = %d;
+        let success = false;
+        
+        // APPROACH 1: RC-Slider (common React slider library)
+        const rcHandles = document.querySelectorAll('.rc-slider-handle');
+        if (rcHandles.length >= 2) {
+          console.log('Using RC-Slider approach');
+          // For a range slider, we need to set both handles to same value
+          // RC-Slider stores value in aria-valuenow
+          // We need to simulate mouse events
+          
+          // Get slider track to calculate positions
+          const track = document.querySelector('.rc-slider-rail, .rc-slider');
+          if (track) {
+            const rect = track.getBoundingClientRect();
+            const min = parseInt(rcHandles[0].getAttribute('aria-valuemin') || '1');
+            const max = parseInt(rcHandles[0].getAttribute('aria-valuemax') || '17');
+            const range = max - min;
+            const pixelPerUnit = rect.width / range;
+            const targetX = rect.left + ((targetGW - min) * pixelPerUnit);
+            const targetY = rect.top + rect.height / 2;
+            
+            // Simulate drag for both handles
+            for (const handle of rcHandles) {
+              // Mouse down on handle
+              handle.dispatchEvent(new MouseEvent('mousedown', {
+                bubbles: true, clientX: handle.getBoundingClientRect().left, clientY: targetY
+              }));
+              
+              // Mouse move to target
+              document.dispatchEvent(new MouseEvent('mousemove', {
+                bubbles: true, clientX: targetX, clientY: targetY
+              }));
+              
+              // Mouse up
+              document.dispatchEvent(new MouseEvent('mouseup', { bubbles: true }));
+            }
+            success = true;
+          }
+        }
+        
+        // APPROACH 2: Standard range inputs
+        if (!success) {
+          const sliders = document.querySelectorAll('input[type=\"range\"]');
+          if (sliders.length >= 1) {
+            console.log('Using range input approach');
+            const nativeSetter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set;
+            
+            for (const slider of sliders) {
+              nativeSetter.call(slider, targetGW);
+              slider.dispatchEvent(new Event('input', { bubbles: true }));
+              slider.dispatchEvent(new Event('change', { bubbles: true }));
+            }
+            success = true;
+          }
+        }
+        
+        // APPROACH 3: ARIA role sliders (keyboard navigation)
+        if (!success) {
+          const ariaSliders = document.querySelectorAll('[role=\"slider\"]');
+          if (ariaSliders.length >= 1) {
+            console.log('Using ARIA slider approach');
+            for (const slider of ariaSliders) {
+              const current = parseInt(slider.getAttribute('aria-valuenow') || '1');
+              slider.focus();
+              
+              // Use arrow keys to adjust
+              const diff = targetGW - current;
+              const key = diff > 0 ? 'ArrowRight' : 'ArrowLeft';
+              
+              for (let i = 0; i < Math.abs(diff); i++) {
+                slider.dispatchEvent(new KeyboardEvent('keydown', { 
+                  key: key, code: key, keyCode: key === 'ArrowRight' ? 39 : 37, bubbles: true 
+                }));
+                slider.dispatchEvent(new KeyboardEvent('keyup', { 
+                  key: key, code: key, keyCode: key === 'ArrowRight' ? 39 : 37, bubbles: true 
+                }));
+              }
+            }
+            success = true;
+          }
+        }
+        
+        return success;
+      })()", gameweek)
+    )$result$value
+    
+    if (!isTRUE(success)) {
+      return(FALSE)
+    }
+    
+    # Wait for table to update
+    Sys.sleep(3)
+    
+    # VERIFY the filter actually worked by checking the page
+    # Look for indication that we're viewing the right GW
+    verification <- browser$Runtime$evaluate(
+      sprintf("(() => {
+        const targetGW = %d;
+        
+        // Check if aria-valuenow matches on sliders
+        const sliders = document.querySelectorAll('[role=\"slider\"], .rc-slider-handle');
+        for (const s of sliders) {
+          const val = parseInt(s.getAttribute('aria-valuenow'));
+          if (!isNaN(val) && val === targetGW) {
+            return { verified: true, method: 'aria-valuenow' };
+          }
+        }
+        
+        // Check range inputs
+        const rangeInputs = document.querySelectorAll('input[type=\"range\"]');
+        for (const r of rangeInputs) {
+          if (parseInt(r.value) === targetGW) {
+            return { verified: true, method: 'range-input' };
+          }
+        }
+        
+        // Check for visual indicator showing the GW number
+        const badges = document.querySelectorAll('.rc-slider-mark-text, [class*=\"badge\"], [class*=\"label\"]');
+        for (const b of badges) {
+          if (b.classList.contains('rc-slider-mark-text-active') && 
+              parseInt(b.textContent) === targetGW) {
+            return { verified: true, method: 'mark-text' };
+          }
+        }
+        
+        return { verified: false, method: 'none' };
+      })()", gameweek)
+    )$result$value
+    
+    if (!is.null(verification) && isTRUE(verification$verified)) {
+      message(sprintf("    ✓ Filter verified via %s", verification$method))
+      return(TRUE)
+    } else {
+      message("    ⚠️  Could not verify filter was set correctly")
+      # Still return TRUE if we think we set it - table content will tell us
+      return(TRUE)
+    }
+    
+  }, error = function(e) {
+    message(sprintf("    Error setting filter: %s", e$message))
+    return(FALSE)
+  })
+  
+  return(result)
+}
+
+#' Get already scraped gameweeks from Google Sheet
+get_existing_gameweeks <- function(sheet_id, sheet_name) {
+  tryCatch({
+    # Check if sheet exists
+    sheet_info <- gs4_get(sheet_id)
+    if (!sheet_name %in% sheet_info$sheets$name) {
+      message("  Sheet doesn't exist yet - will scrape all gameweeks")
+      return(integer(0))
+    }
+    
+    # Read just the gameweek column
+    existing_data <- read_sheet(sheet_id, sheet = sheet_name, col_types = "c")
+    
+    if (nrow(existing_data) == 0 || !"gameweek" %in% names(existing_data)) {
+      return(integer(0))
+    }
+    
+    existing_gws <- unique(as.integer(existing_data$gameweek))
+    existing_gws <- existing_gws[!is.na(existing_gws)]
+    
+    return(sort(existing_gws))
+    
+  }, error = function(e) {
+    message(sprintf("  Note: Could not read existing data: %s", e$message))
+    return(integer(0))
+  })
+}
+
+#' Scrape gameweek stats one gameweek at a time (incremental)
+scrape_gameweek_stats_incremental <- function(url, browser, sheet_id, sheet_name) {
+  
+  message("\n=== Scraping Gameweek Stats (Incremental) ===")
+  message(sprintf("URL: %s", url))
+  
+  # Navigate to page first
+  Sys.sleep(RATE_LIMIT_DELAY)
+  page <- fetch_page(url, browser)
+  
+  # Detect max gameweek
+  max_gw <- get_max_gameweek(browser)
+  
+  if (is.null(max_gw)) {
+    message("  ✗ Could not detect max gameweek - cannot proceed with incremental scraping")
+    message("  TIP: Check the page manually and update CURRENT_GAMEWEEK in config if needed")
+    return(NULL)
+  }
+  
+  message(sprintf("  Max gameweek to scrape: %d", max_gw))
+  
+  # Check which gameweeks already exist
+  existing_gws <- get_existing_gameweeks(sheet_id, sheet_name)
+  if (length(existing_gws) > 0) {
+    message(sprintf("  Already scraped: GW %s", paste(existing_gws, collapse = ", ")))
+  }
+  
+  # Determine which gameweeks to scrape
+  all_gws <- 1:max_gw
+  new_gws <- setdiff(all_gws, existing_gws)
+  
+  if (length(new_gws) == 0) {
+    message("  ✓ All gameweeks already scraped - nothing to do")
+    return(NULL)
+  }
+  
+  message(sprintf("  Gameweeks to scrape: %s", paste(new_gws, collapse = ", ")))
+  
+  all_data <- list()
+  
+  for (gw in new_gws) {
+    message(sprintf("\n--- Gameweek %d ---", gw))
+    
+    # Navigate fresh to the page for each gameweek
+    Sys.sleep(RATE_LIMIT_DELAY)
+    page <- fetch_page(url, browser)
+    Sys.sleep(2)
+    
+    # Set the filter to this gameweek
+    if (!set_gameweek_filter(browser, gw)) {
+      message(sprintf("  ⚠️  Could not set filter for GW%d - skipping", gw))
+      next
+    }
+    
+    # Wait for table to update after filter
+    Sys.sleep(3)
+    
+    # Scrape all pages for this gameweek
+    gw_data <- scrape_current_table_all_pages(browser)
+    
+    if (!is.null(gw_data) && nrow(gw_data) > 0) {
+      # Add gameweek column
+      gw_data$gameweek <- gw
+      all_data[[length(all_data) + 1]] <- gw_data
+      message(sprintf("  ✓ GW%d: %d rows", gw, nrow(gw_data)))
+    } else {
+      message(sprintf("  ⚠️  GW%d: No data found", gw))
+    }
+  }
+  
+  if (length(all_data) == 0) {
+    message("  No new data scraped")
+    return(NULL)
+  }
+  
+  # Combine all gameweek data
+  combined_data <- bind_rows(all_data)
+  combined_data$scrape_date <- format(Sys.time(), "%Y-%m-%d %H:%M:%S")
+  
+  message(sprintf("\n✓ Total new data: %d rows across %d gameweeks", 
+                  nrow(combined_data), length(all_data)))
+  
+  return(combined_data)
+}
+
+#' Scrape current filtered table across all pages (helper for gameweek scraping)
+scrape_current_table_all_pages <- function(browser) {
+  
+  all_rows <- list()
+  headers <- NULL
+  page_num <- 1
+  
+  repeat {
+    # Get current page HTML
+    html <- browser$Runtime$evaluate("document.documentElement.outerHTML")$result$value
+    page <- read_html(html)
+    
+    # Extract table
+    table_data <- extract_table_from_page(page)
+    
+    if (is.null(table_data)) {
+      if (page_num == 1) {
+        return(NULL)
+      }
+      break
+    }
+    
+    # Store headers from first page
+    if (page_num == 1) {
+      headers <- table_data$headers
+    }
+    
+    # Add rows
+    all_rows <- c(all_rows, table_data$rows)
+    
+    # Check if last page
+    if (is_last_page(browser)) {
+      break
+    }
+    
+    # Try next page
+    if (!click_next_page(browser)) {
+      break
+    }
+    
+    Sys.sleep(RATE_LIMIT_DELAY)
+    page_num <- page_num + 1
+    
+    if (page_num > 100) break
+  }
+  
+  if (length(all_rows) == 0 || is.null(headers)) {
+    return(NULL)
+  }
+  
+  # Build dataframe
+  num_cols <- length(headers)
+  cleaned_rows <- lapply(all_rows, function(row) {
+    if (length(row) < num_cols) {
+      c(row, rep("", num_cols - length(row)))
+    } else if (length(row) > num_cols) {
+      row[1:num_cols]
+    } else {
+      row
+    }
+  })
+  
+  df <- as.data.frame(do.call(rbind, cleaned_rows), stringsAsFactors = FALSE)
+  names(df) <- make.names(headers, unique = TRUE)
+  
+  return(df)
 }
 
 set_rows_per_page <- function(browser, target_rows = 100) {
@@ -382,18 +847,10 @@ scrape_paginated_table <- function(url, name, browser) {
   Sys.sleep(RATE_LIMIT_DELAY)
   page <- fetch_page(url, browser)
   
-  # Try to set max rows per page
-  set_rows_per_page(browser, 500)
-  
-  # Re-fetch after potential rows change
-  Sys.sleep(2)
-  html <- browser$Runtime$evaluate("document.documentElement.outerHTML")$result$value
-  page <- read_html(html)
-  
-  # Get total count if available
-  total_rows <- get_pagination_info(browser)
-  if (!is.null(total_rows)) {
-    message(sprintf("  Total rows detected: %d", total_rows))
+  # Get pagination info
+  page_info <- get_pagination_info(browser)
+  if (!is.null(page_info) && !is.null(page_info$total)) {
+    message(sprintf("  Pagination detected: Page %d of %d", page_info$current, page_info$total))
   }
   
   all_rows <- list()
@@ -402,6 +859,10 @@ scrape_paginated_table <- function(url, name, browser) {
   
   repeat {
     message(sprintf("  Processing page %d...", page_num))
+    
+    # Re-fetch page content (important after navigation)
+    html <- browser$Runtime$evaluate("document.documentElement.outerHTML")$result$value
+    page <- read_html(html)
     
     # Extract current page
     table_data <- extract_table_from_page(page)
@@ -417,32 +878,35 @@ scrape_paginated_table <- function(url, name, browser) {
     # Store headers from first page
     if (page_num == 1) {
       headers <- table_data$headers
-      message(sprintf("  Headers: %s", paste(headers, collapse = ", ")))
+      message(sprintf("  Headers (%d cols): %s...", length(headers), 
+                      paste(headers[1:min(5, length(headers))], collapse = ", ")))
     }
     
     # Add rows
     rows_added <- length(table_data$rows)
     all_rows <- c(all_rows, table_data$rows)
-    message(sprintf("  Found %d rows (total: %d)", rows_added, length(all_rows)))
+    message(sprintf("    Found %d rows (total: %d)", rows_added, length(all_rows)))
+    
+    # Check if we're on the last page
+    if (is_last_page(browser)) {
+      message("  Reached last page")
+      break
+    }
     
     # Try to go to next page
     if (!click_next_page(browser)) {
-      message("  No more pages")
+      message("  No more pages (Next button not found or disabled)")
       break
     }
     
     # Wait for new page to load
     Sys.sleep(RATE_LIMIT_DELAY)
     
-    # Re-fetch page content
-    html <- browser$Runtime$evaluate("document.documentElement.outerHTML")$result$value
-    page <- read_html(html)
-    
     page_num <- page_num + 1
     
-    # Safety limit
-    if (page_num > 50) {
-      message("  ⚠️  Reached page limit of 50")
+    # Safety limit (45 pages * ~10 rows = ~450 players, but allow extra)
+    if (page_num > 100) {
+      message("  ⚠️  Reached page limit of 100")
       break
     }
   }
@@ -490,14 +954,15 @@ main <- function() {
   message("          NotOnlyFPL FanTeam STATS SCRAPER")
   message("================================================================================")
   message("")
-  message("📊 DATA SOURCES:")
-  message(sprintf("   1. Stats Overall: %s", URLS$stats_overview))
-  message(sprintf("   2. Stats by GW: %s", URLS$gameweek_stats))
+  message("📊 DATA SOURCE:")
+  message(sprintf("   %s", STATS_URL))
   message("")
   message("📝 TARGET GOOGLE SHEET:")
   message(sprintf("   https://docs.google.com/spreadsheets/d/%s/edit", GOOGLE_SHEET_ID))
   message("")
-  message("⚠️  MODE: Full replace (clears and rewrites sheets)")
+  message("⚠️  MODE:")
+  message("   - stats_overview: Full season totals (replaced each run)")
+  message("   - gameweek_detail: Individual GW stats (INCREMENTAL - only new GWs)")
   message(sprintf("⚠️  RATE LIMIT: %d seconds between requests", RATE_LIMIT_DELAY))
   message("================================================================================")
   
@@ -514,23 +979,23 @@ main <- function() {
     stop("Failed to authenticate with Google Sheets: ", e$message)
   })
   
-  # Scrape both tables
   results <- list()
   
   tryCatch({
     
-    # 1. Stats Overview
+    # 1. Stats Overview - full season (slider at full range 1-17)
     results$stats_overview <- scrape_paginated_table(
-      URLS$stats_overview, 
-      "Stats Overall",
+      STATS_URL, 
+      "Stats Overall (Full Season)",
       browser
     )
     
-    # 2. Gameweek Stats
-    results$gameweek_stats <- scrape_paginated_table(
-      URLS$gameweek_stats,
-      "Stats by Gameweek",
-      browser
+    # 2. Individual Gameweek Stats (incremental - filter by each GW)
+    results$gameweek_detail <- scrape_gameweek_stats_incremental(
+      STATS_URL,
+      browser,
+      GOOGLE_SHEET_ID,
+      "gameweek_detail"
     )
     
   }, finally = {
@@ -540,6 +1005,7 @@ main <- function() {
   # Write to Google Sheets
   message("\n=== Writing to Google Sheets ===")
   
+  # Stats Overview - full replace
   if (!is.null(results$stats_overview)) {
     write_to_google_sheet(
       results$stats_overview,
@@ -549,13 +1015,16 @@ main <- function() {
     )
   }
   
-  if (!is.null(results$gameweek_stats)) {
+  # Gameweek Detail - append new GWs only
+  if (!is.null(results$gameweek_detail) && nrow(results$gameweek_detail) > 0) {
     write_to_google_sheet(
-      results$gameweek_stats,
+      results$gameweek_detail,
       GOOGLE_SHEET_ID,
-      SHEET_NAMES$gameweek_stats,
-      replace = TRUE
+      "gameweek_detail",
+      replace = FALSE
     )
+  } else {
+    message("  Gameweek Detail: No new data to write")
   }
   
   # Summary
@@ -565,15 +1034,18 @@ main <- function() {
   message("================================================================================")
   
   if (!is.null(results$stats_overview)) {
-    message(sprintf("✓ Stats Overview: %d rows", nrow(results$stats_overview)))
+    message(sprintf("✓ Stats Overview: %d rows (full season)", nrow(results$stats_overview)))
   } else {
     message("✗ Stats Overview: No data")
   }
   
-  if (!is.null(results$gameweek_stats)) {
-    message(sprintf("✓ Gameweek Stats: %d rows", nrow(results$gameweek_stats)))
+  if (!is.null(results$gameweek_detail) && nrow(results$gameweek_detail) > 0) {
+    gws_scraped <- unique(results$gameweek_detail$gameweek)
+    message(sprintf("✓ Gameweek Detail: %d rows (GW %s)", 
+                    nrow(results$gameweek_detail),
+                    paste(sort(gws_scraped), collapse = ", ")))
   } else {
-    message("✗ Gameweek Stats: No data")
+    message("○ Gameweek Detail: Already up to date (or no new GWs)")
   }
   
   message("")

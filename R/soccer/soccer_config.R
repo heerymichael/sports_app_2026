@@ -16,6 +16,19 @@ SOCCER_SHEET_IDS <- list(
   team_goals = "1gUCVxBFR3kwE259ZccWBLRn7iAlV0HpZL7OccbGsWuo"
 )
 
+# Google Drive Parquet File IDs (for fast loading - ~5-15 seconds vs ~3 minutes)
+USE_GOOGLE_DRIVE <- TRUE
+
+# Folder containing Parquet files - files are looked up by name automatically
+SOCCER_DRIVE_FOLDER_ID <- "1APlkMnjX3RjxPOzEnYWP5DYYCH_AcUM8"
+
+# File names in the Drive folder (must match what scraper uploads)
+SOCCER_DRIVE_FILES <- list(
+  player_match_stats = "player_match_stats.parquet",
+  shots = "shots.parquet",
+  team_goals = "team_goals.parquet"
+)
+
 # Use Parquet format for faster cache reads (requires arrow package)
 USE_PARQUET_CACHE <- TRUE
 
@@ -46,6 +59,20 @@ LEAGUE_DATA_NAMES <- c(
   "La Liga" = "La-Liga",
   "Bundesliga" = "Bundesliga",
   "Championship" = "Championship"
+)
+
+# =============================================================================
+# LEAGUE LOGO PATHS
+# =============================================================================
+
+# Map display league names to logo file paths (relative to www/)
+# Files are in www/soccer_logos/League Logos/
+LEAGUE_LOGO_PATHS <- c(
+  "Premier League" = "soccer_logos/League Logos/Premier_League.png",
+  "Serie A" = "soccer_logos/League Logos/Serie_A.jpeg",
+  "La Liga" = "soccer_logos/League Logos/LaLiga.jpeg",
+  "Bundesliga" = "soccer_logos/League Logos/Bundesliga.png",
+  "Championship" = "soccer_logos/League Logos/Championship.png"
 )
 
 # =============================================================================
@@ -98,16 +125,16 @@ TEAM_NAME_MAPPING <- c(
   # La Liga
   "Betis" = "Real Betis",
   "Real Betis" = "Real Betis",
-  "AtlÃƒÆ’Ã‚Â©tico Madrid" = "Atletico Madrid",
+  "AtlÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â©tico Madrid" = "Atletico Madrid",
   "Atletico Madrid" = "Atletico Madrid",
-  "Atlético Madrid" = "Atletico Madrid",
-  "Atlético" = "Atletico Madrid",
+  "AtlÃƒÆ’Ã‚Â©tico Madrid" = "Atletico Madrid",
   "AtlÃƒÆ’Ã‚Â©tico" = "Atletico Madrid",
+  "AtlÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â©tico" = "Atletico Madrid",
   "Athletic Club" = "Athletic Bilbao",
   "Athletic Bilbao" = "Athletic Bilbao",
-  "AlavÃƒÆ’Ã‚Â©s" = "Alaves",
+  "AlavÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â©s" = "Alaves",
   "Alaves" = "Alaves",
-  "Alavés" = "Alaves",
+  "AlavÃƒÆ’Ã‚Â©s" = "Alaves",
   "Oviedo" = "Real Oviedo",
   "Real Oviedo" = "Real Oviedo",
   "Espanyol" = "Espanyol",
@@ -115,17 +142,17 @@ TEAM_NAME_MAPPING <- c(
   "Rayo Vallecano" = "Rayo Vallecano",
   "Sevilla" = "Sevilla",
   "Las Palmas" = "Las Palmas",
-  "LeganÃƒÆ’Ã‚Â©s" = "Leganes",
+  "LeganÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â©s" = "Leganes",
   "Leganes" = "Leganes",
-  "Leganés" = "Leganes",
+  "LeganÃƒÆ’Ã‚Â©s" = "Leganes",
   "Valladolid" = "Real Valladolid",
   "Real Valladolid" = "Real Valladolid",
   
   # Bundesliga
   "Bayern Munich" = "Bayern Munich",
-  "Bayern München" = "Bayern Munich",
-  "Bayern MÃƒÂ¼nchen" = "Bayern Munich",
-  "FC Bayern MÃƒÂ¼nchen" = "Bayern Munich",
+  "Bayern MÃƒÆ’Ã‚Â¼nchen" = "Bayern Munich",
+  "Bayern MÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¼nchen" = "Bayern Munich",
+  "FC Bayern MÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¼nchen" = "Bayern Munich",
   "Bayern" = "Bayern Munich",
   "Borussia Dortmund" = "Borussia Dortmund",
   "Dortmund" = "Borussia Dortmund",
@@ -148,10 +175,10 @@ TEAM_NAME_MAPPING <- c(
   "Mainz 05" = "Mainz",
   "1. FSV Mainz 05" = "Mainz",
   "Borussia Monchengladbach" = "Borussia Monchengladbach",
-  "Borussia Mönchengladbach" = "Borussia Monchengladbach",
+  "Borussia MÃƒÆ’Ã‚Â¶nchengladbach" = "Borussia Monchengladbach",
   "M'Gladbach" = "Borussia Monchengladbach",
-  "Mönchengladbach" = "Borussia Monchengladbach",
-  "Borussia MÃƒÂ¶nchengladbach" = "Borussia Monchengladbach",
+  "MÃƒÆ’Ã‚Â¶nchengladbach" = "Borussia Monchengladbach",
+  "Borussia MÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¶nchengladbach" = "Borussia Monchengladbach",
   "Gladbach" = "Borussia Monchengladbach",
   "Hoffenheim" = "Hoffenheim",
   "TSG Hoffenheim" = "Hoffenheim",
@@ -169,9 +196,9 @@ TEAM_NAME_MAPPING <- c(
   "Darmstadt" = "Darmstadt",
   "SV Darmstadt 98" = "Darmstadt",
   "Koln" = "Koln",
-  "Köln" = "Koln",
-  "KÃƒÂ¶ln" = "Koln",
-  "1. FC KÃƒÂ¶ln" = "Koln",
+  "KÃƒÆ’Ã‚Â¶ln" = "Koln",
+  "KÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¶ln" = "Koln",
+  "1. FC KÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¶ln" = "Koln",
   "Hamburg" = "Hamburg",
   "Hamburger SV" = "Hamburg",
   "HSV" = "Hamburg",
@@ -561,8 +588,96 @@ get_soccer_team_logo <- function(team_name) {
   normalized <- normalize_team_names(team_name)
   
   if (normalized %in% names(TEAM_LOGO_PATHS)) {
-    return(TEAM_LOGO_PATHS[normalized])
+    return(unname(TEAM_LOGO_PATHS[normalized]))
   }
   
   return(NULL)
+}
+
+#' Get logo path for a league
+#' @param league_name Display league name (e.g., "Premier League", "Serie A")
+#' @return Logo path or NULL if not found
+get_league_logo <- function(league_name) {
+  if (is.null(league_name) || is.na(league_name) || league_name == "") return(NULL)
+  
+  if (league_name %in% names(LEAGUE_LOGO_PATHS)) {
+    return(unname(LEAGUE_LOGO_PATHS[league_name]))
+  }
+  
+  return(NULL)
+}
+
+# =============================================================================
+# POSITION SIMPLIFICATION (FBref â†’ FanTeam style)
+# =============================================================================
+
+#' Simplify FBref position to FanTeam-style position
+#' FBref uses: GK, DF, MF, FW with variants like "FW,AM", "MF,FW", "DF,DM"
+#' FanTeam uses: GK, DEF, MID, FWD
+#' 
+#' Logic: Take the primary (first) position and map it
+#' @param position FBref position string (e.g., "FW,AM", "MF", "DF,DM") - can be a vector
+#' @return Simplified position (GK, DEF, MID, or FWD)
+simplify_position <- function(position) {
+  # Position mapping - WB maps to MID as modern wingbacks are attack-minded
+  pos_map <- c(
+    "GK" = "GK",
+    "DF" = "DEF",
+    "CB" = "DEF",
+    "LB" = "DEF",
+    "RB" = "DEF",
+    "WB" = "MID",
+    "LWB" = "MID",
+    "RWB" = "MID",
+    "MF" = "MID",
+    "DM" = "MID",
+    "CM" = "MID",
+    "AM" = "MID",
+    "LM" = "MID",
+    "RM" = "MID",
+    "FW" = "FWD",
+    "LW" = "FWD",
+    "RW" = "FWD",
+    "ST" = "FWD",
+    "CF" = "FWD"
+  )
+  
+  # Vectorized implementation
+  sapply(position, function(pos) {
+    if (is.null(pos) || is.na(pos) || pos == "") {
+      return(NA_character_)
+    }
+    
+    # Extract primary position (first one before comma)
+    primary <- toupper(trimws(strsplit(as.character(pos), ",")[[1]][1]))
+    
+    if (primary %in% names(pos_map)) {
+      return(unname(pos_map[primary]))
+    }
+    
+    # Fallback: check if contains key position indicators
+    if (grepl("GK|GOALKEEPER", pos, ignore.case = TRUE)) return("GK")
+    if (grepl("^DF|DEFENDER|\\bDF\\b", pos, ignore.case = TRUE)) return("DEF")
+    if (grepl("^MF|MIDFIELDER|\\bMF\\b", pos, ignore.case = TRUE)) return("MID")
+    if (grepl("^FW|FORWARD|\\bFW\\b", pos, ignore.case = TRUE)) return("FWD")
+    
+    return(NA_character_)
+  }, USE.NAMES = FALSE)
+}
+
+#' Get position display badge color
+#' @param position Simplified position (GK, DEF, MID, FWD)
+#' @return Hex color for the position badge
+get_position_color <- function(position) {
+  colors <- c(
+    "GK" = "#f59e0b",   # Amber
+    "DEF" = "#3b82f6",  # Blue
+    "MID" = "#22c55e",  # Green
+    "FWD" = "#ef4444"   # Red
+  )
+  
+  if (position %in% names(colors)) {
+    return(colors[position])
+  }
+  return("#6b7280")  # Gray fallback
 }

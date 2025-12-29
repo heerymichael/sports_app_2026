@@ -45,9 +45,12 @@ nfl_projections_ui <- function(id) {
     week_selected <- NULL
   }
   
-  # Build slate choices
-  slate_choices <- c("Main" = "main", "Late" = "late")[c("main", "late") %in% slates]
-  if (length(slate_choices) == 0) slate_choices <- c("Main" = "main")
+  # Build slate choices with proper labels for all available slates
+  slate_choices <- if (length(slates) > 0) {
+    setNames(slates, sapply(slates, get_slate_label))
+  } else {
+    c("Main" = "main")
+  }
   
   tagList(
     # Page header
@@ -79,7 +82,7 @@ nfl_projections_ui <- function(id) {
         column(4,
                selectInput(ns("slate"), "Slate",
                            choices = slate_choices,
-                           selected = "main"
+                           selected = slates[1]
                )
         )
       ),
@@ -286,13 +289,24 @@ nfl_projections_server <- function(id) {
       log_debug(">>> Slates found:", paste(slates, collapse = ", "), level = "INFO")
       
       if (length(slates) > 0) {
-        slate_choices <- c("Main" = "main", "Late" = "late")[c("main", "late") %in% slates]
+        slate_choices <- setNames(slates, sapply(slates, get_slate_label))
+        
+        # Preserve current selection if still valid
+        current_slate <- isolate(input$slate)
+        new_selected <- if (!is.null(current_slate) && current_slate %in% slates) {
+          current_slate
+        } else if ("main" %in% slates) {
+          "main"
+        } else {
+          slates[1]
+        }
+        
         updateSelectInput(session, "slate",
                           choices = slate_choices,
-                          selected = if ("main" %in% slates) "main" else slates[1]
+                          selected = new_selected
         )
       }
-    }, ignoreInit = TRUE)
+    }, ignoreInit = FALSE)
     
     # =========================================================================
     # UPDATE TEAM DROPDOWN when data loads
@@ -452,7 +466,7 @@ nfl_projections_server <- function(id) {
       # Sort indicator helper
       sort_indicator <- function(col_name) {
         if (sort_col() == col_name) {
-          if (sort_dir() == "desc") " â–¼" else " â–²"
+          if (sort_dir() == "desc") " Ã¢â€“Â¼" else " Ã¢â€“Â²"
         } else {
           ""
         }

@@ -1,17 +1,19 @@
 ################################################################################
 # FBref COMBINED SCRAPER - UNIFIED PLAYER MATCH STATS
 # 
-# Scrapes and combines player data into a single sheet:
-#   - Player Summary + Possession combined at scrape time
-#   - Shots in separate sheet (different grain)
-#   - Team Goals in separate sheet (different grain)
+# PRODUCTION VERSION - All fixes included:
+#   - Fixed URL format for FBref (current season has no year in URL)
+#   - Fixed score parsing regex (handles en-dashes, em-dashes)
+#   - Fixed shot column names: xg_shot->xg, psxg_shot->psxg, team->squad
+#   - Parquet-first loading for existing URLs (fast startup)
+#   - Fixed write_to_google_sheet to handle empty sheets (writes headers)
+#   - Exports to Parquet at end of scrape
 #
 # Target Sheets:
-#   - Player_Match_Stats: Combined player-level data (new!)
+#   - Player_Match_Stats: Combined player-level data
 #   - Shot_Data: Individual shot records
 #   - Team_Goals: Match scores
 ################################################################################
-
 library(rvest)
 library(dplyr)
 library(stringr)
@@ -24,38 +26,31 @@ library(chromote)
 ################################################################################
 # CONFIGURATION
 ################################################################################
-
 RATE_LIMIT_DELAY <- 10
 LEAGUE_DELAY <- 15
-BATCH_SIZE <- 20  # Write to Google Sheets every 20 matches
+BATCH_SIZE <- 20
 SAVE_LOCAL_BACKUP <- TRUE
 BACKUP_DIR <- "fbref_backups"
-
 LEAGUES_TO_SCRAPE <- c("Premier-League", "Serie-A", "La-Liga", "Bundesliga", "Championship")
 SEASON <- "2025-2026"
 
-# NEW SHEET STRUCTURE
 SHEETS_CONFIG <- list(
-  # NEW: Combined player match stats (Summary + Possession)
   player_match_stats = list(
     sheet_id = "12MXPMsuI4S7EiTPnVpaqx5-riXoK37cEtPo-MFOf1fA",
     sheet_name = "Player_Match_Stats"
   ),
-  # Keep shots separate (shot-level grain)
   shots = list(
     sheet_id = "1oxQ6rk_B_r2QUNZxGssmDEopKqJD0otMt_r1hPOufT0",
     sheet_name = "Shot_Data"
   ),
-  # Keep team goals separate (match-level grain)
   team_goals = list(
     sheet_id = "1gUCVxBFR3kwE259ZccWBLRn7iAlV0HpZL7OccbGsWuo",
     sheet_name = "Team_Goals"
   )
 )
 
-# Google Drive folder for Parquet files (fast loading for Shiny app)
 DRIVE_FOLDER_ID <- "1APlkMnjX3RjxPOzEnYWP5DYYCH_AcUM8"
-EXPORT_PARQUET_TO_DRIVE <- TRUE  # Set FALSE to skip Parquet export
+EXPORT_PARQUET_TO_DRIVE <- TRUE
 
 LEAGUE_CODES <- c(
   "Premier-League" = "9",
@@ -73,45 +68,27 @@ LEAGUE_CODES <- c(
 )
 
 ################################################################################
-# COLUMN SCHEMA FOR COMBINED PLAYER STATS
+# COLUMN SCHEMAS
 ################################################################################
-
 SCHEMA_PLAYER_MATCH_STATS <- c(
-  # Identifiers
   "league", "season", "match_date", "gameweek",
-  # Match info
   "home_team", "away_team", "venue",
-  # Player info
   "team", "player", "player_href", "shirtnumber", "nationality", "position", "age",
-  # Playing time
   "minutes",
-  # Goals & Assists
   "goals", "assists", "pens_made", "pens_att",
-  # Shooting
   "shots", "shots_on_target", "xg", "npxg",
-  # Passing
   "passes_completed", "passes", "passes_pct", "progressive_passes", "xg_assist",
-  # Shot creation
   "sca", "gca",
-  # Defense
   "tackles", "interceptions", "blocks",
-  # Cards
   "cards_yellow", "cards_red",
-  # Touches (from Possession)
   "touches", "touches_def_pen_area", "touches_def_3rd", "touches_mid_3rd",
   "touches_att_3rd", "touches_att_pen_area", "touches_live_ball",
-  # Take-ons (from Possession)
   "take_ons", "take_ons_won", "take_ons_won_pct", "take_ons_tackled", "take_ons_tackled_pct",
-  # Carries (from Possession)
   "carries", "carries_distance", "carries_progressive_distance", "progressive_carries",
   "carries_into_final_third", "carries_into_penalty_area",
-  # Ball control (from Possession)
   "miscontrols", "dispossessed", "passes_received", "progressive_passes_received",
-  # Reference
   "match_url",
-  # Possession percentages (existing in Sheet)
   "touches_poss", "take_ons_poss", "take_ons_won_poss", "carries_poss", "progressive_carries_poss",
-  # New stats
   "fouls", "fouled", "offsides", "crosses", "tackles_won", "own_goals", "pens_won", "pens_conceded"
 )
 
@@ -130,18 +107,15 @@ SCHEMA_TEAM_GOALS <- c(
 ################################################################################
 # SCHEMA ENFORCEMENT
 ################################################################################
-
 enforce_schema <- function(df, schema) {
   if (is.null(df) || nrow(df) == 0) return(df)
   
-  # Add missing columns
   for (col in schema) {
     if (!col %in% names(df)) {
       df[[col]] <- NA
     }
   }
   
-  # STRICT: Only keep schema columns, in schema order
   df <- df %>% 
     select(all_of(schema)) %>%
     mutate(across(everything(), as.character))
@@ -150,8 +124,54 @@ enforce_schema <- function(df, schema) {
 }
 
 ################################################################################
-# CACHED URL LOADING
+# LOAD EXISTING URLS - PARQUET FIRST, SHEETS FALLBACK
 ################################################################################
+load_parquet_from_drive <- function(data_type) {
+  if (!requireNamespace("googledrive", quietly = TRUE) || 
+      !requireNamespace("arrow", quietly = TRUE)) {
+    return(NULL)
+  }
+  
+  filenames <- list(
+    player_match_stats = "player_match_stats.parquet",
+    shots = "shots.parquet",
+    team_goals = "team_goals.parquet"
+  )
+  
+  filename <- filenames[[data_type]]
+  if (is.null(filename)) return(NULL)
+  
+  tryCatch({
+    googledrive::drive_deauth()
+    
+    files <- googledrive::drive_find(
+      q = sprintf("'%s' in parents and name = '%s'", DRIVE_FOLDER_ID, filename),
+      n_max = 1
+    )
+    
+    if (nrow(files) == 0) {
+      message(sprintf("  [WARN] Parquet not found on Drive: %s", filename))
+      return(NULL)
+    }
+    
+    temp_file <- tempfile(fileext = ".parquet")
+    googledrive::drive_download(
+      googledrive::as_id(files$id[1]),
+      path = temp_file,
+      overwrite = TRUE
+    )
+    
+    data <- arrow::read_parquet(temp_file)
+    unlink(temp_file)
+    
+    message(sprintf("  [OK] Loaded %s from Drive Parquet: %d rows", data_type, nrow(data)))
+    return(as.data.frame(data))
+    
+  }, error = function(e) {
+    message(sprintf("  [WARN] Drive Parquet load failed for %s: %s", data_type, e$message))
+    return(NULL)
+  })
+}
 
 load_all_existing_urls <- function() {
   message("\n========================================")
@@ -160,19 +180,58 @@ load_all_existing_urls <- function() {
   
   cache <- list()
   
-  # Player Match Stats (combined sheet with league column)
-  player_data <- tryCatch({
-    read_sheet(
-      SHEETS_CONFIG$player_match_stats$sheet_id,
-      sheet = SHEETS_CONFIG$player_match_stats$sheet_name,
-      col_types = "c"
-    )
-  }, error = function(e) {
-    message(sprintf("  Note: Could not read Player_Match_Stats: %s", e$message))
-    data.frame()
-  })
+  message("Attempting to load from Google Drive Parquet files...")
   
-  if (nrow(player_data) > 0 && "match_url" %in% names(player_data)) {
+  player_data <- load_parquet_from_drive("player_match_stats")
+  shots_data <- load_parquet_from_drive("shots")
+  goals_data <- load_parquet_from_drive("team_goals")
+  
+  parquet_success <- !is.null(player_data) && !is.null(shots_data) && !is.null(goals_data)
+  
+  if (!parquet_success) {
+    message("\n[INFO] Some Parquet files missing - falling back to Google Sheets (slower)...")
+    
+    if (is.null(player_data)) {
+      message("  Loading Player_Match_Stats from Sheets...")
+      player_data <- tryCatch({
+        read_sheet(
+          SHEETS_CONFIG$player_match_stats$sheet_id,
+          sheet = SHEETS_CONFIG$player_match_stats$sheet_name,
+          col_types = "c"
+        )
+      }, error = function(e) {
+        message(sprintf("    [WARN] Could not read: %s", e$message))
+        data.frame()
+      })
+    }
+    
+    if (is.null(shots_data)) {
+      message("  Loading Shot_Data from Sheets...")
+      shots_data <- tryCatch({
+        read_sheet(
+          SHEETS_CONFIG$shots$sheet_id,
+          sheet = SHEETS_CONFIG$shots$sheet_name,
+          col_types = "c"
+        )
+      }, error = function(e) data.frame())
+    }
+    
+    if (is.null(goals_data)) {
+      message("  Loading Team_Goals from Sheets...")
+      goals_data <- tryCatch({
+        read_sheet(
+          SHEETS_CONFIG$team_goals$sheet_id,
+          sheet = SHEETS_CONFIG$team_goals$sheet_name,
+          col_types = "c"
+        )
+      }, error = function(e) data.frame())
+    }
+  } else {
+    message("[OK] All data loaded from Parquet files (fast path)")
+  }
+  
+  # Build URL cache from player data
+  if (!is.null(player_data) && nrow(player_data) > 0 && "match_url" %in% names(player_data)) {
     if ("league" %in% names(player_data)) {
       for (league in LEAGUES_TO_SCRAPE) {
         cache[[paste0("player_", league)]] <- unique(
@@ -187,22 +246,14 @@ load_all_existing_urls <- function() {
     }
     message(sprintf("  Player Match Stats: %d total rows", nrow(player_data)))
   } else {
-    message("  Player Match Stats: Empty or new sheet")
+    message("  Player Match Stats: Empty or new")
     for (league in LEAGUES_TO_SCRAPE) {
       cache[[paste0("player_", league)]] <- character(0)
     }
   }
   
-  # Shots
-  shots_data <- tryCatch({
-    read_sheet(
-      SHEETS_CONFIG$shots$sheet_id,
-      sheet = SHEETS_CONFIG$shots$sheet_name,
-      col_types = "c"
-    )
-  }, error = function(e) data.frame())
-  
-  if (nrow(shots_data) > 0 && "match_url" %in% names(shots_data)) {
+  # Build URL cache from shots data
+  if (!is.null(shots_data) && nrow(shots_data) > 0 && "match_url" %in% names(shots_data)) {
     if ("league" %in% names(shots_data)) {
       for (league in LEAGUES_TO_SCRAPE) {
         cache[[paste0("shots_", league)]] <- unique(
@@ -215,19 +266,16 @@ load_all_existing_urls <- function() {
         cache[[paste0("shots_", league)]] <- all_urls
       }
     }
+    message(sprintf("  Shots: %d total rows", nrow(shots_data)))
+  } else {
+    message("  Shots: Empty or new")
+    for (league in LEAGUES_TO_SCRAPE) {
+      cache[[paste0("shots_", league)]] <- character(0)
+    }
   }
-  message(sprintf("  Shots: %d total rows", nrow(shots_data)))
   
-  # Team Goals
-  goals_data <- tryCatch({
-    read_sheet(
-      SHEETS_CONFIG$team_goals$sheet_id,
-      sheet = SHEETS_CONFIG$team_goals$sheet_name,
-      col_types = "c"
-    )
-  }, error = function(e) data.frame())
-  
-  if (nrow(goals_data) > 0 && "match_url" %in% names(goals_data)) {
+  # Build URL cache from goals data
+  if (!is.null(goals_data) && nrow(goals_data) > 0 && "match_url" %in% names(goals_data)) {
     if ("league" %in% names(goals_data)) {
       for (league in LEAGUES_TO_SCRAPE) {
         cache[[paste0("goals_", league)]] <- unique(
@@ -240,8 +288,13 @@ load_all_existing_urls <- function() {
         cache[[paste0("goals_", league)]] <- all_urls
       }
     }
+    message(sprintf("  Team Goals: %d total rows", nrow(goals_data)))
+  } else {
+    message("  Team Goals: Empty or new")
+    for (league in LEAGUES_TO_SCRAPE) {
+      cache[[paste0("goals_", league)]] <- character(0)
+    }
   }
-  message(sprintf("  Team Goals: %d total rows", nrow(goals_data)))
   
   message("========================================\n")
   return(cache)
@@ -252,7 +305,6 @@ get_existing_urls_for_league <- function(league, cache) {
   shots_urls <- cache[[paste0("shots_", league)]] %||% character(0)
   goals_urls <- cache[[paste0("goals_", league)]] %||% character(0)
   
-  # Complete = in all three
   complete <- Reduce(intersect, list(player_urls, shots_urls, goals_urls))
   
   list(
@@ -266,7 +318,6 @@ get_existing_urls_for_league <- function(league, cache) {
 ################################################################################
 # LOCAL BACKUP
 ################################################################################
-
 init_backup_dir <- function() {
   if (SAVE_LOCAL_BACKUP && !dir.exists(BACKUP_DIR)) {
     dir.create(BACKUP_DIR, recursive = TRUE)
@@ -290,7 +341,6 @@ save_local_backup <- function(data, data_type, league) {
 ################################################################################
 # CHROMOTE BROWSER
 ################################################################################
-
 init_browser <- function() {
   message("Initializing headless browser...")
   
@@ -369,6 +419,7 @@ fetch_page <- function(url, browser, wait_time = 10, max_retries = 3) {
 ################################################################################
 # GOOGLE SHEETS WRITE
 ################################################################################
+SHEETS_INITIALIZED <- new.env()
 
 write_to_google_sheet <- function(data, sheet_id, sheet_name, schema = NULL, data_type = "records") {
   if (is.null(data) || nrow(data) == 0) return(FALSE)
@@ -379,27 +430,51 @@ write_to_google_sheet <- function(data, sheet_id, sheet_name, schema = NULL, dat
   
   message(sprintf("  >> Writing %d %s to %s...", nrow(data), data_type, sheet_name))
   
+  sheet_key <- paste0(sheet_id, "_", sheet_name)
+  
   tryCatch({
     sheet_info <- gs4_get(sheet_id)
     existing_sheets <- sheet_info$sheets$name
     
     if (!sheet_name %in% existing_sheets) {
       sheet_write(data, ss = sheet_id, sheet = sheet_name)
-    } else {
-      # Match existing column order
+      SHEETS_INITIALIZED[[sheet_key]] <- TRUE
+      message(sprintf("    [OK] Created new sheet with headers (%d rows)", nrow(data)))
+      
+    } else if (!isTRUE(SHEETS_INITIALIZED[[sheet_key]])) {
       existing_data <- tryCatch({
         read_sheet(sheet_id, sheet = sheet_name, n_max = 1)
       }, error = function(e) NULL)
       
-      if (!is.null(existing_data) && ncol(existing_data) > 0) {
+      if (is.null(existing_data)) {
+        sheet_props <- sheet_info$sheets[sheet_info$sheets$name == sheet_name, ]
+        grid_rows <- tryCatch({ sheet_props$grid_rows }, error = function(e) NA)
+        
+        if (!is.na(grid_rows) && grid_rows > 1) {
+          sheet_append(data, ss = sheet_id, sheet = sheet_name)
+          SHEETS_INITIALIZED[[sheet_key]] <- TRUE
+        } else {
+          sheet_write(data, ss = sheet_id, sheet = sheet_name)
+          SHEETS_INITIALIZED[[sheet_key]] <- TRUE
+        }
+        
+      } else if (ncol(existing_data) == 0 || nrow(existing_data) == 0) {
+        sheet_write(data, ss = sheet_id, sheet = sheet_name)
+        SHEETS_INITIALIZED[[sheet_key]] <- TRUE
+        
+      } else {
         existing_cols <- names(existing_data)
         for (col in existing_cols) {
           if (!col %in% names(data)) data[[col]] <- NA
         }
         new_cols <- setdiff(names(data), existing_cols)
         data <- data %>% select(all_of(c(existing_cols, new_cols)))
+        
+        sheet_append(data, ss = sheet_id, sheet = sheet_name)
+        SHEETS_INITIALIZED[[sheet_key]] <- TRUE
       }
       
+    } else {
       sheet_append(data, ss = sheet_id, sheet = sheet_name)
     }
     
@@ -414,10 +489,14 @@ write_to_google_sheet <- function(data, sheet_id, sheet_name, schema = NULL, dat
 ################################################################################
 # HELPER FUNCTIONS
 ################################################################################
-
-get_league_url <- function(league, season) {
+get_league_url <- function(league, season, use_current = TRUE) {
   league_code <- LEAGUE_CODES[league]
-  sprintf("https://fbref.com/en/comps/%s/%s/%s-Stats", league_code, season, league)
+  
+  if (use_current) {
+    sprintf("https://fbref.com/en/comps/%s/%s-Stats", league_code, league)
+  } else {
+    sprintf("https://fbref.com/en/comps/%s/%s/%s-%s-Stats", league_code, season, season, league)
+  }
 }
 
 polite_delay <- function() {
@@ -427,7 +506,6 @@ polite_delay <- function() {
 ################################################################################
 # SCRAPING FUNCTIONS
 ################################################################################
-
 scrape_league_match_urls <- function(league, season, browser) {
   
   message(sprintf("\n=== Getting Match URLs for %s %s ===", league, season))
@@ -437,7 +515,10 @@ scrape_league_match_urls <- function(league, season, browser) {
   
   tryCatch({
     page <- fetch_page(league_url, browser)
-    if (is.null(page)) return(NULL)
+    if (is.null(page)) {
+      message("  [ERROR] Failed to fetch league page")
+      return(NULL)
+    }
     
     schedule_link <- page %>%
       html_nodes("a") %>%
@@ -463,47 +544,78 @@ scrape_league_match_urls <- function(league, season, browser) {
     
     polite_delay()
     schedule_page <- fetch_page(schedule_url, browser)
-    if (is.null(schedule_page)) return(NULL)
+    if (is.null(schedule_page)) {
+      message("  [ERROR] Failed to fetch schedule page")
+      return(NULL)
+    }
     
     fixtures_table <- schedule_page %>% html_node("table.stats_table")
-    if (is.null(fixtures_table)) stop("Could not find fixtures table")
+    if (is.null(fixtures_table)) {
+      stop("Could not find fixtures table")
+    }
     
     rows <- fixtures_table %>% html_nodes("tbody tr")
     
-    match_data <- map_df(rows, function(row) {
-      if (length(html_attrs(row)) > 0) {
-        if ("class" %in% names(html_attrs(row))) {
-          if (grepl("spacer", html_attr(row, "class"))) return(NULL)
-        }
-      }
-      
-      match_link <- row %>% html_node("td[data-stat='score'] a") %>% html_attr("href")
-      if (is.na(match_link)) return(NULL)
-      
-      score_text <- row %>% html_node("td[data-stat='score'] a") %>% html_text(trim = TRUE)
-      home_goals <- NA; away_goals <- NA
-      if (!is.na(score_text) && score_text != "") {
-        score_parts <- str_split(score_text, "[---]")[[1]]
-        if (length(score_parts) == 2) {
-          home_goals <- as.integer(str_trim(score_parts[1]))
-          away_goals <- as.integer(str_trim(score_parts[2]))
-        }
-      }
-      
-      gameweek <- row %>% html_node("th[data-stat='gameweek']") %>% html_text(trim = TRUE)
-      date <- row %>% html_node("td[data-stat='date']") %>% html_text(trim = TRUE)
-      home_team <- row %>% html_node("td[data-stat='home_team']") %>% html_text(trim = TRUE)
-      away_team <- row %>% html_node("td[data-stat='away_team']") %>% html_text(trim = TRUE)
-      venue <- row %>% html_node("td[data-stat='venue']") %>% html_text(trim = TRUE)
-      
-      match_url <- if (!grepl("^http", match_link)) {
-        paste0("https://fbref.com", match_link)
-      } else match_link
-      
-      tibble(gameweek = gameweek, date = date, home_team = home_team, away_team = away_team,
-             home_goals = home_goals, away_goals = away_goals, venue = venue, match_url = match_url)
-    })
+    match_list <- list()
     
+    for (row_idx in seq_along(rows)) {
+      row <- rows[[row_idx]]
+      
+      tryCatch({
+        if (length(html_attrs(row)) > 0) {
+          if ("class" %in% names(html_attrs(row))) {
+            if (grepl("spacer", html_attr(row, "class"))) next
+          }
+        }
+        
+        match_link <- row %>% html_node("td[data-stat='score'] a") %>% html_attr("href")
+        if (is.na(match_link)) next
+        
+        score_text <- row %>% html_node("td[data-stat='score'] a") %>% html_text(trim = TRUE)
+        home_goals <- NA_integer_
+        away_goals <- NA_integer_
+        
+        if (!is.na(score_text) && score_text != "") {
+          score_parts <- str_split(score_text, "[-–—]")[[1]]
+          if (length(score_parts) == 2) {
+            home_goals <- as.integer(str_trim(score_parts[1]))
+            away_goals <- as.integer(str_trim(score_parts[2]))
+          }
+        }
+        
+        gameweek <- row %>% html_node("th[data-stat='gameweek']") %>% html_text(trim = TRUE)
+        date <- row %>% html_node("td[data-stat='date']") %>% html_text(trim = TRUE)
+        home_team <- row %>% html_node("td[data-stat='home_team']") %>% html_text(trim = TRUE)
+        away_team <- row %>% html_node("td[data-stat='away_team']") %>% html_text(trim = TRUE)
+        venue <- row %>% html_node("td[data-stat='venue']") %>% html_text(trim = TRUE)
+        
+        match_url_full <- if (!grepl("^http", match_link)) {
+          paste0("https://fbref.com", match_link)
+        } else {
+          match_link
+        }
+        
+        match_list[[length(match_list) + 1]] <- data.frame(
+          gameweek = as.character(gameweek),
+          date = as.character(date),
+          home_team = as.character(home_team),
+          away_team = as.character(away_team),
+          home_goals = home_goals,
+          away_goals = away_goals,
+          venue = as.character(venue),
+          match_url = as.character(match_url_full),
+          stringsAsFactors = FALSE
+        )
+        
+      }, error = function(e) {})
+    }
+    
+    if (length(match_list) == 0) {
+      message("  [ERROR] No matches parsed from fixtures table")
+      return(NULL)
+    }
+    
+    match_data <- bind_rows(match_list)
     match_data <- match_data %>% filter(!is.na(match_url))
     message(sprintf("[OK] Found %d completed matches", nrow(match_data)))
     return(match_data)
@@ -515,9 +627,8 @@ scrape_league_match_urls <- function(league, season, browser) {
 }
 
 ################################################################################
-# DATA EXTRACTION - COMBINED PLAYER STATS
+# DATA EXTRACTION
 ################################################################################
-
 scrape_match_all_data <- function(match_url, match_info, league, browser, existing_urls) {
   
   polite_delay()
@@ -531,7 +642,7 @@ scrape_match_all_data <- function(match_url, match_info, league, browser, existi
   )
   
   if (length(data_needed) == 0) {
-    message("    [SKIP] All data exists - skipping")
+    message("    [SKIP] All data exists")
     return(list(player_stats = NULL, shots = NULL, success = TRUE))
   }
   
@@ -543,7 +654,6 @@ scrape_match_all_data <- function(match_url, match_info, league, browser, existi
   }
   
   tryCatch({
-    # Get match metadata
     match_date <- page %>%
       html_nodes("div.scorebox_meta div") %>%
       html_text() %>%
@@ -566,7 +676,6 @@ scrape_match_all_data <- function(match_url, match_info, league, browser, existi
     results <- list(player_stats = NULL, shots = NULL, success = TRUE)
     
     if (need_player) {
-      # Extract and combine Summary + Possession
       results$player_stats <- extract_combined_player_stats(
         page, home_team, away_team, match_date, match_url, match_info, league
       )
@@ -598,8 +707,12 @@ extract_combined_player_stats <- function(page, home_team, away_team, match_date
   for (tbl in stats_tables) {
     table_id <- html_attr(tbl, "id")
     if (!is.na(table_id) && grepl("stats_.*_summary", table_id)) {
-      if (is.null(summary_home)) summary_home <- tbl
-      else if (is.null(summary_away)) { summary_away <- tbl; break }
+      if (is.null(summary_home)) {
+        summary_home <- tbl
+      } else if (is.null(summary_away)) {
+        summary_away <- tbl
+        break
+      }
     }
   }
   
@@ -608,12 +721,15 @@ extract_combined_player_stats <- function(page, home_team, away_team, match_date
   for (tbl in stats_tables) {
     table_id <- html_attr(tbl, "id")
     if (!is.na(table_id) && grepl("stats_.*_possession", table_id)) {
-      if (is.null(poss_home)) poss_home <- tbl
-      else if (is.null(poss_away)) { poss_away <- tbl; break }
+      if (is.null(poss_home)) {
+        poss_home <- tbl
+      } else if (is.null(poss_away)) {
+        poss_away <- tbl
+        break
+      }
     }
   }
   
-  # Parse tables
   parse_player_table <- function(table, team_name) {
     if (is.null(table)) return(NULL)
     
@@ -666,7 +782,6 @@ extract_combined_player_stats <- function(page, home_team, away_team, match_date
     if (!is.null(poss_df) && nrow(poss_df) > 0) {
       poss_df$join_key <- paste(poss_df$player, poss_df$team, sep = "|||")
       
-      # Get possession columns not in summary
       summary_cols <- names(summary_df)
       poss_only_cols <- setdiff(names(poss_df), summary_cols)
       poss_only_cols <- c("join_key", poss_only_cols)
@@ -677,13 +792,13 @@ extract_combined_player_stats <- function(page, home_team, away_team, match_date
       
       combined_df <- summary_df %>%
         left_join(poss_slim, by = "join_key", suffix = c("", "_poss"))
+      
     } else {
       combined_df <- summary_df
     }
     
     combined_df <- combined_df %>% select(-join_key)
     
-    # Add metadata
     combined_df$league <- league
     combined_df$season <- SEASON
     combined_df$match_date <- match_date
@@ -699,6 +814,9 @@ extract_combined_player_stats <- function(page, home_team, away_team, match_date
   return(NULL)
 }
 
+################################################################################
+# EXTRACT SHOTS - WITH COLUMN NAME FIXES
+################################################################################
 extract_shots <- function(page, home_team, away_team, match_date, match_url, match_info, league) {
   
   shots_table <- page %>% html_node("table#shots_all")
@@ -727,6 +845,27 @@ extract_shots <- function(page, home_team, away_team, match_date, match_url, mat
   if (length(shots_list) == 0) return(NULL)
   
   shots_df <- bind_rows(shots_list)
+  
+  # =========================================================================
+  # FIX COLUMN NAMES - FBref uses different names than our schema
+  # =========================================================================
+  
+  # FBref: xg_shot -> Our schema: xg
+  if ("xg_shot" %in% names(shots_df) && !"xg" %in% names(shots_df)) {
+    shots_df <- shots_df %>% rename(xg = xg_shot)
+  }
+  
+  # FBref: psxg_shot -> Our schema: psxg
+  if ("psxg_shot" %in% names(shots_df) && !"psxg" %in% names(shots_df)) {
+    shots_df <- shots_df %>% rename(psxg = psxg_shot)
+  }
+  
+  # FBref: team -> Our schema: squad
+  if ("team" %in% names(shots_df) && (!"squad" %in% names(shots_df) || all(is.na(shots_df$squad)))) {
+    shots_df$squad <- shots_df$team
+  }
+  
+  # Add metadata
   shots_df$league <- league
   shots_df$season <- SEASON
   shots_df$match_date <- match_date
@@ -741,12 +880,10 @@ extract_shots <- function(page, home_team, away_team, match_date, match_url, mat
 ################################################################################
 # BATCH WRITE
 ################################################################################
-
 flush_batch_to_sheets <- function(batch_data, league) {
   
   message("\n  === FLUSHING BATCH ===")
   
-  # Write Combined Player Stats
   if (!is.null(batch_data$player_stats) && nrow(batch_data$player_stats) > 0) {
     write_to_google_sheet(
       batch_data$player_stats,
@@ -758,7 +895,6 @@ flush_batch_to_sheets <- function(batch_data, league) {
     save_local_backup(batch_data$player_stats, "player_stats", league)
   }
   
-  # Write Shots
   if (!is.null(batch_data$shots) && nrow(batch_data$shots) > 0) {
     write_to_google_sheet(
       batch_data$shots,
@@ -776,7 +912,6 @@ flush_batch_to_sheets <- function(batch_data, league) {
 ################################################################################
 # MAIN WORKFLOW
 ################################################################################
-
 process_league <- function(league, season, browser, url_cache) {
   
   message("\n################################################################################")
@@ -831,7 +966,6 @@ process_league <- function(league, season, browser, url_cache) {
   message(sprintf("\n=== MATCHES TO PROCESS: %d ===", nrow(new_matches)))
   message(sprintf("Estimated time: ~%.1f minutes", (nrow(new_matches) * RATE_LIMIT_DELAY) / 60))
   
-  # Process in batches
   batch_player <- list()
   batch_shots <- list()
   
@@ -894,15 +1028,11 @@ process_league <- function(league, season, browser, url_cache) {
 }
 
 ################################################################################
-# PARQUET EXPORT TO GOOGLE DRIVE (for fast Shiny app loading)
+# PARQUET EXPORT TO GOOGLE DRIVE
 ################################################################################
-
-#' Upload data frame to Google Drive as Parquet
 upload_parquet_to_drive <- function(data, name, folder_id = DRIVE_FOLDER_ID) {
   message(sprintf("  Uploading %s.parquet...", name))
   
-  # Write to temp file
-  # Flatten any list columns (Google Sheets sometimes returns these)
   if (any(sapply(data, is.list))) {
     data <- data %>%
       mutate(across(where(is.list), ~sapply(., function(x) if(length(x) == 0) NA else x[[1]])))
@@ -914,7 +1044,6 @@ upload_parquet_to_drive <- function(data, name, folder_id = DRIVE_FOLDER_ID) {
   file_size <- file.size(temp_file) / 1024 / 1024
   message(sprintf("    Size: %.2f MB (%d rows)", file_size, nrow(data)))
   
-  # Check if file already exists
   existing <- drive_find(
     q = sprintf("'%s' in parents and name = '%s.parquet'", folder_id, name),
     n_max = 1
@@ -930,7 +1059,6 @@ upload_parquet_to_drive <- function(data, name, folder_id = DRIVE_FOLDER_ID) {
       name = paste0(name, ".parquet"),
       overwrite = FALSE
     )
-    # Make publicly accessible
     drive_share(result$id, role = "reader", type = "anyone")
     message(sprintf("    [OK] Created new file (ID: %s)", result$id))
   }
@@ -939,7 +1067,6 @@ upload_parquet_to_drive <- function(data, name, folder_id = DRIVE_FOLDER_ID) {
   return(result$id)
 }
 
-#' Export all Google Sheets data to Parquet files on Google Drive
 export_to_parquet <- function() {
   if (!EXPORT_PARQUET_TO_DRIVE) {
     message("\n[SKIP] Parquet export disabled (EXPORT_PARQUET_TO_DRIVE = FALSE)")
@@ -950,7 +1077,6 @@ export_to_parquet <- function() {
   message("EXPORTING TO PARQUET (Google Drive - for fast Shiny app loading)")
   message("================================================================================\n")
   
-  # Authenticate with Drive separately (needs write permissions)
   message("Authenticating with Google Drive...")
   drive_auth()
   message("[OK] Google Drive authenticated\n")
@@ -958,7 +1084,6 @@ export_to_parquet <- function() {
   file_ids <- list()
   
   tryCatch({
-    # 1. Player Match Stats
     message("Reading Player_Match_Stats from Google Sheets...")
     player_data <- read_sheet(
       SHEETS_CONFIG$player_match_stats$sheet_id,
@@ -966,7 +1091,6 @@ export_to_parquet <- function() {
     ) %>% as.data.frame()
     file_ids$player_match_stats <- upload_parquet_to_drive(player_data, "player_match_stats")
     
-    # 2. Shot Data
     message("\nReading Shot_Data from Google Sheets...")
     shot_data <- read_sheet(
       SHEETS_CONFIG$shots$sheet_id,
@@ -974,7 +1098,6 @@ export_to_parquet <- function() {
     ) %>% as.data.frame()
     file_ids$shots <- upload_parquet_to_drive(shot_data, "shots")
     
-    # 3. Team Goals
     message("\nReading Team_Goals from Google Sheets...")
     team_goals <- read_sheet(
       SHEETS_CONFIG$team_goals$sheet_id,
@@ -986,11 +1109,6 @@ export_to_parquet <- function() {
     message("[OK] PARQUET EXPORT COMPLETE")
     message("================================================================================")
     message(sprintf("Files at: https://drive.google.com/drive/folders/%s", DRIVE_FOLDER_ID))
-    message("")
-    message("Update soccer_config.R with these IDs (if first time):")
-    message(sprintf('  player_match_stats = "%s"', file_ids$player_match_stats))
-    message(sprintf('  shots = "%s"', file_ids$shots))
-    message(sprintf('  team_goals = "%s"', file_ids$team_goals))
     message("================================================================================\n")
     
   }, error = function(e) {
@@ -1004,7 +1122,6 @@ export_to_parquet <- function() {
 ################################################################################
 # MAIN
 ################################################################################
-
 main <- function() {
   
   message("================================================================================")
@@ -1014,8 +1131,8 @@ main <- function() {
   message(sprintf("Season: %s", SEASON))
   message("")
   message(">> OUTPUT SHEETS:")
-  message("    * Player_Match_Stats: Combined Summary + Possession (NEW!)")
-  message("    * Shot_Data: Individual shots")
+  message("    * Player_Match_Stats: Combined Summary + Possession")
+  message("    * Shot_Data: Individual shots (xg, psxg, squad)")
   message("    * Team_Goals: Match scores")
   message("")
   message(sprintf("[CFG] Settings: Batch %d, Rate limit %ds", BATCH_SIZE, RATE_LIMIT_DELAY))
@@ -1088,8 +1205,7 @@ main <- function() {
 ################################################################################
 # RUN
 ################################################################################
-
-# To run ONLY the Parquet export (for existing data), uncomment this line:
+# To run ONLY the Parquet export (for existing data):
 # gs4_auth(); export_to_parquet()
 
 # To run the full scraper + Parquet export:

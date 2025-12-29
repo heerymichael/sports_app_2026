@@ -28,9 +28,13 @@ soccer_team_dashboard_ui <- function(id) {
       
       fluidRow(
         column(3,
-               selectInput(ns("league"), "League",
-                           choices = c("Loading..." = ""),
-                           selected = NULL
+               shinyWidgets::pickerInput(ns("league"), "League",
+                                         choices = c("Loading..." = ""),
+                                         selected = NULL,
+                                         options = shinyWidgets::pickerOptions(
+                                           liveSearch = FALSE,
+                                           size = 10
+                                         )
                )
         ),
         column(3,
@@ -371,9 +375,21 @@ soccer_team_dashboard_server <- function(id) {
       if (length(leagues) > 0) {
         default_league <- if ("Premier League" %in% leagues) "Premier League" else leagues[1]
         
-        updateSelectInput(session, "league",
-                          choices = setNames(leagues, leagues),
-                          selected = default_league
+        # Build HTML content for each league (logo + name)
+        league_content <- sapply(leagues, function(lg) {
+          logo_path <- get_league_logo(lg)
+          if (!is.null(logo_path)) {
+            sprintf('<img src="%s" style="width:20px; height:20px; margin-right:8px; vertical-align:middle; object-fit:contain;"> %s', 
+                    logo_path, lg)
+          } else {
+            lg
+          }
+        }, USE.NAMES = FALSE)
+        
+        shinyWidgets::updatePickerInput(session, "league",
+                                        choices = leagues,
+                                        selected = default_league,
+                                        choicesOpt = list(content = league_content)
         )
       }
     })
@@ -830,7 +846,7 @@ soccer_team_dashboard_server <- function(id) {
       
       HTML(paste0(
         '<span style="font-family: var(--font-display, \'Fjalla One\'), sans-serif; font-size: 16px; color: var(--text-secondary, #5C4E3D); font-weight: 400; display: inline-flex; align-items: center;">',
-        '<span style="font-size: 22px; line-height: 1; margin-right: 8px;">←</span>',
+        '<span style="font-size: 22px; line-height: 1; margin-right: 8px;">&larr;</span>',
         '<span style="line-height: 1;">', label_text, '</span>',
         '</span>'
       ))
@@ -861,7 +877,7 @@ soccer_team_dashboard_server <- function(id) {
       HTML(paste0(
         '<span style="font-family: var(--font-display, \'Fjalla One\'), sans-serif; font-size: 16px; color: var(--text-secondary, #5C4E3D); font-weight: 400; display: inline-flex; align-items: center;">',
         '<span style="line-height: 1;">', label_text, '</span>',
-        '<span style="font-size: 22px; line-height: 1; margin-left: 8px;">→</span>',
+        '<span style="font-size: 22px; line-height: 1; margin-left: 8px;">&rarr;</span>',
         '</span>'
       ))
     })

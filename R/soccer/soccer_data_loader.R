@@ -30,12 +30,60 @@ has_googledrive <- function() {
   requireNamespace("googledrive", quietly = TRUE)
 }
 
+# Cache for Drive file IDs (looked up once per session)
+.drive_id_cache <- new.env(parent = emptyenv())
+
+#' Get Drive file ID by looking up filename in folder
+#' @param data_type Type of data (player_match_stats, shots, team_goals)
+#' @return Google Drive file ID or NULL
+get_drive_file_id <- function(data_type) {
+  # Check cache first
+  
+  cache_key <- paste0("drive_id_", data_type)
+  if (exists(cache_key, envir = .drive_id_cache)) {
+    return(get(cache_key, envir = .drive_id_cache))
+  }
+  
+  # Look up by filename
+  filename <- SOCCER_DRIVE_FILES[[data_type]]
+  if (is.null(filename)) {
+    log_debug(sprintf("No Drive filename configured for: %s", data_type), level = "WARN")
+    return(NULL)
+  }
+  
+  tryCatch({
+    googledrive::drive_deauth()
+    
+    # Find file by name in folder
+    files <- googledrive::drive_find(
+      q = sprintf("'%s' in parents and name = '%s'", SOCCER_DRIVE_FOLDER_ID, filename),
+      n_max = 1
+    )
+    
+    if (nrow(files) == 0) {
+      log_debug(sprintf("Drive file not found: %s", filename), level = "WARN")
+      return(NULL)
+    }
+    
+    file_id <- files$id[1]
+    
+    # Cache the ID for this session
+    assign(cache_key, file_id, envir = .drive_id_cache)
+    log_debug(sprintf("Found Drive file %s -> %s", filename, file_id), level = "DEBUG")
+    
+    return(file_id)
+    
+  }, error = function(e) {
+    log_debug(sprintf("Drive lookup failed: %s", e$message), level = "WARN")
+    return(NULL)
+  })
+}
+
 #' Download and read Parquet file from Google Drive
-#' @param file_id Google Drive file ID
-#' @param data_type Type of data for cache path naming
+#' @param data_type Type of data (player_match_stats, shots, team_goals)
 #' @return Data frame or NULL if failed
-load_from_google_drive <- function(file_id, data_type) {
-  if (is.null(file_id) || !USE_GOOGLE_DRIVE) {
+load_from_google_drive <- function(data_type) {
+  if (!USE_GOOGLE_DRIVE) {
     return(NULL)
   }
   
@@ -44,10 +92,15 @@ load_from_google_drive <- function(file_id, data_type) {
     return(NULL)
   }
   
+  # Look up file ID by name
+  file_id <- get_drive_file_id(data_type)
+  if (is.null(file_id)) {
+    return(NULL)
+  }
+  
   log_debug(sprintf("Loading %s from Google Drive...", data_type), level = "INFO")
   
   tryCatch({
-    # Deauth for public files
     googledrive::drive_deauth()
     
     # Create temp file for download
@@ -176,17 +229,14 @@ load_player_match_stats <- function(force_refresh = FALSE) {
   }
   
   # 2. Try Google Drive Parquet (fast - ~5-15 seconds)
-  drive_id <- SOCCER_DRIVE_IDS$player_match_stats
-  if (!is.null(drive_id)) {
-    data <- load_from_google_drive(drive_id, "player_stats")
-    if (!is.null(data)) {
-      # Normalize team names
-      data <- normalize_team_columns(data, c("team", "squad", "home_team", "away_team"))
-      # Save to cache for next time
-      save_to_cache_v2(data, "player_stats")
-      log_debug("========================================", level = "INFO")
-      return(data)
-    }
+  data <- load_from_google_drive("player_match_stats")
+  if (!is.null(data)) {
+    # Normalize team names
+    data <- normalize_team_columns(data, c("team", "squad", "home_team", "away_team"))
+    # Save to cache for next time
+    save_to_cache_v2(data, "player_stats")
+    log_debug("========================================", level = "INFO")
+    return(data)
   }
   
   # 3. Fall back to Google Sheets (slow - ~3 minutes)
@@ -259,17 +309,14 @@ load_shot_data <- function(force_refresh = FALSE) {
   }
   
   # 2. Try Google Drive Parquet (fast)
-  drive_id <- SOCCER_DRIVE_IDS$shots
-  if (!is.null(drive_id)) {
-    data <- load_from_google_drive(drive_id, "shots")
-    if (!is.null(data)) {
-      # Normalize team names
-      data <- normalize_team_columns(data, c("squad", "home_team", "away_team"))
-      # Save to cache
-      save_to_cache_v2(data, "shots")
-      log_debug("========================================", level = "INFO")
-      return(data)
-    }
+  data <- load_from_google_drive("shots")
+  if (!is.null(data)) {
+    # Normalize team names
+    data <- normalize_team_columns(data, c("squad", "home_team", "away_team"))
+    # Save to cache
+    save_to_cache_v2(data, "shots")
+    log_debug("========================================", level = "INFO")
+    return(data)
   }
   
   # 3. Fall back to Google Sheets (slow)
@@ -340,17 +387,14 @@ load_team_goals <- function(force_refresh = FALSE) {
   }
   
   # 2. Try Google Drive Parquet (fast)
-  drive_id <- SOCCER_DRIVE_IDS$team_goals
-  if (!is.null(drive_id)) {
-    data <- load_from_google_drive(drive_id, "team_goals")
-    if (!is.null(data)) {
-      # Normalize team names
-      data <- normalize_team_columns(data, c("home_team", "away_team"))
-      # Save to cache
-      save_to_cache_v2(data, "team_goals")
-      log_debug("========================================", level = "INFO")
-      return(data)
-    }
+  data <- load_from_google_drive("team_goals")
+  if (!is.null(data)) {
+    # Normalize team names
+    data <- normalize_team_columns(data, c("home_team", "away_team"))
+    # Save to cache
+    save_to_cache_v2(data, "team_goals")
+    log_debug("========================================", level = "INFO")
+    return(data)
   }
   
   # 3. Fall back to Google Sheets (slow)

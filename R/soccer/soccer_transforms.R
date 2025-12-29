@@ -5,6 +5,65 @@
 # Dependencies: soccer_config.R
 # =============================================================================
 
+#' Ensure shot data has a team column (copy from squad if needed) and numeric xg
+#' @param data Data frame to check
+#' @return Data frame with team column guaranteed and xg as numeric
+ensure_team_column <- function(data) {
+  if (is.null(data) || nrow(data) == 0) return(data)
+  
+  # Ensure team column exists
+  
+  if (!"team" %in% names(data) && "squad" %in% names(data)) {
+    data$team <- data$squad
+  } else if (!"team" %in% names(data)) {
+    data$team <- NA_character_
+  }
+  
+  # Ensure xg is numeric (Google Sheets often returns as character)
+  if ("xg" %in% names(data) && !is.numeric(data$xg)) {
+    data$xg <- suppressWarnings(as.numeric(data$xg))
+  }
+  
+  return(data)
+}
+
+#' Derive team column for shot data using player_data lookup
+#' @param shot_data Shot data with player column
+#' @param player_data Player match stats with team info
+#' @return Shot data with team column populated
+derive_shot_teams <- function(shot_data, player_data) {
+  if (is.null(player_data) || nrow(player_data) == 0) {
+    return(shot_data)
+  }
+  
+  # Check if team column already has data
+  if ("team" %in% names(shot_data) && !all(is.na(shot_data$team))) {
+    return(shot_data)
+  }
+  
+  # Get team lookup from player_data
+  team_col <- if ("team" %in% names(player_data)) "team" else if ("squad" %in% names(player_data)) "squad" else NULL
+  if (is.null(team_col)) {
+    return(shot_data)
+  }
+  
+  player_teams <- player_data %>%
+    filter(!is.na(!!sym(team_col))) %>%
+    group_by(player, league) %>%
+    summarise(derived_team = first(!!sym(team_col)), .groups = "drop")
+  
+  # Join to add team info
+  shot_data <- shot_data %>%
+    left_join(player_teams, by = c("player", "league")) %>%
+    mutate(team = coalesce(team, squad, derived_team)) %>%
+    select(-any_of("derived_team"))
+  
+  log_debug(sprintf("Derived team for %d of %d shots", 
+                    sum(!is.na(shot_data$team)), nrow(shot_data)), level = "DEBUG")
+  
+  return(shot_data)
+}
+
 # =============================================================================
 # TEAM STATISTICS
 # =============================================================================
@@ -15,8 +74,9 @@
 #' @param possession_data Possession data
 #' @param league League name (display format)
 #' @param selected_team Team name
+#' @param player_data Optional player data for deriving team from shots
 #' @return List with team stats for and against
-calculate_team_stats <- function(shooting_data, shot_data, possession_data, league, selected_team) {
+calculate_team_stats <- function(shooting_data, shot_data, possession_data, league, selected_team, player_data = NULL) {
   log_debug("========================================", level = "INFO")
   log_debug("calculate_team_stats() for", selected_team, "in", league, level = "INFO")
   
@@ -25,6 +85,14 @@ calculate_team_stats <- function(shooting_data, shot_data, possession_data, leag
   
   league_data_name <- LEAGUE_DATA_NAMES[league]
   if (is.na(league_data_name)) league_data_name <- league
+  
+  # Derive team column from player_data if needed
+  if (!is.null(player_data)) {
+    shot_data <- derive_shot_teams(shot_data, player_data)
+  }
+  
+  # Ensure team column exists and xg is numeric
+  shot_data <- ensure_team_column(shot_data)
   
   # Filter to this league first
   league_shots <- shot_data %>%
@@ -65,7 +133,7 @@ calculate_team_stats <- function(shooting_data, shot_data, possession_data, leag
   
   goals_for <- sum(shots_by_team$outcome == "Goal", na.rm = TRUE)
   shots_for <- nrow(shots_by_team)
-  xg_for <- sum(shots_by_team$xg_shot, na.rm = TRUE)
+  xg_for <- sum(as.numeric(shots_by_team$xg), na.rm = TRUE)
   
   # Calculate stats AGAINST (shots by OPPONENTS in matches involving this team)
   shots_against_team <- league_shots %>%
@@ -74,7 +142,7 @@ calculate_team_stats <- function(shooting_data, shot_data, possession_data, leag
   
   goals_against <- sum(shots_against_team$outcome == "Goal", na.rm = TRUE)
   shots_against <- nrow(shots_against_team)
-  xg_against <- sum(shots_against_team$xg_shot, na.rm = TRUE)
+  xg_against <- sum(as.numeric(shots_against_team$xg), na.rm = TRUE)
   
   # Per game averages
   stats <- list(
@@ -106,8 +174,9 @@ calculate_team_stats <- function(shooting_data, shot_data, possession_data, leag
 #' @param league League name (display format)
 #' @param timeframe "season" for whole season, "last6" for last 6 games
 #' @param team_goals_data Optional data frame with actual match scores (includes own goals)
+#' @param player_data Optional player data for deriving team from shots
 #' @return Data frame with per-game stats for all teams including opponent-adjusted metrics
-calculate_all_team_stats <- function(shot_data, league, timeframe = "season", team_goals_data = NULL) {
+calculate_all_team_stats <- function(shot_data, league, timeframe = "season", team_goals_data = NULL, player_data = NULL) {
   log_debug("========================================", level = "INFO")
   log_debug("calculate_all_team_stats() for", league, "timeframe:", timeframe, level = "INFO")
   if (!is.null(team_goals_data)) {
@@ -116,6 +185,14 @@ calculate_all_team_stats <- function(shot_data, league, timeframe = "season", te
   
   league_data_name <- LEAGUE_DATA_NAMES[league]
   if (is.na(league_data_name)) league_data_name <- league
+  
+  # Derive team column from player_data if needed
+  if (!is.null(player_data)) {
+    shot_data <- derive_shot_teams(shot_data, player_data)
+  }
+  
+  # Ensure team column exists and xg is numeric
+  shot_data <- ensure_team_column(shot_data)
   
   # Filter to this league
   league_shots <- shot_data %>%
@@ -143,13 +220,22 @@ calculate_all_team_stats <- function(shot_data, league, timeframe = "season", te
       select(match_url, home_team_normalized, away_team_normalized, home_goals, away_goals)
   }
   
-  # Get all teams (use normalized names)
+  # Get all teams - try team_normalized first, fallback to home/away teams
   all_teams <- league_shots %>%
     pull(team_normalized) %>%
-    unique() %>%
-    sort()
-  
+    unique()
   all_teams <- all_teams[!is.na(all_teams) & all_teams != ""]
+  
+  # Fallback: get teams from home_team/away_team if team column is empty
+  if (length(all_teams) == 0) {
+    log_debug("team column empty, using home_team/away_team for team list", level = "DEBUG")
+    home_teams <- unique(league_shots$home_team_normalized)
+    away_teams <- unique(league_shots$away_team_normalized)
+    all_teams <- unique(c(home_teams, away_teams))
+    all_teams <- all_teams[!is.na(all_teams) & all_teams != ""]
+  }
+  
+  all_teams <- sort(all_teams)
   
   log_debug("Calculating stats for", length(all_teams), "teams", level = "INFO")
   
@@ -219,13 +305,13 @@ calculate_all_team_stats <- function(shot_data, league, timeframe = "season", te
     # Stats FOR (using normalized team column)
     shots_by_team <- league_shots %>% filter(team_normalized == t)
     shots_for <- nrow(shots_by_team)
-    xg_for <- sum(shots_by_team$xg_shot, na.rm = TRUE)
+    xg_for <- sum(as.numeric(shots_by_team$xg), na.rm = TRUE)
     
     # Stats AGAINST (using normalized team column)
     shots_against_team <- league_shots %>%
       filter(match_url %in% team_match_urls, team_normalized != t)
     shots_against <- nrow(shots_against_team)
-    xg_against <- sum(shots_against_team$xg_shot, na.rm = TRUE)
+    xg_against <- sum(as.numeric(shots_against_team$xg), na.rm = TRUE)
     
     # Goals - use team_goals_data if available (includes own goals)
     if (!is.null(goals_by_match)) {
@@ -340,7 +426,7 @@ calculate_league_averages <- function(league_shots) {
   
   total_goals <- sum(league_shots$outcome == "Goal", na.rm = TRUE)
   total_shots <- nrow(league_shots)
-  total_xg <- sum(league_shots$xg_shot, na.rm = TRUE)
+  total_xg <- sum(as.numeric(league_shots$xg), na.rm = TRUE)
   
   # Per team per game (divide by 2 since each match has 2 teams)
   list(
@@ -374,6 +460,9 @@ calculate_game_by_game_stats <- function(shot_data, league, selected_team, team_
   league_data_name <- LEAGUE_DATA_NAMES[league]
   if (is.na(league_data_name)) league_data_name <- league
   
+  # Ensure team column exists and xg is numeric
+  shot_data <- ensure_team_column(shot_data)
+  
   # Filter to league
   league_shots <- shot_data %>%
     filter(.data$league == league_data_name)
@@ -381,6 +470,7 @@ calculate_game_by_game_stats <- function(shot_data, league, selected_team, team_
   # Normalize team columns for consistent matching
   league_shots <- league_shots %>%
     mutate(
+      team_normalized = normalize_team_names(team),
       home_team_normalized = normalize_team_names(home_team),
       away_team_normalized = normalize_team_names(away_team)
     )
@@ -480,18 +570,14 @@ calculate_game_by_game_stats <- function(shot_data, league, selected_team, team_
     opponent <- ifelse(match_info$home_team == selected_team, match_info$away_team, match_info$home_team)
     is_home <- match_info$home_team == selected_team
     
-    # Normalize team column for comparison (shot data may have different team name format)
-    match_shots <- match_shots %>%
-      mutate(team_normalized = normalize_team_names(team))
-    
-    # Shots FOR - compare normalized names
+    # Shots FOR - compare normalized names (already normalized in league_shots)
     shots_for_df <- match_shots %>% filter(team_normalized == .env$selected_team)
-    xg_for <- sum(shots_for_df$xg_shot, na.rm = TRUE)
+    xg_for <- sum(as.numeric(shots_for_df$xg), na.rm = TRUE)
     shots_for <- nrow(shots_for_df)
     
     # Shots AGAINST
     shots_against_df <- match_shots %>% filter(team_normalized != .env$selected_team)
-    xg_against <- sum(shots_against_df$xg_shot, na.rm = TRUE)
+    xg_against <- sum(as.numeric(shots_against_df$xg), na.rm = TRUE)
     shots_against <- nrow(shots_against_df)
     
     # Goals - use team_goals_data if available (includes own goals), otherwise count from shots
@@ -552,6 +638,20 @@ get_player_stats <- function(player_data, shot_data, league, team) {
   log_debug("========================================", level = "INFO")
   log_debug("get_player_stats() for", team, "in", league, level = "INFO")
   
+  # DEBUG: Log available columns
+  log_debug("Available columns:", paste(names(player_data), collapse = ", "), level = "INFO")
+  
+  # Check if touch columns exist
+  touch_cols <- c("touches", "touches_att_3rd", "touches_att_pen_area", "touches_def_3rd", "touches_mid_3rd")
+  for (col in touch_cols) {
+    if (col %in% names(player_data)) {
+      log_debug(sprintf("Column %s EXISTS - sample values: %s", col, 
+                        paste(head(player_data[[col]], 3), collapse = ", ")), level = "INFO")
+    } else {
+      log_debug(sprintf("Column %s MISSING", col), level = "WARN")
+    }
+  }
+  
   league_data_name <- LEAGUE_DATA_NAMES[league]
   if (is.na(league_data_name)) league_data_name <- league
   
@@ -578,31 +678,84 @@ get_player_stats <- function(player_data, shot_data, league, team) {
     return(data.frame())
   }
   
-  # Coerce numeric columns
+  # Coerce numeric columns (including new touch columns)
   numeric_cols <- c("minutes", "goals", "assists", "shots", "xg", "sca", "gca", 
-                    "touches", "progressive_passes", "progressive_carries")
+                    "touches", "touches_att_3rd", "touches_att_pen_area",
+                    "progressive_passes", "progressive_carries")
   for (col in numeric_cols) {
     if (col %in% names(filtered_data)) {
       filtered_data[[col]] <- as.numeric(filtered_data[[col]])
     }
   }
   
+  # Add simplified position column
+  filtered_data <- filtered_data %>%
+    mutate(position_simple = simplify_position(position))
+  
+  # DEBUG: Log position data for specific players
+  diallo_data <- filtered_data %>% filter(grepl("Diallo", player, ignore.case = TRUE))
+  if (nrow(diallo_data) > 0) {
+    log_debug("=== DIALLO DEBUG ===", level = "INFO")
+    log_debug("Raw positions:", paste(unique(diallo_data$position), collapse = ", "), level = "INFO")
+    log_debug("Simplified positions:", paste(unique(diallo_data$position_simple), collapse = ", "), level = "INFO")
+    log_debug("Touches att_3rd sample:", paste(head(diallo_data$touches_att_3rd, 5), collapse = ", "), level = "INFO")
+    log_debug("Touches att_pen sample:", paste(head(diallo_data$touches_att_pen_area, 5), collapse = ", "), level = "INFO")
+  }
+  
+  # First, determine each player's primary position (most common one)
+  player_positions <- filtered_data %>%
+    group_by(player, position_simple) %>%
+    summarise(pos_minutes = sum(minutes, na.rm = TRUE), .groups = "drop") %>%
+    group_by(player) %>%
+    slice_max(pos_minutes, n = 1, with_ties = FALSE) %>%
+    ungroup() %>%
+    select(player, position = position_simple)
+  
+  # Check which columns exist before summarise (safer than checking inside)
+  has_assists <- "assists" %in% names(filtered_data)
+  has_shots <- "shots" %in% names(filtered_data)
+  has_xg <- "xg" %in% names(filtered_data)
+  has_sca <- "sca" %in% names(filtered_data)
+  has_gca <- "gca" %in% names(filtered_data)
+  has_touches <- "touches" %in% names(filtered_data)
+  has_touches_att_3rd <- "touches_att_3rd" %in% names(filtered_data)
+  has_touches_att_pen <- "touches_att_pen_area" %in% names(filtered_data)
+  has_prog_passes <- "progressive_passes" %in% names(filtered_data)
+  has_prog_carries <- "progressive_carries" %in% names(filtered_data)
+  
+  log_debug(sprintf("Column checks: assists=%s, shots=%s, xg=%s, sca=%s, gca=%s, touches=%s, att_3rd=%s, att_pen=%s",
+                    has_assists, has_shots, has_xg, has_sca, has_gca, has_touches, has_touches_att_3rd, has_touches_att_pen), level = "INFO")
+  
+  # Now aggregate stats by player only (no position grouping)
   player_stats <- filtered_data %>%
-    group_by(player, position) %>%
+    mutate(minutes_num = as.numeric(minutes)) %>%
+    group_by(player) %>%
     summarise(
       matches = n(),
-      minutes = sum(minutes, na.rm = TRUE),
-      goals = sum(goals, na.rm = TRUE),
-      assists = if ("assists" %in% names(.)) sum(assists, na.rm = TRUE) else NA_integer_,
-      shots = if ("shots" %in% names(.)) sum(shots, na.rm = TRUE) else 0L,
-      xg = if ("xg" %in% names(.)) sum(xg, na.rm = TRUE) else 0,
-      sca = if ("sca" %in% names(.)) sum(sca, na.rm = TRUE) else NA_integer_,
-      gca = if ("gca" %in% names(.)) sum(gca, na.rm = TRUE) else NA_integer_,
-      touches = if ("touches" %in% names(.)) sum(touches, na.rm = TRUE) else NA_integer_,
-      progressive_passes = if ("progressive_passes" %in% names(.)) sum(progressive_passes, na.rm = TRUE) else 0L,
-      progressive_carries = if ("progressive_carries" %in% names(.)) sum(progressive_carries, na.rm = TRUE) else 0L,
+      minutes = sum(minutes_num, na.rm = TRUE),
+      # Appearance counts by minutes threshold - use numeric minutes
+      apps_60 = sum(minutes_num >= 60, na.rm = TRUE),
+      apps_90 = sum(minutes_num >= 89, na.rm = TRUE),
+      # Goals & assists
+      goals = sum(as.numeric(goals), na.rm = TRUE),
+      assists = if (has_assists) sum(as.numeric(assists), na.rm = TRUE) else NA_real_,
+      # Shooting
+      shots = if (has_shots) sum(as.numeric(shots), na.rm = TRUE) else 0,
+      xg = if (has_xg) sum(as.numeric(xg), na.rm = TRUE) else 0,
+      # Shot creation
+      sca = if (has_sca) sum(as.numeric(sca), na.rm = TRUE) else NA_real_,
+      gca = if (has_gca) sum(as.numeric(gca), na.rm = TRUE) else NA_real_,
+      # Touches
+      touches = if (has_touches) sum(as.numeric(touches), na.rm = TRUE) else NA_real_,
+      touches_att_3rd = if (has_touches_att_3rd) sum(as.numeric(touches_att_3rd), na.rm = TRUE) else NA_real_,
+      touches_att_pen = if (has_touches_att_pen) sum(as.numeric(touches_att_pen_area), na.rm = TRUE) else NA_real_,
+      # Progressive actions
+      progressive_passes = if (has_prog_passes) sum(as.numeric(progressive_passes), na.rm = TRUE) else 0,
+      progressive_carries = if (has_prog_carries) sum(as.numeric(progressive_carries), na.rm = TRUE) else 0,
       .groups = "drop"
     ) %>%
+    # Join back the primary position
+    left_join(player_positions, by = "player") %>%
     mutate(
       mins_per_match = round(minutes / pmax(matches, 1), 0),
       progressive_actions = progressive_passes + progressive_carries
@@ -610,13 +763,19 @@ get_player_stats <- function(player_data, shot_data, league, team) {
   
   # Supplement with shot data if available
   if (!is.null(shot_data) && nrow(shot_data) > 0) {
+    # Ensure team column exists and xg is numeric in shot data
+    shot_data <- ensure_team_column(shot_data)
+    
+    # Get list of players from this team to filter shot data
+    team_players <- unique(player_stats$player)
+    
     shot_stats <- shot_data %>%
-      filter(league == league_data_name, team == team_normalized) %>%
+      filter(league == league_data_name, player %in% team_players) %>%
       group_by(player) %>%
       summarise(
         shot_goals = sum(outcome == "Goal", na.rm = TRUE),
         shot_count = n(),
-        shot_xg = sum(xg_shot, na.rm = TRUE),
+        shot_xg = sum(as.numeric(xg), na.rm = TRUE),
         .groups = "drop"
       )
     
@@ -644,7 +803,7 @@ get_player_stats <- function(player_data, shot_data, league, team) {
 
 #' Get set piece specialists (defenders/midfielders with headers from set pieces)
 #' @param shot_data Individual shot data
-#' @param possession_data Possession data (for position info)
+#' @param player_data Player match stats (for position info)
 #' @param league League name (display format)
 #' @param team Team name (NULL for all teams in league)
 #' @return Data frame with set piece header specialists
@@ -655,6 +814,23 @@ get_set_piece_specialists <- function(shot_data, player_data, league, team = NUL
   league_data_name <- LEAGUE_DATA_NAMES[league]
   if (is.na(league_data_name)) league_data_name <- league
   
+  # Get team info for players from player_data
+  team_col <- if ("team" %in% names(player_data)) "team" else if ("squad" %in% names(player_data)) "squad" else NULL
+  
+  if (is.null(team_col)) {
+    log_debug("No team column in player_data", level = "WARN")
+    return(data.frame())
+  }
+  
+  player_teams <- player_data %>%
+    filter(league == league_data_name) %>%
+    group_by(player) %>%
+    summarise(team = first(!!sym(team_col)), .groups = "drop") %>%
+    filter(!is.na(team))
+  
+  # Ensure team column exists and xg is numeric in shot data
+  shot_data <- ensure_team_column(shot_data)
+  
   # Filter for set piece shots
   set_piece_shots <- shot_data %>%
     filter(league == league_data_name) %>%
@@ -662,27 +838,31 @@ get_set_piece_specialists <- function(shot_data, player_data, league, team = NUL
       sca_1_type == "Pass (Dead)" | 
         sca_2_type == "Pass (Dead)" |
         grepl("Penalty|Free kick", notes, ignore.case = TRUE)
-    )
+    ) %>%
+    # Join to get team info from player_data
+    left_join(player_teams, by = "player", suffix = c("", "_lookup")) %>%
+    mutate(team = coalesce(team, team_lookup)) %>%
+    select(-any_of("team_lookup"))
   
   if (!is.null(team)) {
     team_normalized <- normalize_team_names(team)
     set_piece_shots <- set_piece_shots %>%
-      filter(team == team_normalized)
+      filter(normalize_team_names(team) == team_normalized)
   }
   
   # Get headers specifically
   set_piece_headers <- set_piece_shots %>%
     filter(body_part == "Head")
   
-  # Get position info from player data
-  team_col <- if ("team" %in% names(player_data)) "team" else if ("squad" %in% names(player_data)) "squad" else "team"
-  
   player_positions <- player_data %>%
     filter(league == league_data_name) %>%
-    distinct(player, position, !!sym(team_col)) %>%
+    mutate(position_simple = simplify_position(position)) %>%
+    group_by(player, !!sym(team_col), position_simple) %>%
+    summarise(pos_minutes = sum(as.numeric(minutes), na.rm = TRUE), .groups = "drop") %>%
     group_by(player) %>%
-    slice(1) %>%
-    ungroup()
+    slice_max(pos_minutes, n = 1, with_ties = FALSE) %>%
+    ungroup() %>%
+    select(player, position = position_simple)
   
   # Aggregate by player
   header_stats <- set_piece_headers %>%
@@ -690,12 +870,13 @@ get_set_piece_specialists <- function(shot_data, player_data, league, team = NUL
     summarise(
       set_piece_headers = n(),
       sp_header_goals = sum(outcome == "Goal", na.rm = TRUE),
-      sp_header_xg = sum(xg_shot, na.rm = TRUE),
-      avg_xg_per_header = round(mean(xg_shot, na.rm = TRUE), 3),
+      sp_header_xg = sum(as.numeric(xg), na.rm = TRUE),
+      avg_xg_per_header = round(mean(as.numeric(xg), na.rm = TRUE), 3),
       .groups = "drop"
     ) %>%
     left_join(player_positions, by = "player") %>%
-    filter(grepl("CB|LB|RB|WB|DM|CM|CDM", position, ignore.case = TRUE) | is.na(position)) %>%
+    # Filter for DEF and MID positions (not forwards)
+    filter(position %in% c("DEF", "MID") | is.na(position)) %>%
     arrange(desc(set_piece_headers))
   
   log_debug("Found", nrow(header_stats), "set piece header specialists", level = "INFO")
@@ -713,6 +894,9 @@ get_set_piece_shots <- function(shot_data, league, team = NULL) {
   league_data_name <- LEAGUE_DATA_NAMES[league]
   if (is.na(league_data_name)) league_data_name <- league
   
+  # Ensure team column exists and xg is numeric
+  shot_data <- ensure_team_column(shot_data)
+  
   set_piece_shots <- shot_data %>%
     filter(league == league_data_name) %>%
     filter(
@@ -722,8 +906,17 @@ get_set_piece_shots <- function(shot_data, league, team = NULL) {
     )
   
   if (!is.null(team)) {
-    set_piece_shots <- set_piece_shots %>%
-      filter(team == !!team)
+    team_normalized <- normalize_team_names(team)
+    # Try 'team' column first, then fallback to home_team/away_team
+    if ("team" %in% names(set_piece_shots) && !all(is.na(set_piece_shots$team))) {
+      set_piece_shots <- set_piece_shots %>%
+        filter(normalize_team_names(team) == team_normalized)
+    } else if ("home_team" %in% names(set_piece_shots)) {
+      # Filter to shots where this team was home or away
+      set_piece_shots <- set_piece_shots %>%
+        filter(normalize_team_names(home_team) == team_normalized | 
+                 normalize_team_names(away_team) == team_normalized)
+    }
   }
   
   return(set_piece_shots)
