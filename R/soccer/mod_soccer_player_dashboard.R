@@ -105,6 +105,9 @@ soccer_player_dashboard_ui <- function(id) {
         )
       ),
       
+      # Conditional plot controls row - appears when "Plots" is selected
+      uiOutput(ns("plot_controls_row")),
+      
       tags$hr(style = "margin: 0.5rem 0 1rem 0; border-color: var(--bg-secondary);"),
       
       # Table output
@@ -238,12 +241,15 @@ soccer_player_dashboard_server <- function(id) {
       if (length(leagues) > 0) {
         default_league <- if ("Premier League" %in% leagues) "Premier League" else leagues[1]
         
+        # Cache-busting parameter to force logo refresh
+        cache_bust <- format(Sys.Date(), "%Y%m%d")
+        
         # Build HTML content for each league (logo + name)
         league_content <- sapply(leagues, function(lg) {
           logo_path <- get_league_logo(lg)
           if (!is.null(logo_path)) {
-            sprintf('<img src="%s" style="width:20px; height:20px; margin-right:8px; vertical-align:middle; object-fit:contain;"> %s', 
-                    logo_path, lg)
+            sprintf('<img src="%s?v=%s" style="width:20px; height:20px; margin-right:8px; vertical-align:middle; object-fit:contain;"> %s', 
+                    logo_path, cache_bust, lg)
           } else {
             lg
           }
@@ -288,13 +294,117 @@ soccer_player_dashboard_server <- function(id) {
           }, USE.NAMES = FALSE)
         )
         
-        # Default to All Teams
+        # Default to Manchester United for Premier League, otherwise All Teams
+        default_team <- if (input$league == "Premier League" && "Manchester United" %in% teams) {
+          "Manchester United"
+        } else {
+          "ALL"
+        }
+        
         shinyWidgets::updatePickerInput(session, "team",
                                         choices = all_teams_choices,
-                                        selected = "ALL",
+                                        selected = default_team,
                                         choicesOpt = list(content = team_content)
         )
       }
+    })
+    
+    # =========================================================================
+    # PLOT CONTROLS ROW (conditional - shows when "Plots" view selected)
+    # =========================================================================
+    
+    output$plot_controls_row <- renderUI({
+      req(input$player_view == "plots")
+      log_debug(">>> Rendering plot controls row", level = "DEBUG")
+      
+      # Get available players based on team and position filters
+      req(rv$player_data, input$league)
+      
+      # Get teams to show
+      if (is.null(input$team) || length(input$team) == 0 || "ALL" %in% input$team) {
+        teams_to_show <- get_league_teams(rv$player_data, input$league)
+      } else {
+        teams_to_show <- input$team
+      }
+      
+      # Position filter
+      position_filter <- input$player_position_filter
+      if (is.null(position_filter) || length(position_filter) == 0) {
+        position_filter <- c("FWD", "MID", "DEF", "GK")
+      }
+      
+      # Get league data name for filtering
+      league_data_name <- LEAGUE_DATA_NAMES[input$league]
+      if (is.na(league_data_name)) league_data_name <- input$league
+      
+      # Get players from selected teams with position filter
+      available_players <- rv$player_data %>%
+        filter(league == league_data_name) %>%
+        filter(team %in% teams_to_show) %>%
+        mutate(position_simple = simplify_position(position)) %>%
+        filter(position_simple %in% position_filter | is.na(position_simple)) %>%
+        group_by(player) %>%
+        summarise(
+          total_minutes = sum(as.numeric(minutes), na.rm = TRUE),
+          matches = n(),
+          .groups = "drop"
+        ) %>%
+        filter(matches >= 3) %>%  # Only show players with 3+ games
+        arrange(desc(total_minutes)) %>%
+        pull(player)
+      
+      log_debug("Available players for plot:", length(available_players), level = "DEBUG")
+      
+      # Metric choices
+      metric_choices <- c(
+        "Goals" = "goals",
+        "xG" = "xg",
+        "Shots" = "shots",
+        "Minutes" = "minutes",
+        "SCA" = "sca",
+        "GCA" = "gca",
+        "Attacking Third Touches" = "touches_att_3rd",
+        "Penalty Box Touches" = "touches_att_pen_area"
+      )
+      
+      # Return the controls row
+      div(
+        style = "margin-top: 1rem; padding: 1rem; background: var(--bg-tertiary); border-radius: 8px;",
+        fluidRow(
+          column(4,
+                 shinyWidgets::pickerInput(ns("plot_players"), "Select Players",
+                                           choices = available_players,
+                                           selected = head(available_players, 3),  # Default to top 3
+                                           multiple = TRUE,
+                                           options = shinyWidgets::pickerOptions(
+                                             actionsBox = TRUE,
+                                             liveSearch = TRUE,
+                                             maxOptions = 8,
+                                             noneSelectedText = "Select players to compare",
+                                             selectedTextFormat = "count > 3",
+                                             countSelectedText = "{0} players"
+                                           )
+                 )
+          ),
+          column(3,
+                 selectInput(ns("plot_metric"), "Metric",
+                             choices = metric_choices,
+                             selected = "xg"
+                 )
+          ),
+          column(2,
+                 selectInput(ns("plot_view_by"), "View By",
+                             choices = c("Player" = "player", "Gameweek" = "gameweek"),
+                             selected = "player"
+                 )
+          ),
+          column(3,
+                 numericInput(ns("plot_games"), "Last N Games",
+                              value = 5, min = 1, max = 20, step = 1
+                 )
+          )
+        )
+      )
     })
     
     # =========================================================================
@@ -309,33 +419,37 @@ soccer_player_dashboard_server <- function(id) {
       
       view_type <- input$player_view
       
-      # Handle plots view with placeholder
+      # Handle plots view - render the bar chart
       if (view_type == "plots") {
-        return(
-          div(
-            style = "padding: 3rem; text-align: center; background: var(--bg-tertiary); border-radius: 8px;",
-            tags$h4(style = "color: var(--text-muted); margin-bottom: 1rem;", "Player Statistics Plots"),
-            tags$p(style = "color: var(--text-muted);", "Coming soon - visualizations for player performance metrics"),
-            tags$div(
-              style = "display: flex; justify-content: center; gap: 2rem; margin-top: 2rem; flex-wrap: wrap;",
-              div(
-                style = "padding: 1.5rem; background: var(--bg-secondary); border-radius: 6px; min-width: 200px;",
-                tags$p(style = "font-weight: 600; margin-bottom: 0.5rem;", "xG vs Goals Scatter"),
-                tags$p(style = "font-size: 0.85rem; color: var(--text-muted);", "Compare expected vs actual output")
-              ),
-              div(
-                style = "padding: 1.5rem; background: var(--bg-secondary); border-radius: 6px; min-width: 200px;",
-                tags$p(style = "font-weight: 600; margin-bottom: 0.5rem;", "Touch Heatmaps"),
-                tags$p(style = "font-size: 0.85rem; color: var(--text-muted);", "Attacking third & penalty box involvement")
-              ),
-              div(
-                style = "padding: 1.5rem; background: var(--bg-secondary); border-radius: 6px; min-width: 200px;",
-                tags$p(style = "font-weight: 600; margin-bottom: 0.5rem;", "Progressive Actions"),
-                tags$p(style = "font-size: 0.85rem; color: var(--text-muted);", "Ball progression by player")
-              )
-            )
-          )
-        )
+        # Wait for plot controls to render
+        req(input$plot_players, input$plot_metric, input$plot_games, input$plot_view_by)
+        
+        selected_players <- input$plot_players
+        selected_metric <- input$plot_metric
+        n_games <- input$plot_games
+        view_by <- input$plot_view_by
+        
+        log_debug(">>> Rendering player bar chart", level = "DEBUG")
+        log_debug("  Players:", paste(selected_players, collapse = ", "), level = "DEBUG")
+        log_debug("  Metric:", selected_metric, level = "DEBUG")
+        log_debug("  Games:", n_games, level = "DEBUG")
+        log_debug("  View by:", view_by, level = "DEBUG")
+        
+        if (length(selected_players) == 0) {
+          return(div(class = "text-muted", style = "text-align: center; padding: 2rem;",
+                     "Please select at least one player to display"))
+        }
+        
+        # Render the plot
+        return(render_player_metric_plot(
+          rv$player_data,
+          input$league,
+          selected_players,
+          selected_metric,
+          n_games,
+          view_by,
+          ns("player_metric_plot")
+        ))
       }
       
       # Determine which teams to show based on main team filter
@@ -676,25 +790,25 @@ render_player_stats_table <- function(player_data, shot_data,
     style = "margin-top: 0.75rem; padding: 0.5rem 0.75rem; background: var(--bg-tertiary); border-radius: 6px; font-size: 0.75rem; color: var(--text-muted);",
     tags$span(style = "font-weight: 600; margin-right: 0.5rem;", "Legend:"),
     tags$span("MP = Matches Played"),
-    tags$span(style = "margin: 0 0.4rem;", "Â·"),
-    tags$span("60+ = Games â‰¥60 mins"),
-    tags$span(style = "margin: 0 0.4rem;", "Â·"),
+    tags$span(style = "margin: 0 0.4rem;", "Ã‚Â·"),
+    tags$span("60+ = Games Ã¢â€°Â¥60 mins"),
+    tags$span(style = "margin: 0 0.4rem;", "Ã‚Â·"),
     tags$span("90 = Full games"),
-    tags$span(style = "margin: 0 0.4rem;", "Â·"),
+    tags$span(style = "margin: 0 0.4rem;", "Ã‚Â·"),
     tags$span("M/G = Mins per game"),
-    tags$span(style = "margin: 0 0.4rem;", "Â·"),
+    tags$span(style = "margin: 0 0.4rem;", "Ã‚Â·"),
     tags$span("xG = Expected Goals"),
-    tags$span(style = "margin: 0 0.4rem;", "Â·"),
+    tags$span(style = "margin: 0 0.4rem;", "Ã‚Â·"),
     tags$span("Sh = Shots"),
-    tags$span(style = "margin: 0 0.4rem;", "Â·"),
+    tags$span(style = "margin: 0 0.4rem;", "Ã‚Â·"),
     tags$span("SCA = Shot Creating Actions"),
-    tags$span(style = "margin: 0 0.4rem;", "Â·"),
+    tags$span(style = "margin: 0 0.4rem;", "Ã‚Â·"),
     tags$span("GCA = Goal Creating Actions"),
-    tags$span(style = "margin: 0 0.4rem;", "Â·"),
+    tags$span(style = "margin: 0 0.4rem;", "Ã‚Â·"),
     tags$span("A3rd = Attacking Third Touches"),
-    tags$span(style = "margin: 0 0.4rem;", "Â·"),
+    tags$span(style = "margin: 0 0.4rem;", "Ã‚Â·"),
     tags$span("Pen = Penalty Box Touches"),
-    tags$span(style = "margin: 0 0.4rem;", "Â·"),
+    tags$span(style = "margin: 0 0.4rem;", "Ã‚Â·"),
     tags$span("Prg = Progressive Actions (passes + carries)")
   )
   
@@ -857,6 +971,371 @@ render_player_stats_by_gameweek <- function(player_data, shot_data,
       compact = TRUE,
       theme = app_reactable_theme(),
       columns = col_defs
+    )
+  )
+}
+
+#' Render player metric bar chart (faceted by player or gameweek view)
+#' @param player_data Combined player match stats
+#' @param league League name (display format)
+#' @param players Vector of player names to display
+#' @param metric Metric to display
+#' @param n_games Number of recent games to show
+#' @param view_by Either "player" (faceted by player) or "gameweek" (horizontal bars by gameweek)
+#' @param plot_id Shiny output ID for the plot
+#' @return tagList with the plot
+render_player_metric_plot <- function(player_data, league, players, metric, n_games, view_by = "player", plot_id) {
+  log_debug(">>> render_player_metric_plot called", level = "DEBUG")
+  log_debug("  League:", league, level = "DEBUG")
+  log_debug("  Players:", paste(players, collapse = ", "), level = "DEBUG")
+  log_debug("  Metric:", metric, level = "DEBUG")
+  log_debug("  N games:", n_games, level = "DEBUG")
+  log_debug("  View by:", view_by, level = "DEBUG")
+  
+  # Convert league display name to data name
+  league_data_name <- LEAGUE_DATA_NAMES[league]
+  if (is.na(league_data_name)) league_data_name <- league
+  
+  # Metric labels for display
+  metric_labels <- c(
+    goals = "Goals",
+    xg = "xG",
+    shots = "Shots",
+    minutes = "Minutes",
+    sca = "Shot Creating Actions",
+    gca = "Goal Creating Actions",
+    touches_att_3rd = "Attacking Third Touches",
+    touches_att_pen_area = "Penalty Box Touches"
+  )
+  
+  metric_label <- metric_labels[metric]
+  if (is.na(metric_label)) metric_label <- metric
+  
+  # Filter data for selected players and league
+  plot_data <- player_data %>%
+    filter(league == league_data_name, player %in% players) %>%
+    filter(!is.na(gameweek)) %>%
+    mutate(gameweek = as.numeric(gameweek)) %>%
+    arrange(player, desc(gameweek)) %>%
+    group_by(player) %>%
+    slice_head(n = n_games) %>%
+    ungroup()
+  
+  if (nrow(plot_data) == 0) {
+    return(div(class = "text-muted", style = "text-align: center; padding: 2rem;",
+               "No gameweek data available for the selected players"))
+  }
+  
+  # Ensure metric column exists and is numeric
+  if (!metric %in% names(plot_data)) {
+    return(div(class = "text-muted", style = "text-align: center; padding: 2rem;",
+               sprintf("Metric '%s' not available in the data", metric_label)))
+  }
+  
+  plot_data <- plot_data %>%
+    mutate(
+      metric_value = as.numeric(.data[[metric]]),
+      minutes_num = as.numeric(minutes)
+    ) %>%
+    mutate(
+      metric_value = ifelse(is.na(metric_value), 0, metric_value),
+      minutes_num = ifelse(is.na(minutes_num), 0, minutes_num)
+    )
+  
+  # Create gameweek labels
+  plot_data <- plot_data %>%
+    mutate(gw_label = paste0("GW", gameweek)) %>%
+    arrange(player, gameweek)
+  
+  # Order factor for gameweeks (ascending)
+  all_gws <- sort(unique(plot_data$gameweek))
+  plot_data$gw_label <- factor(plot_data$gw_label, 
+                               levels = paste0("GW", all_gws))
+  
+  if (view_by == "player") {
+    # =========================================================================
+    # PLAYER VIEW - Faceted bar chart by player (max 2 columns)
+    # X-axis: Consistent GW range across all facets
+    # Minutes annotation below each bar (per player)
+    # =========================================================================
+    
+    # Get the full gameweek range across ALL selected players' last N games
+    gw_range <- plot_data %>%
+      group_by(player) %>%
+      slice_head(n = n_games) %>%
+      ungroup() %>%
+      summarise(min_gw = min(gameweek), max_gw = max(gameweek))
+    
+    all_gameweeks <- seq(gw_range$min_gw, gw_range$max_gw)
+    
+    # Create a complete grid of player x gameweek combinations for the FULL range
+    complete_grid <- expand.grid(
+      player = unique(plot_data$player),
+      gameweek = all_gameweeks,
+      stringsAsFactors = FALSE
+    )
+    
+    # Join with actual data (plot_data already has last N games per player)
+    plot_data <- complete_grid %>%
+      left_join(plot_data, by = c("player", "gameweek")) %>%
+      mutate(
+        metric_value = ifelse(is.na(metric_value), 0, metric_value),
+        minutes_num = ifelse(is.na(minutes_num), 0, minutes_num),
+        is_dnp = minutes_num == 0,
+        # Create minutes label for annotation
+        mins_label = ifelse(is_dnp, "DNP", sprintf("[%d']", round(minutes_num)))
+      )
+    
+    # For minutes metric, ensure 90 is always visible
+    is_minutes_metric <- metric == "minutes"
+    if (is_minutes_metric) {
+      y_limit <- c(0, max(95, max(plot_data$metric_value, na.rm = TRUE) * 1.15))
+      y_breaks <- c(0, 30, 60, 90)
+    } else {
+      y_max <- max(plot_data$metric_value, na.rm = TRUE)
+      y_limit <- c(0, max(y_max * 1.3, 1))  # Leave room for labels
+      y_breaks <- waiver()
+    }
+    
+    # Use numeric x-axis for consistent positioning across facets
+    p <- ggplot(plot_data, aes(x = gameweek, y = metric_value)) +
+      geom_col(fill = APP_COLORS$sage, width = 0.7, na.rm = TRUE) +
+      geom_hline(yintercept = 0, color = APP_COLORS$primary, linewidth = 0.8) +
+      # Add minutes annotation below bars
+      geom_text(
+        aes(y = -y_limit[2] * 0.08, label = mins_label),
+        size = 2.3,
+        fontface = "bold",
+        color = APP_COLORS$muted
+      ) +
+      facet_wrap(~ player, ncol = min(length(unique(plot_data$player)), 2)) +
+      labs(
+        y = metric_label,
+        x = NULL
+      ) +
+      scale_x_continuous(
+        breaks = all_gameweeks,
+        labels = paste0("GW", all_gameweeks)
+      ) +
+      scale_y_continuous(limits = c(-y_limit[2] * 0.15, y_limit[2]), breaks = y_breaks, expand = expansion(mult = c(0, 0.05))) +
+      coord_cartesian(clip = "off") +
+      theme_app(base_size = 11) +
+      theme(
+        plot.background = element_rect(fill = APP_COLORS$bg_card, color = NA),
+        panel.background = element_rect(fill = APP_COLORS$bg_card, color = NA),
+        panel.grid.major.x = element_blank(),
+        panel.grid.major.y = element_line(color = APP_COLORS$grid, linewidth = 0.5),
+        axis.text.x = element_text(angle = 0, hjust = 0.5, size = 9, face = "bold"),
+        axis.text.y = element_text(size = 10),
+        axis.title.y = element_text(size = 11, face = "bold", margin = margin(r = 10)),
+        strip.text = element_text(family = get_app_font(), size = 13, face = "bold", color = APP_COLORS$primary),
+        strip.background = element_blank(),
+        panel.spacing.x = unit(5, "lines"),
+        panel.spacing.y = unit(4, "lines"),
+        plot.margin = margin(t = 10, r = 15, b = 20, l = 10)
+      )
+    
+    # Calculate dynamic height based on number of players (2 columns, more spacing)
+    n_rows <- ceiling(length(unique(plot_data$player)) / 2)
+    plot_height <- max(350, n_rows * 280)
+    
+    subtitle_text <- sprintf("Showing %s for last %d games per player", metric_label, n_games)
+    
+  } else {
+    # =========================================================================
+    # GAMEWEEK VIEW - Line plot with smooth curves
+    # Each player has a color-coded line across gameweeks
+    # Missing data/0 values show as 0 on the spline
+    # Legend above plot, larger text
+    # =========================================================================
+    
+    # Get all gameweeks in range
+    all_gameweeks <- sort(unique(plot_data$gameweek))
+    
+    # Create complete grid - fill missing weeks with 0
+    complete_grid <- expand.grid(
+      player = unique(plot_data$player),
+      gameweek = all_gameweeks,
+      stringsAsFactors = FALSE
+    )
+    
+    # Join and fill missing with 0
+    plot_data <- complete_grid %>%
+      left_join(plot_data, by = c("player", "gameweek")) %>%
+      mutate(
+        metric_value = ifelse(is.na(metric_value), 0, metric_value),
+        minutes_num = ifelse(is.na(minutes_num), 0, minutes_num)
+      )
+    
+    # Extract surname from player name (last word)
+    plot_data <- plot_data %>%
+      mutate(
+        surname = sapply(strsplit(as.character(player), " "), function(x) tail(x, 1)),
+        gw_numeric = as.numeric(gameweek)
+      )
+    
+    # Order players by total metric value for consistent ordering
+    player_order <- plot_data %>%
+      group_by(player, surname) %>%
+      summarise(total_metric = sum(metric_value, na.rm = TRUE), .groups = "drop") %>%
+      arrange(desc(total_metric))
+    
+    plot_data <- plot_data %>%
+      mutate(
+        player = factor(player, levels = player_order$player),
+        surname = factor(surname, levels = player_order$surname)
+      )
+    
+    # For minutes metric, ensure 90 is always visible
+    is_minutes_metric <- metric == "minutes"
+    if (is_minutes_metric) {
+      y_limit <- c(0, max(95, max(plot_data$metric_value, na.rm = TRUE) * 1.1))
+      y_breaks <- c(0, 30, 60, 90)
+    } else {
+      y_limit <- c(0, max(plot_data$metric_value, na.rm = TRUE) * 1.15)
+      y_breaks <- waiver()
+    }
+    
+    # Create color palette for players
+    n_players <- length(unique(plot_data$player))
+    if (n_players <= 8) {
+      # Use a qualitative palette for up to 8 players
+      player_colors <- c(
+        APP_COLORS$sage,
+        APP_COLORS$coral,
+        APP_COLORS$primary,
+        "#6B8E23",  # Olive
+        "#4682B4",  # Steel blue
+        "#9370DB",  # Medium purple
+        "#20B2AA",  # Light sea green
+        "#CD853F"   # Peru
+      )[1:n_players]
+    } else {
+      player_colors <- scales::hue_pal()(n_players)
+    }
+    names(player_colors) <- levels(plot_data$player)
+    
+    # Create surname labels for legend
+    surname_labels <- setNames(player_order$surname, player_order$player)
+    
+    # Create the line plot with smooth curves - use numeric x for spline interpolation
+    p <- ggplot(plot_data, aes(x = gw_numeric, y = metric_value, color = player, group = player)) +
+      geom_hline(yintercept = 0, color = APP_COLORS$primary, linewidth = 0.8)
+    
+    # Add smooth curved lines using spline interpolation
+    if (length(all_gameweeks) >= 3) {
+      # Use spline interpolation for smooth curves
+      smooth_data <- plot_data %>%
+        group_by(player) %>%
+        arrange(gw_numeric) %>%
+        do({
+          df <- .
+          if (nrow(df) >= 3) {
+            # Create smooth spline
+            x_vals <- df$gw_numeric
+            y_vals <- df$metric_value
+            # Generate more points for smooth curve
+            x_new <- seq(min(x_vals), max(x_vals), length.out = 50)
+            spline_fit <- tryCatch(
+              spline(x_vals, y_vals, xout = x_new, method = "natural"),
+              error = function(e) list(x = x_vals, y = y_vals)
+            )
+            data.frame(
+              gw_numeric = spline_fit$x,
+              metric_value_smooth = spline_fit$y
+            )
+          } else {
+            # Not enough points for spline, just use linear
+            data.frame(
+              gw_numeric = df$gw_numeric,
+              metric_value_smooth = df$metric_value
+            )
+          }
+        }) %>%
+        ungroup()
+      
+      # Clamp negative values to 0 (splines can dip below 0)
+      smooth_data <- smooth_data %>%
+        mutate(metric_value_smooth = pmax(metric_value_smooth, 0))
+      
+      p <- p + geom_line(
+        data = smooth_data,
+        aes(x = gw_numeric, y = metric_value_smooth),
+        linewidth = 2.5,
+        lineend = "round",
+        linejoin = "round"
+      )
+    } else {
+      # Not enough gameweeks for spline, use straight lines
+      p <- p + geom_line(linewidth = 2.5, lineend = "round", linejoin = "round")
+    }
+    
+    # Add points on top (use original data points)
+    p <- p + geom_point(size = 4.5, stroke = 1.2) +
+      scale_x_continuous(
+        breaks = as.numeric(all_gameweeks),
+        labels = paste0("GW", all_gameweeks)
+      ) +
+      scale_color_manual(values = player_colors, labels = surname_labels) +
+      scale_y_continuous(limits = y_limit, breaks = y_breaks, expand = expansion(mult = c(0, 0.05))) +
+      labs(
+        y = metric_label,
+        x = NULL,
+        color = NULL
+      ) +
+      theme_app(base_size = 11) +
+      theme(
+        plot.background = element_rect(fill = APP_COLORS$bg_card, color = NA),
+        panel.background = element_rect(fill = APP_COLORS$bg_card, color = NA),
+        panel.grid.major.x = element_line(color = APP_COLORS$grid, linewidth = 0.3),
+        panel.grid.major.y = element_line(color = APP_COLORS$grid, linewidth = 0.5),
+        axis.text.x = element_text(size = 11, face = "bold"),
+        axis.text.y = element_text(size = 10),
+        axis.title.y = element_text(size = 12, face = "bold", margin = margin(r = 10)),
+        # Legend: above plot, larger text
+        legend.position = "top",
+        legend.justification = "center",
+        legend.text = element_text(size = 13, face = "bold"),
+        legend.key = element_rect(fill = "transparent"),
+        legend.key.width = unit(2.5, "lines"),
+        legend.background = element_rect(fill = "transparent"),
+        legend.margin = margin(b = 15),
+        legend.spacing.x = unit(1, "cm"),
+        plot.margin = margin(t = 10, r = 20, b = 15, l = 15)
+      ) +
+      guides(color = guide_legend(nrow = 1, override.aes = list(size = 5, linewidth = 3)))
+    
+    # Calculate dynamic height (extra space for legend at top)
+    plot_height <- max(450, 400 + (n_players > 4) * 50)
+    
+    subtitle_text <- sprintf("Showing %s across last %d gameweeks", metric_label, n_games)
+    
+    # Return the line plot
+    return(tagList(
+      div(
+        style = "padding: 1rem; background: var(--bg-card); border-radius: 8px; margin-top: 0.5rem;",
+        tags$p(
+          style = "font-size: 0.85rem; color: var(--text-muted); margin-bottom: 0.75rem;",
+          subtitle_text
+        ),
+        renderPlot({
+          print(p)
+        }, height = plot_height, bg = "transparent")
+      )
+    ))
+  }
+  
+  # Return the plot in a container
+  tagList(
+    div(
+      style = "padding: 1rem; background: var(--bg-card); border-radius: 8px; margin-top: 0.5rem;",
+      tags$p(
+        style = "font-size: 0.85rem; color: var(--text-muted); margin-bottom: 0.75rem;",
+        subtitle_text
+      ),
+      renderPlot({
+        print(p)
+      }, height = plot_height, bg = "transparent")
     )
   )
 }
