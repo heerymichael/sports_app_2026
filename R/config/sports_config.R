@@ -60,8 +60,8 @@ get_sports_config <- function() {
       color = APP_COLORS$frost,
       color_light = "#A3C1D9",
       icon_scale = 1.2,
-      sections = c("dashboard", "projections"),
-      default_section = "dashboard"
+      sections = c("dashboard", "projections", "handbuild"),
+      default_section = "projections"
     )
   )
 }

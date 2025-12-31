@@ -29,6 +29,7 @@ FANTEAM_CLUB_MAPPING <- c(
   "MUN" = "Manchester United",
   "NEW" = "Newcastle United",
   "NFO" = "Nottingham Forest",
+  "NTG" = "Nottingham Forest",
   "SOU" = "Southampton",
   "SUN" = "Sunderland",
   "TOT" = "Tottenham",

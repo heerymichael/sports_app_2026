@@ -401,6 +401,76 @@ calculate_all_team_stats <- function(shot_data, league, timeframe = "season", te
       logo_path = sapply(team, get_soccer_team_logo)
     )
   
+  # =========================================================================
+  # CALCULATE TRUE OPPONENT-ADJUSTED METRICS (vs actual opponent strength)
+  # =========================================================================
+  
+  # Build match-opponent lookup from shots
+  match_teams <- league_shots %>%
+    distinct(match_url, home_team_normalized, away_team_normalized)
+  
+  # For each team, calculate opponent-adjusted metrics
+  opp_adjusted <- lapply(all_teams, function(t) {
+    # Get all matches for this team
+    team_matches <- match_teams %>%
+      filter(home_team_normalized == t | away_team_normalized == t) %>%
+      mutate(
+        opponent = ifelse(home_team_normalized == t, away_team_normalized, home_team_normalized)
+      )
+    
+    if (nrow(team_matches) == 0) {
+      return(data.frame(
+        team = t,
+        opp_avg_xga = NA_real_,
+        opp_avg_xgf = NA_real_,
+        xgf_vs_opp_strength = NA_real_,
+        xga_vs_opp_strength = NA_real_,
+        stringsAsFactors = FALSE
+      ))
+    }
+    
+    # Get opponents' stats
+    opponents <- unique(team_matches$opponent)
+    opp_stats <- stats_df %>%
+      filter(team %in% opponents) %>%
+      summarise(
+        opp_avg_xga = mean(xg_against_pg, na.rm = TRUE),  # What opponents typically concede
+        opp_avg_xgf = mean(xg_for_pg, na.rm = TRUE)       # What opponents typically create
+      )
+    
+    # Get this team's stats
+    team_stats_row <- stats_df %>% filter(team == t)
+    
+    if (nrow(team_stats_row) == 0) {
+      return(data.frame(
+        team = t,
+        opp_avg_xga = opp_stats$opp_avg_xga,
+        opp_avg_xgf = opp_stats$opp_avg_xgf,
+        xgf_vs_opp_strength = NA_real_,
+        xga_vs_opp_strength = NA_real_,
+        stringsAsFactors = FALSE
+      ))
+    }
+    
+    # Calculate opponent-adjusted metrics
+    # Positive xgf_vs_opp_strength = team creates MORE xG than their opponents typically concede
+    # Negative xga_vs_opp_strength = team concedes LESS xG than their opponents typically create
+    data.frame(
+      team = t,
+      opp_avg_xga = round(opp_stats$opp_avg_xga, 2),
+      opp_avg_xgf = round(opp_stats$opp_avg_xgf, 2),
+      xgf_vs_opp_strength = round(team_stats_row$xg_for_pg - opp_stats$opp_avg_xga, 2),
+      xga_vs_opp_strength = round(team_stats_row$xg_against_pg - opp_stats$opp_avg_xgf, 2),
+      stringsAsFactors = FALSE
+    )
+  })
+  
+  opp_adjusted_df <- bind_rows(opp_adjusted)
+  
+  # Join opponent-adjusted metrics back to main stats
+  stats_df <- stats_df %>%
+    left_join(opp_adjusted_df, by = "team")
+  
   log_debug("All team stats calculated:", nrow(stats_df), "teams", level = "INFO")
   log_debug("========================================", level = "INFO")
   

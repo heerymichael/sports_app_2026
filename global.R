@@ -24,6 +24,7 @@ library(shinyWidgets)  # For pickerInput
 library(reactable)     # For styled tables
 library(zoo)           # For rolling averages
 library(ggrepel)       # For chart labels
+library(stringi)       # For string normalization (NHL name matching)
 cat("[STARTUP] Packages loaded successfully\n\n")
 
 # Load fonts for ggplot
@@ -162,11 +163,18 @@ cat("[STARTUP]     mod_soccer_fanteam_contests.R loaded\n")
 # source("R/soccer/mod_soccer_performance.R")     # Future
 cat("[STARTUP]   Soccer modules loaded\n")
 
+# NHL (Ice Hockey)
+cat("[STARTUP]   Loading NHL modules...\n")
+source("R/nhl/nhl_config.R")              # Team info, scoring rules, lineup config
+cat("[STARTUP]     nhl_config.R loaded\n")
+source("R/nhl/mod_nhl_projections.R")     # Projections module
+cat("[STARTUP]     mod_nhl_projections.R loaded\n")
+source("R/nhl/mod_nhl_handbuild.R")       # Handbuild/lineup builder module
+cat("[STARTUP]     mod_nhl_handbuild.R loaded\n")
+cat("[STARTUP]   NHL modules loaded\n")
+
 # Formula 1 - uses placeholder_ui (no module yet)
 # source("R/f1/mod_f1_dashboard.R")
-
-# NHL (Ice Hockey) - uses placeholder_ui (no module yet)
-# source("R/nhl/mod_nhl_dashboard.R")
 
 # Golf
 # source("R/golf/mod_golf_dashboard.R")
