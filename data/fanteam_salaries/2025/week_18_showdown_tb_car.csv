@@ -1,0 +1,39 @@
+Tournament,PlayerID,Name,FName,Club,Lineup,Position,Price
+1061597,4352630,Dalton,Andy,CAR,unexpected,quarterback,13.8
+1061597,4352631,Young,Bryce,CAR,expected,quarterback,16.6
+1061597,4352634,Dowdle,Rico,CAR,expected,running_back,12.2
+1061597,4352637,Hubbard,Chuba,CAR,expected,running_back,9.2
+1061597,4352638,Etienne,Trevor,CAR,unexpected,running_back,4.6
+1061597,4352639,Coker,Jalen,CAR,expected,wide_receiver,12.2
+1061597,4352642,Legette,Xavier,CAR,expected,wide_receiver,9
+1061597,4352643,Moore,David,CAR,possible,wide_receiver,4
+1061597,4352645,Tremayne,Brycen,CAR,unexpected,wide_receiver,4.6
+1061597,4352646,Renfrow,Hunter,CAR,unexpected,wide_receiver,4.2
+1061597,4352648,Horn Jr.,Jimmy,CAR,expected,wide_receiver,5.4
+1061597,4352649,McMillan,Tetairoa,CAR,expected,wide_receiver,14.6
+1061597,4352651,DEF/ST Panthers,,CAR,expected,defense_special,7.8
+1061597,4352652,Sanders,Ja'Tavion,CAR,injured,tight_end,8.4
+1061597,4352656,Mitchell,James,CAR,unexpected,tight_end,4
+1061597,4352657,Tremble,Tommy,CAR,expected,tight_end,8.8
+1061597,4352658,Evans,Mitchell,CAR,expected,tight_end,6.4
+1061597,4353347,Dwelley,Ross,CAR,expected,tight_end,4
+1061597,4353382,Mayfield,Baker,TB,expected,quarterback,19
+1061597,4353383,Bridgewater,Teddy,TB,unexpected,quarterback,15.2
+1061597,4353387,White,Rachaad,TB,expected,running_back,8
+1061597,4353388,Tucker,Sean,TB,expected,running_back,7.8
+1061597,4353389,Williams,Josh,TB,unexpected,running_back,4.4
+1061597,4353390,Irving,Bucky,TB,expected,running_back,15.8
+1061597,4353391,Wright,Owen,TB,unexpected,running_back,4.2
+1061597,4353392,Johnson,Tez,TB,expected,wide_receiver,4.8
+1061597,4353393,McMillan,Jalen,TB,expected,wide_receiver,9.4
+1061597,4353394,Evans,Mike,TB,expected,wide_receiver,14.2
+1061597,4353395,Godwin,Chris,TB,expected,wide_receiver,13.4
+1061597,4353397,Shepard,Sterling,TB,expected,wide_receiver,4.2
+1061597,4353403,Egbuka,Emeka,TB,expected,wide_receiver,8.6
+1061597,4353404,Johnson,Kameron,TB,unexpected,wide_receiver,4
+1061597,4353406,Durham,Payne,TB,unexpected,tight_end,4.2
+1061597,4353408,Culp,Devin,TB,unexpected,tight_end,4.4
+1061597,4353409,Otton,Cade,TB,expected,tight_end,9.8
+1061597,4353410, DEF/ST Buccaneers,,TB,expected,defense_special,8.4
+1061597,4459245,Chisena,Dan,CAR,unexpected,wide_receiver,4
+1061597,4459272,Wiley,Michael,TB,refuted,running_back,4

@@ -16,7 +16,7 @@ get_sports_config <- function() {
       color = APP_COLORS$coral,
       color_light = "#E8B8A8",
       icon_scale = 1.2,  # 20% larger than base
-      sections = c("projections", "handbuild", "optimiser", "ffpc_bestball"),
+      sections = c("projections", "handbuild", "showdown", "optimiser", "ffpc_bestball"),
       default_section = "projections"
     ),
     
@@ -81,6 +81,12 @@ get_sections_config <- function() {
       id = "handbuild",
       name = "Handbuild",
       icon = "edit"
+    ),
+    
+    showdown = list(
+      id = "showdown",
+      name = "Showdown",
+      icon = "zap"
     ),
     
     optimiser = list(

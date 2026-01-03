@@ -1,0 +1,39 @@
+Tournament,PlayerID,Name,FName,Club,Lineup,Position,Price
+1061620,4352979,Moore,Skyy,SF,unexpected,wide_receiver,4.4
+1061620,4353149,Bourne,Kendrick,SF,expected,wide_receiver,5
+1061620,4353173,Jones Jr.,Velus,SEA,unexpected,running_back,4.4
+1061620,4353178,Akers,Cam,SEA,unexpected,running_back,4.6
+1061620,4353188,Shaheed,Rashid,SEA,expected,wide_receiver,12
+1061620,4353322,Jones,Mac,SF,unexpected,quarterback,16.6
+1061620,4353323,Mordecai,Tanner,SF,refuted,quarterback,15
+1061620,4353324,Purdy,Brock,SF,expected,quarterback,17.8
+1061620,4353329,Juszczyk,Kyle,SF,expected,running_back,6
+1061620,4353330,Guerendo,Isaac,SF,unexpected,running_back,4.2
+1061620,4353331,McCaffrey,Christian,SF,expected,running_back,20.4
+1061620,4353333,James,Jordan,SF,unexpected,running_back,4
+1061620,4353335,Jennings,Jauan,SF,expected,wide_receiver,12.6
+1061620,4353340,Robinson,Demarcus,SF,expected,wide_receiver,6.4
+1061620,4353341,Watkins,Jordan,SF,unexpected,wide_receiver,4.2
+1061620,4353342,Pearsall,Ricky,SF,possible,wide_receiver,11
+1061620,4353348,Farrell,Luke,SF,unexpected,tight_end,4.8
+1061620,4353349,Tonges,Jake,SF,expected,tight_end,4.6
+1061620,4353350,Willis,Brayden,SF,unexpected,tight_end,4
+1061620,4353351, DEF/ST 49ers,,SF,expected,defense_special,8
+1061620,4353352,Kittle,George,SF,possible,tight_end,14
+1061620,4353353,Lock,Drew,SEA,unexpected,quarterback,14.8
+1061620,4353354,Milroe,Jalen,SEA,unexpected,quarterback,14.4
+1061620,4353355,Darnold,Sam,SEA,expected,quarterback,17
+1061620,4353357,Russell,Brady,SEA,unexpected,running_back,4
+1061620,4353360,Ouzts,Robbie,SEA,unexpected,running_back,4
+1061620,4353363,Charbonnet,Zach,SEA,expected,running_back,10.8
+1061620,4353364,Walker III,Kenneth,SEA,expected,running_back,12.4
+1061620,4353365,Smith-Njigba,Jaxon,SEA,expected,wide_receiver,22.4
+1061620,4353367,Kupp,Cooper,SEA,expected,wide_receiver,10.6
+1061620,4353371,Bobo,Jake,SEA,expected,wide_receiver,4
+1061620,4353374,Young,Dareke,SEA,unexpected,wide_receiver,4.2
+1061620,4353375,White,Cody,SEA,injured,wide_receiver,4.4
+1061620,4353376, DEF/ST Seahawks,,SEA,expected,defense_special,8.2
+1061620,4353378,Saubert,Eric,SEA,unexpected,tight_end,4.4
+1061620,4353379,Kallerup,Nick,SEA,unexpected,tight_end,4.2
+1061620,4353381,Barner,AJ,SEA,expected,tight_end,11.4
+1061620,4353447,Robinson Jr.,Brian,SF,expected,running_back,5.8

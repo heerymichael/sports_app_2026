@@ -50,12 +50,62 @@ nfl_handbuild_ui <- function(id) {
   }
   
   tagList(
+    # Enable shinyjs for button state management
+    shinyjs::useShinyjs(),
+    
     # Page header
     div(
       class = "page-header",
       tags$h2("NFL Handbuild"),
       tags$p(class = "text-muted", "Build lineups manually with optimization assistance")
     ),
+    
+    # CSS for position filter buttons
+    tags$style(HTML("
+      /* Position filter buttons - INACTIVE state (raised with shadow) */
+      .btn-position-filter {
+        padding: 6px 16px !important;
+        font-size: 0.85rem !important;
+        font-weight: 600 !important;
+        border: 2px solid #3B3226 !important;
+        border-radius: 6px !important;
+        background: #ffffff !important;
+        color: #3B3226 !important;
+        box-shadow: 3px 3px 0px #3B3226 !important;
+        transition: all 0.1s ease !important;
+        position: relative !important;
+        top: 0 !important;
+        left: 0 !important;
+        cursor: pointer !important;
+        outline: none !important;
+      }
+      
+      .btn-position-filter:hover:not(.active) {
+        background: #f5f5f5 !important;
+      }
+      
+      .btn-position-filter:focus {
+        outline: none !important;
+      }
+      
+      /* ACTIVE state - Match btn-primary (dusty mauve) */
+      .btn-position-filter.active {
+        background: #9B8A9E !important;
+        color: #ffffff !important;
+        border-color: #3B3226 !important;
+        box-shadow: none !important;
+        top: 3px !important;
+        left: 3px !important;
+      }
+      
+      .btn-position-filter.active:hover {
+        background: #8A7A8D !important;
+      }
+      
+      .btn-position-filter.active:focus {
+        box-shadow: inset 0 2px 4px rgba(0,0,0,0.2) !important;
+      }
+    ")),
     
     # ==========================================================================
     # FILTERS CARD
@@ -767,7 +817,7 @@ nfl_handbuild_server <- function(id) {
           left_join(player_data %>% select(player, blended), by = "player") %>%
           mutate(
             adj_value = blended * (1 + adj_pct / 100),
-            display = sprintf("%s: %.1f ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ %.1f (%+.0f%%)", player, blended, adj_value, adj_pct)
+            display = sprintf("%s: %.1f ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ %.1f (%+.0f%%)", player, blended, adj_value, adj_pct)
           )
       } else {
         adj_df <- adj_df %>%
@@ -1011,7 +1061,7 @@ nfl_handbuild_server <- function(id) {
             ),
             
             # Arrow
-            span(style = "color: var(--text-muted); font-size: 1.2rem;", "ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢"),
+            span(style = "color: var(--text-muted); font-size: 1.2rem;", "ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢"),
             
             # Stack requirement
             div(
@@ -1342,12 +1392,43 @@ nfl_handbuild_server <- function(id) {
       ))
     })
     
-    observeEvent(input$filter_all, { rv$position_filter <- "all" })
-    observeEvent(input$filter_qb, { rv$position_filter <- "QB" })
-    observeEvent(input$filter_rb, { rv$position_filter <- "RB" })
-    observeEvent(input$filter_wr, { rv$position_filter <- "WR" })
-    observeEvent(input$filter_te, { rv$position_filter <- "TE" })
-    observeEvent(input$filter_dst, { rv$position_filter <- "DST" })
+    # Helper to update button active states via shinyjs
+    update_position_buttons <- function(active_pos) {
+      positions <- c("all", "QB", "RB", "WR", "TE", "DST")
+      for (pos in positions) {
+        btn_id <- paste0("filter_", tolower(pos))
+        if (tolower(pos) == tolower(active_pos)) {
+          shinyjs::addClass(id = btn_id, class = "active")
+        } else {
+          shinyjs::removeClass(id = btn_id, class = "active")
+        }
+      }
+    }
+    
+    observeEvent(input$filter_all, { 
+      rv$position_filter <- "all"
+      update_position_buttons("all")
+    })
+    observeEvent(input$filter_qb, { 
+      rv$position_filter <- "QB"
+      update_position_buttons("QB")
+    })
+    observeEvent(input$filter_rb, { 
+      rv$position_filter <- "RB"
+      update_position_buttons("RB")
+    })
+    observeEvent(input$filter_wr, { 
+      rv$position_filter <- "WR"
+      update_position_buttons("WR")
+    })
+    observeEvent(input$filter_te, { 
+      rv$position_filter <- "TE"
+      update_position_buttons("TE")
+    })
+    observeEvent(input$filter_dst, { 
+      rv$position_filter <- "DST"
+      update_position_buttons("DST")
+    })
     
     # Team filter
     observeEvent(input$filter_team, {
@@ -1409,7 +1490,7 @@ nfl_handbuild_server <- function(id) {
       # Helper for sort indicator
       sort_indicator <- function(col) {
         if (sort_col == col) {
-          if (sort_dir == "desc") " Ã¢â€“Â¼" else " Ã¢â€“Â²"
+          if (sort_dir == "desc") " ÃƒÂ¢Ã¢â‚¬â€œÃ‚Â¼" else " ÃƒÂ¢Ã¢â‚¬â€œÃ‚Â²"
         } else {
           ""
         }
@@ -2113,7 +2194,7 @@ nfl_handbuild_server <- function(id) {
             style = "text-align: center;",
             div(style = "font-size: 0.75rem; text-transform: uppercase; color: var(--text-muted);", "Optimal"),
             div(style = "font-size: 1.25rem; font-weight: 700; color: var(--accent-teal);", 
-                if (optimal_proj > 0) sprintf("%.1f", optimal_proj) else "--Â")
+                if (optimal_proj > 0) sprintf("%.1f", optimal_proj) else "--Ã‚Â")
           ),
           div(
             style = "text-align: center;",
@@ -2122,7 +2203,7 @@ nfl_handbuild_server <- function(id) {
               style = sprintf("font-size: 1.25rem; font-weight: 700; color: %s;",
                               if (optimal_proj > 0) "var(--accent-coral)" else "var(--text-muted)"
               ),
-              if (optimal_proj > 0) sprintf("%+.1f", best_proj - optimal_proj) else "--Â"
+              if (optimal_proj > 0) sprintf("%+.1f", best_proj - optimal_proj) else "--Ã‚Â"
             )
           )
         ),
