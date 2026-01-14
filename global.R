@@ -96,6 +96,15 @@ if (dir.exists("data/fanteam_salaries")) {
 } else {
   cat("[STARTUP]   WARNING: No salary directory found!\n")
 }
+
+# Check golf data
+if (dir.exists("data/golf_2025")) {
+  cat("[STARTUP]   Found: data/golf_2025/\n")
+  golf_contents <- list.dirs("data/golf_2025", recursive = FALSE, full.names = FALSE)
+  cat("[STARTUP]   Golf subfolders:", paste(golf_contents, collapse = ", "), "\n")
+} else {
+  cat("[STARTUP]   INFO: No golf data directory found (data/golf_2025/)\n")
+}
 cat("\n")
 
 # -----------------------------------------------------------------------------
@@ -175,12 +184,16 @@ source("R/nhl/mod_nhl_handbuild.R")       # Handbuild/lineup builder module
 cat("[STARTUP]     mod_nhl_handbuild.R loaded\n")
 cat("[STARTUP]   NHL modules loaded\n")
 
+# Golf
+cat("[STARTUP]   Loading Golf modules...\n")
+source("R/golf/golf_config.R")              # Configuration, name reconciliation, headshots
+cat("[STARTUP]     golf_config.R loaded\n")
+source("R/golf/mod_golf_season_long.R")     # Season-long roster management
+cat("[STARTUP]     mod_golf_season_long.R loaded\n")
+cat("[STARTUP]   Golf modules loaded\n")
+
 # Formula 1 - uses placeholder_ui (no module yet)
 # source("R/f1/mod_f1_dashboard.R")
-
-# Golf
-# source("R/golf/mod_golf_dashboard.R")
-# source("R/golf/mod_golf_optimizer.R")
 
 cat("[STARTUP] Sport modules loaded\n")
 

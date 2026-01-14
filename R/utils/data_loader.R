@@ -5,7 +5,7 @@
 
 #' Load data for a specific season, week, and slate
 #' @param season Year (e.g., 2025)
-#' @param week Week number
+#' @param week Week number or playoff identifier (e.g., "wild_card", "divisional_round")
 #' @param slate Slate type ("main" or "late")
 #' @return Data frame with combined projections and salaries
 load_week_data <- function(season, week, slate = "main") {
@@ -15,14 +15,18 @@ load_week_data <- function(season, week, slate = "main") {
   log_debug("  Week:", week, level = "INFO")
   log_debug("  Slate:", slate, level = "INFO")
   
+  # Get the file prefix (handles both regular weeks and playoff rounds)
+  week_prefix <- get_week_file_prefix(week)
+  log_debug("  Week prefix:", week_prefix, level = "DEBUG")
+  
   # Determine file paths based on structure
   # Try new structure first (data/projections/2025/), then old structure (projections/)
   
   # Projection file
   proj_file <- NULL
   proj_paths_to_try <- c(
-    sprintf("data/projections/%s/week_%d_projections.csv", season, week),
-    sprintf("projections/week_%d_projections.csv", week)
+    sprintf("data/projections/%s/%s_projections.csv", season, week_prefix),
+    sprintf("projections/%s_projections.csv", week_prefix)
   )
   
   for (path in proj_paths_to_try) {
@@ -46,21 +50,21 @@ load_week_data <- function(season, week, slate = "main") {
   salary_file <- NULL
   if (slate == "late") {
     salary_paths_to_try <- c(
-      sprintf("data/fanteam_salaries/%s/week_%d_late.csv", season, week),
-      sprintf("data/fanteam_salaries/%s/week_%d_fumble.csv", season, week),
-      sprintf("fanteam_salaries/week_%d_late.csv", week),
-      sprintf("fanteam_salaries/week_%d_fumble.csv", week)
+      sprintf("data/fanteam_salaries/%s/%s_late.csv", season, week_prefix),
+      sprintf("data/fanteam_salaries/%s/%s_fumble.csv", season, week_prefix),
+      sprintf("fanteam_salaries/%s_late.csv", week_prefix),
+      sprintf("fanteam_salaries/%s_fumble.csv", week_prefix)
     )
   } else if (slate %in% c("two_game_slate", "three_game_slate")) {
     # Custom slate files (e.g., week_15_two_game_slate.csv)
     salary_paths_to_try <- c(
-      sprintf("data/fanteam_salaries/%s/week_%d_%s.csv", season, week, slate),
-      sprintf("fanteam_salaries/week_%d_%s.csv", week, slate)
+      sprintf("data/fanteam_salaries/%s/%s_%s.csv", season, week_prefix, slate),
+      sprintf("fanteam_salaries/%s_%s.csv", week_prefix, slate)
     )
   } else {
     salary_paths_to_try <- c(
-      sprintf("data/fanteam_salaries/%s/week_%d_main.csv", season, week),
-      sprintf("fanteam_salaries/week_%d_main.csv", week)
+      sprintf("data/fanteam_salaries/%s/%s_main.csv", season, week_prefix),
+      sprintf("fanteam_salaries/%s_main.csv", week_prefix)
     )
   }
   
@@ -198,6 +202,7 @@ load_week_data <- function(season, week, slate = "main") {
         player == "KaVontae Turpin" ~ "Kavontae Turpin",
         player == "Ollie Gordon II" ~ "Ollie Gordon",
         player == "T.J. Hockenson" ~ "TJ Hockenson",
+        player == "C.J. Stroud" ~ "CJ Stroud",
         TRUE ~ player
       ))
   }, error = function(e) {
@@ -292,17 +297,20 @@ load_week_data_with_headshots <- function(season, week, slate = "main") {
 
 #' Check which slates are available for a week
 #' @param season Year
-#' @param week Week number
+#' @param week Week number or playoff identifier
 #' @return Vector of available slates
 get_available_slates <- function(season, week) {
   log_debug("get_available_slates() for season:", season, "week:", week, level = "DEBUG")
+  
+  # Get the file prefix (handles both regular weeks and playoff rounds)
+  week_prefix <- get_week_file_prefix(week)
   
   slates <- c()
   
   # Try multiple path patterns for main slate
   main_paths <- c(
-    sprintf("data/fanteam_salaries/%s/week_%d_main.csv", season, week),
-    sprintf("fanteam_salaries/week_%d_main.csv", week)
+    sprintf("data/fanteam_salaries/%s/%s_main.csv", season, week_prefix),
+    sprintf("fanteam_salaries/%s_main.csv", week_prefix)
   )
   
   for (path in main_paths) {
@@ -315,10 +323,10 @@ get_available_slates <- function(season, week) {
   
   # Try multiple path patterns for late slate
   late_paths <- c(
-    sprintf("data/fanteam_salaries/%s/week_%d_fumble.csv", season, week),
-    sprintf("data/fanteam_salaries/%s/week_%d_late.csv", season, week),
-    sprintf("fanteam_salaries/week_%d_fumble.csv", week),
-    sprintf("fanteam_salaries/week_%d_late.csv", week)
+    sprintf("data/fanteam_salaries/%s/%s_fumble.csv", season, week_prefix),
+    sprintf("data/fanteam_salaries/%s/%s_late.csv", season, week_prefix),
+    sprintf("fanteam_salaries/%s_fumble.csv", week_prefix),
+    sprintf("fanteam_salaries/%s_late.csv", week_prefix)
   )
   
   for (path in late_paths) {
@@ -337,8 +345,8 @@ get_available_slates <- function(season, week) {
   
   for (slate_name in custom_slate_patterns) {
     custom_paths <- c(
-      sprintf("data/fanteam_salaries/%s/week_%d_%s.csv", season, week, slate_name),
-      sprintf("fanteam_salaries/week_%d_%s.csv", week, slate_name)
+      sprintf("data/fanteam_salaries/%s/%s_%s.csv", season, week_prefix, slate_name),
+      sprintf("fanteam_salaries/%s_%s.csv", week_prefix, slate_name)
     )
     
     for (path in custom_paths) {
@@ -375,18 +383,21 @@ get_slate_label <- function(slate) {
 
 #' Get unmatched players - those with projections but not in salary data
 #' @param season Year
-#' @param week Week number
+#' @param week Week number or playoff identifier
 #' @param slate Slate type
 #' @param min_projection Minimum projection threshold (default 3)
 #' @return Data frame of unmatched players with their projections
 get_unmatched_players <- function(season, week, slate = "main", min_projection = 3) {
   log_debug("get_unmatched_players() for season:", season, "week:", week, "slate:", slate, level = "INFO")
   
+  # Get the file prefix (handles both regular weeks and playoff rounds)
+  week_prefix <- get_week_file_prefix(week)
+  
   # Load projections
   proj_file <- NULL
   proj_paths_to_try <- c(
-    sprintf("data/projections/%s/week_%d_projections.csv", season, week),
-    sprintf("projections/week_%d_projections.csv", week)
+    sprintf("data/projections/%s/%s_projections.csv", season, week_prefix),
+    sprintf("projections/%s_projections.csv", week_prefix)
   )
   
   for (path in proj_paths_to_try) {
@@ -430,20 +441,20 @@ get_unmatched_players <- function(season, week, slate = "main", min_projection =
   salary_file <- NULL
   if (slate == "late") {
     salary_paths_to_try <- c(
-      sprintf("data/fanteam_salaries/%s/week_%d_late.csv", season, week),
-      sprintf("data/fanteam_salaries/%s/week_%d_fumble.csv", season, week),
-      sprintf("fanteam_salaries/week_%d_late.csv", week),
-      sprintf("fanteam_salaries/week_%d_fumble.csv", week)
+      sprintf("data/fanteam_salaries/%s/%s_late.csv", season, week_prefix),
+      sprintf("data/fanteam_salaries/%s/%s_fumble.csv", season, week_prefix),
+      sprintf("fanteam_salaries/%s_late.csv", week_prefix),
+      sprintf("fanteam_salaries/%s_fumble.csv", week_prefix)
     )
   } else if (slate %in% c("two_game_slate", "three_game_slate")) {
     salary_paths_to_try <- c(
-      sprintf("data/fanteam_salaries/%s/week_%d_%s.csv", season, week, slate),
-      sprintf("fanteam_salaries/week_%d_%s.csv", week, slate)
+      sprintf("data/fanteam_salaries/%s/%s_%s.csv", season, week_prefix, slate),
+      sprintf("fanteam_salaries/%s_%s.csv", week_prefix, slate)
     )
   } else {
     salary_paths_to_try <- c(
-      sprintf("data/fanteam_salaries/%s/week_%d_main.csv", season, week),
-      sprintf("fanteam_salaries/week_%d_main.csv", week)
+      sprintf("data/fanteam_salaries/%s/%s_main.csv", season, week_prefix),
+      sprintf("fanteam_salaries/%s_main.csv", week_prefix)
     )
   }
   
@@ -495,6 +506,7 @@ get_unmatched_players <- function(season, week, slate = "main", min_projection =
         player == "KaVontae Turpin" ~ "Kavontae Turpin",
         player == "Ollie Gordon II" ~ "Ollie Gordon",
         player == "T.J. Hockenson" ~ "TJ Hockenson",
+        player == "C.J. Stroud" ~ "CJ Stroud",
         TRUE ~ player
       ))
   }, error = function(e) {
@@ -529,30 +541,33 @@ get_unmatched_players <- function(season, week, slate = "main", min_projection =
 
 #' Get teams in a slate
 #' @param season Year
-#' @param week Week number
+#' @param week Week number or playoff identifier
 #' @param slate Slate type
 #' @return Vector of team abbreviations in the slate
 get_slate_teams <- function(season, week, slate = "main") {
   log_debug("get_slate_teams() for season:", season, "week:", week, "slate:", slate, level = "DEBUG")
   
+  # Get the file prefix (handles both regular weeks and playoff rounds)
+  week_prefix <- get_week_file_prefix(week)
+  
   # Determine salary file path
   salary_file <- NULL
   if (slate == "late") {
     salary_paths_to_try <- c(
-      sprintf("data/fanteam_salaries/%s/week_%d_late.csv", season, week),
-      sprintf("data/fanteam_salaries/%s/week_%d_fumble.csv", season, week),
-      sprintf("fanteam_salaries/week_%d_late.csv", week),
-      sprintf("fanteam_salaries/week_%d_fumble.csv", week)
+      sprintf("data/fanteam_salaries/%s/%s_late.csv", season, week_prefix),
+      sprintf("data/fanteam_salaries/%s/%s_fumble.csv", season, week_prefix),
+      sprintf("fanteam_salaries/%s_late.csv", week_prefix),
+      sprintf("fanteam_salaries/%s_fumble.csv", week_prefix)
     )
   } else if (slate %in% c("two_game_slate", "three_game_slate")) {
     salary_paths_to_try <- c(
-      sprintf("data/fanteam_salaries/%s/week_%d_%s.csv", season, week, slate),
-      sprintf("fanteam_salaries/week_%d_%s.csv", week, slate)
+      sprintf("data/fanteam_salaries/%s/%s_%s.csv", season, week_prefix, slate),
+      sprintf("fanteam_salaries/%s_%s.csv", week_prefix, slate)
     )
   } else {
     salary_paths_to_try <- c(
-      sprintf("data/fanteam_salaries/%s/week_%d_main.csv", season, week),
-      sprintf("fanteam_salaries/week_%d_main.csv", week)
+      sprintf("data/fanteam_salaries/%s/%s_main.csv", season, week_prefix),
+      sprintf("fanteam_salaries/%s_main.csv", week_prefix)
     )
   }
   

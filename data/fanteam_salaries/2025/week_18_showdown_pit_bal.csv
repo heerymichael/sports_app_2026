@@ -1,0 +1,37 @@
+Tournament,PlayerID,Name,FName,Club,Lineup,Position,Price
+1061676,4352569,Jackson,Lamar,BAL,expected,quarterback,19
+1061676,4352570,Rush,Cooper,BAL,unexpected,quarterback,15.5
+1061676,4352571,Ali,Rasheen,BAL,expected,running_back,5.8
+1061676,4352572,Henry,Derrick,BAL,expected,running_back,16.8
+1061676,4352573,Mitchell,Keaton,BAL,expected,running_back,7.2
+1061676,4352578,Ricard,Patrick,BAL,unexpected,running_back,4.2
+1061676,4352579,Hopkins,DeAndre,BAL,expected,wide_receiver,6.9
+1061676,4352581,Bateman,Rashod,BAL,injured,wide_receiver,8.8
+1061676,4352582,Flowers,Zay,BAL,expected,wide_receiver,14.8
+1061676,4352585,Wester,LaJohntay,BAL,unexpected,wide_receiver,4
+1061676,4352586,Wallace,Tylan,BAL,expected,wide_receiver,5.2
+1061676,4352589,Walker,Devontez,BAL,expected,wide_receiver,6
+1061676,4352594,DEF/ST Ravens,,BAL,expected,defense_special,9.4
+1061676,4352595,Likely,Isaiah,BAL,expected,tight_end,9.2
+1061676,4352597,Andrews,Mark,BAL,expected,tight_end,11.2
+1061676,4352598,Kolar,Charlie,BAL,expected,tight_end,5.6
+1061676,4352647,Thielen,Adam,PIT,expected,wide_receiver,8.5
+1061676,4352723,Huntley,Tyler,BAL,unexpected,quarterback,16.3
+1061676,4353292,Rudolph,Mason,PIT,unexpected,quarterback,13.8
+1061676,4353295,Rodgers,Aaron,PIT,expected,quarterback,15.8
+1061676,4353296,Howard,Will,PIT,unexpected,quarterback,13.5
+1061676,4353297,Nichols,Lew,PIT,unexpected,running_back,4
+1061676,4353299,Warren,Jaylen,PIT,expected,running_back,14
+1061676,4353300,Johnson,Kaleb,PIT,unexpected,running_back,4.2
+1061676,4353301,Gainwell,Kenneth,PIT,expected,running_back,13.5
+1061676,4353302,Sermon,Trey,PIT,unexpected,running_back,4
+1061676,4353303,Miller,Scotty,PIT,expected,wide_receiver,6.9
+1061676,4353307,Austin III,Calvin,PIT,expected,wide_receiver,9.5
+1061676,4353308,Skowronek,Ben,PIT,expected,wide_receiver,4.7
+1061676,4353312,Wilson,Roman,PIT,unexpected,wide_receiver,6
+1061676,4353315,Heyward,Connor,PIT,expected,tight_end,4.5
+1061676,4353317,Smith,Jonnu,PIT,expected,tight_end,8.9
+1061676,4353318,DEF/ST Steelers,,PIT,expected,defense_special,8.2
+1061676,4353319,Freiermuth,Pat,PIT,expected,tight_end,10.7
+1061676,4353370,Valdes-Scantling,Marquez,PIT,expected,wide_receiver,8
+1061676,4353373,Plumlee,John Rhys,PIT,unexpected,wide_receiver,4

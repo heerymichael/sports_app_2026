@@ -38,8 +38,8 @@ get_sports_config <- function() {
       color = APP_COLORS$gold,
       color_light = "#F5E0B8",
       icon_scale = 1.0,  # Base size (taller icon)
-      sections = c("dashboard", "optimizer", "projections"),
-      default_section = "dashboard"
+      sections = c("season_long", "dashboard", "optimizer", "projections"),
+      default_section = "season_long"
     ),
     
     f1 = list(
@@ -118,6 +118,13 @@ get_sections_config <- function() {
       id = "fanteam_contests",
       name = "FanTeam",
       icon = "trophy"
+    ),
+    
+    # Golf sections
+    season_long = list(
+      id = "season_long",
+      name = "Season Long",
+      icon = "calendar"
     ),
     
     # Common sections

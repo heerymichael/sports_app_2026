@@ -267,9 +267,52 @@ get_available_seasons <- function() {
   return(seasons)
 }
 
+# =============================================================================
+# PLAYOFF WEEK CONFIGURATION
+# =============================================================================
+
+# Playoff week identifiers in order
+NFL_PLAYOFF_WEEKS <- c("wild_card", "divisional_round", "conference", "super_bowl")
+
+# Display labels for playoff weeks
+NFL_PLAYOFF_LABELS <- c(
+  "wild_card" = "Wild Card",
+  "divisional_round" = "Divisional Round",
+  "conference" = "Conference Championships",
+  "super_bowl" = "Super Bowl"
+)
+
+#' Check if a week identifier is a playoff week
+#' @param week Week identifier (numeric or string)
+#' @return TRUE if playoff week
+is_playoff_week <- function(week) {
+  as.character(week) %in% NFL_PLAYOFF_WEEKS
+}
+
+#' Get display label for a week
+#' @param week Week identifier (numeric or string)
+#' @return Display label
+get_week_label <- function(week) {
+  week_str <- as.character(week)
+  if (week_str %in% names(NFL_PLAYOFF_LABELS)) {
+    return(NFL_PLAYOFF_LABELS[[week_str]])
+  }
+  paste("Week", week)
+}
+
+#' Build file prefix for a week (handles both regular and playoff weeks)
+#' @param week Week identifier (numeric or string)
+#' @return File prefix (e.g., "week_15" or "wild_card")
+get_week_file_prefix <- function(week) {
+  if (is_playoff_week(week)) {
+    return(as.character(week))
+  }
+  paste0("week_", week)
+}
+
 #' Get available weeks for a season
 #' @param season Year
-#' @return Vector of available weeks
+#' @return Vector of available weeks (numeric for regular season, character for playoffs)
 get_available_weeks <- function(season) {
   log_debug("get_available_weeks() called for season:", season, level = "INFO")
   
@@ -297,7 +340,7 @@ get_available_weeks <- function(season) {
       proj_path <- "projections"
     } else {
       log_debug("Could not determine projections path", level = "ERROR")
-      return(numeric(0))
+      return(character(0))
     }
   }
   
@@ -306,13 +349,13 @@ get_available_weeks <- function(season) {
   
   if (!dir.exists(proj_path)) {
     log_debug("Path does not exist:", proj_path, level = "ERROR")
-    return(numeric(0))
+    return(character(0))
   }
   
-  # List projection files
+  # List ALL projection files
   proj_files <- list.files(
     proj_path, 
-    pattern = "week_.*_projections\\.csv", 
+    pattern = ".*_projections\\.csv", 
     full.names = FALSE
   )
   
@@ -320,13 +363,26 @@ get_available_weeks <- function(season) {
   
   if (length(proj_files) == 0) {
     log_debug("No projection files found", level = "WARN")
-    return(numeric(0))
+    return(character(0))
   }
   
-  weeks <- as.numeric(gsub(".*week_(\\d+)_projections\\.csv", "\\1", proj_files))
-  weeks <- sort(weeks[!is.na(weeks)], decreasing = TRUE)
+  # Extract regular season weeks (numeric)
+  regular_weeks <- as.numeric(gsub(".*week_(\\d+)_projections\\.csv", "\\1", proj_files))
+  regular_weeks <- sort(regular_weeks[!is.na(regular_weeks)], decreasing = TRUE)
   
-  log_debug("Available weeks:", paste(weeks, collapse = ", "), level = "INFO")
+  # Check for playoff weeks
+  playoff_weeks <- c()
+  for (pw in NFL_PLAYOFF_WEEKS) {
+    pattern <- paste0("^", pw, "_projections\\.csv$")
+    if (any(grepl(pattern, proj_files))) {
+      playoff_weeks <- c(playoff_weeks, pw)
+    }
+  }
   
-  return(weeks)
+  # Combine: playoff weeks first (in order), then regular weeks (descending)
+  all_weeks <- c(playoff_weeks, as.character(regular_weeks))
+  
+  log_debug("Available weeks:", paste(all_weeks, collapse = ", "), level = "INFO")
+  
+  return(all_weeks)
 }

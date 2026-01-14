@@ -110,8 +110,9 @@ NFL_PLAYER_NAME_CORRECTIONS <- list(
   "A.J. Brown" = "AJ Brown",
   "J.K. Dobbins" = "JK Dobbins",
   "T.J. Hockenson" = "TJ Hockenson",
-  "D.K. Metcalf" = "D.K. Metcalf",
+  "D.K. Metcalf" = "D.K Metcalf",
   "DK Metcalf" = "D.K. Metcalf",
+  "C.J. Stroud" = "CJ Stroud",
   
   # Nickname variations
   "Hollywood Brown" = "Marquise Brown",

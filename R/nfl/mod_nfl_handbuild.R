@@ -37,7 +37,7 @@ nfl_handbuild_ui <- function(id) {
   }
   
   week_choices <- if (length(weeks) > 0) {
-    setNames(as.character(weeks), paste("Week", weeks))
+    setNames(weeks, sapply(weeks, get_week_label))
   } else {
     c("No weeks" = "")
   }
@@ -493,7 +493,7 @@ nfl_handbuild_server <- function(id) {
       
       log_debug(">>> Updating slates for season:", input$season, "week:", input$week, level = "INFO")
       
-      slates <- get_available_slates(input$season, as.numeric(input$week))
+      slates <- get_available_slates(input$season, input$week)
       
       if (length(slates) > 0) {
         slate_choices <- setNames(slates, sapply(slates, get_slate_label))
@@ -555,7 +555,7 @@ nfl_handbuild_server <- function(id) {
         # Use the same function as projections module
         data <- load_week_data_with_headshots(
           season, 
-          as.numeric(week), 
+          week,   # Pass week as-is (can be numeric string or playoff identifier)
           slate
         )
         
@@ -656,7 +656,7 @@ nfl_handbuild_server <- function(id) {
           
           # Check for unmatched players
           unmatched <- tryCatch({
-            get_unmatched_players(season, as.numeric(week), slate, min_projection = 3)
+            get_unmatched_players(season, week, slate, min_projection = 3)
           }, error = function(e) {
             log_debug(">>> Error checking unmatched players:", e$message, level = "WARN")
             NULL
@@ -694,10 +694,10 @@ nfl_handbuild_server <- function(id) {
       log_debug(">>> Weeks found:", paste(weeks, collapse = ", "), level = "INFO")
       
       if (length(weeks) > 0) {
-        week_choices <- setNames(as.character(weeks), paste("Week", weeks))
+        week_choices <- setNames(weeks, sapply(weeks, get_week_label))
         updateSelectInput(session, "week",
                           choices = week_choices,
-                          selected = as.character(weeks[1])
+                          selected = weeks[1]
         )
         log_debug(">>> Week dropdown updated, selected:", weeks[1], level = "INFO")
       } else {
@@ -817,7 +817,7 @@ nfl_handbuild_server <- function(id) {
           left_join(player_data %>% select(player, blended), by = "player") %>%
           mutate(
             adj_value = blended * (1 + adj_pct / 100),
-            display = sprintf("%s: %.1f ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ %.1f (%+.0f%%)", player, blended, adj_value, adj_pct)
+            display = sprintf("%s: %.1f ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¾Ãƒâ€šÃ‚Â¢ %.1f (%+.0f%%)", player, blended, adj_value, adj_pct)
           )
       } else {
         adj_df <- adj_df %>%
@@ -1061,7 +1061,7 @@ nfl_handbuild_server <- function(id) {
             ),
             
             # Arrow
-            span(style = "color: var(--text-muted); font-size: 1.2rem;", "ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢"),
+            span(style = "color: var(--text-muted); font-size: 1.2rem;", "ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¾Ãƒâ€šÃ‚Â¢"),
             
             # Stack requirement
             div(
@@ -1490,7 +1490,7 @@ nfl_handbuild_server <- function(id) {
       # Helper for sort indicator
       sort_indicator <- function(col) {
         if (sort_col == col) {
-          if (sort_dir == "desc") " ÃƒÂ¢Ã¢â‚¬â€œÃ‚Â¼" else " ÃƒÂ¢Ã¢â‚¬â€œÃ‚Â²"
+          if (sort_dir == "desc") " ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Å“Ãƒâ€šÃ‚Â¼" else " ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Å“Ãƒâ€šÃ‚Â²"
         } else {
           ""
         }
@@ -2194,7 +2194,7 @@ nfl_handbuild_server <- function(id) {
             style = "text-align: center;",
             div(style = "font-size: 0.75rem; text-transform: uppercase; color: var(--text-muted);", "Optimal"),
             div(style = "font-size: 1.25rem; font-weight: 700; color: var(--accent-teal);", 
-                if (optimal_proj > 0) sprintf("%.1f", optimal_proj) else "--Ã‚Â")
+                if (optimal_proj > 0) sprintf("%.1f", optimal_proj) else "--Ãƒâ€šÃ‚Â")
           ),
           div(
             style = "text-align: center;",
@@ -2203,7 +2203,7 @@ nfl_handbuild_server <- function(id) {
               style = sprintf("font-size: 1.25rem; font-weight: 700; color: %s;",
                               if (optimal_proj > 0) "var(--accent-coral)" else "var(--text-muted)"
               ),
-              if (optimal_proj > 0) sprintf("%+.1f", best_proj - optimal_proj) else "--Ã‚Â"
+              if (optimal_proj > 0) sprintf("%+.1f", best_proj - optimal_proj) else "--Ãƒâ€šÃ‚Â"
             )
           )
         ),

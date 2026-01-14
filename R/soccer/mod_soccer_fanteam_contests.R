@@ -1137,12 +1137,13 @@ soccer_fanteam_contests_server <- function(id) {
       
       # Position-specific weights for Fantasy Opportunity Score
       # GKs: CS dominant, minimal goal involvement
-      # DEFs: CS important, but attacking returns matter
-      # MIDs: Goals/assists more valuable
+      # DEFs: CS important, but attacking returns matter more than originally thought
+      # MIDs: Goals/assists more valuable - theory was correct
       # FWDs: Almost entirely attacking
+      # Updated Jan 2026 based on regression analysis (modest adjustment toward goals)
       fos_weights <- list(
-        GK  = c(cs = 0.85, gf = 0.15),
-        DEF = c(cs = 0.55, gf = 0.45),
+        GK  = c(cs = 0.80, gf = 0.20),
+        DEF = c(cs = 0.50, gf = 0.50),
         MID = c(cs = 0.25, gf = 0.75),
         FWD = c(cs = 0.10, gf = 0.90)
       )
@@ -1350,9 +1351,9 @@ soccer_fanteam_contests_server <- function(id) {
             htmltools::tags$div(
               style = "margin-top: 3px; font-size: 0.75rem; color: #9ca3af; display: flex; align-items: center; gap: 6px;",
               logo_html,
-              if (!is.null(logo_html) && pos_text != "") htmltools::tags$span("Â·"),
+              if (!is.null(logo_html) && pos_text != "") htmltools::tags$span("Ã‚Â·"),
               if (pos_text != "") htmltools::tags$span(pos_text),
-              if (pos_text != "" && !is.null(matchup_html)) htmltools::tags$span("Â·"),
+              if (pos_text != "" && !is.null(matchup_html)) htmltools::tags$span("Ã‚Â·"),
               matchup_html
             )
           )

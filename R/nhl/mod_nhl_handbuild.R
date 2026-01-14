@@ -164,6 +164,15 @@ optimize_nhl_lineup_lp <- function(players,
     }
   }
   
+  # Max 3 players per team constraint
+  unique_teams <- unique(players$team)
+  for (tm in unique_teams) {
+    team_constraint <- as.numeric(players$team == tm)
+    constraints[[length(constraints) + 1]] <- team_constraint
+    directions <- c(directions, "<=")
+    rhs <- c(rhs, 3)
+  }
+  
   const_mat <- do.call(rbind, constraints)
   
   result <- tryCatch({
@@ -1038,9 +1047,9 @@ nhl_handbuild_server <- function(id) {
       
       get_sort_icon <- function(col) {
         if (sort_col == col) {
-          if (sort_dir == "desc") "▼" else "▲"
+          if (sort_dir == "desc") "â–¼" else "â–²"
         } else {
-          "▽"
+          "â–½"
         }
       }
       
@@ -1100,12 +1109,12 @@ nhl_handbuild_server <- function(id) {
           div(
             class = "nhl-player-cell",
             div(class = "nhl-player-name", p$player_name),
-            div(class = "nhl-player-meta", sprintf("%s • %s", pos_display, p$team))
+            div(class = "nhl-player-meta", sprintf("%s â€¢ %s", pos_display, p$team))
           ),
           div(class = "nhl-salary", sprintf("$%.1f", p$salary)),
-          div(class = "nhl-median", if (is.na(p$fpts_median) || p$fpts_median == 0) "—" else sprintf("%.1f", p$fpts_median)),
-          div(class = "nhl-ceiling", if (is.na(p$fpts_ceiling) || p$fpts_ceiling == 0) "—" else sprintf("%.1f", p$fpts_ceiling)),
-          div(class = "nhl-value", if (is.na(p$value_median) || p$value_median == 0) "—" else sprintf("%.2f", p$value_median))
+          div(class = "nhl-median", if (is.na(p$fpts_median) || p$fpts_median == 0) "â€”" else sprintf("%.1f", p$fpts_median)),
+          div(class = "nhl-ceiling", if (is.na(p$fpts_ceiling) || p$fpts_ceiling == 0) "â€”" else sprintf("%.1f", p$fpts_ceiling)),
+          div(class = "nhl-value", if (is.na(p$value_median) || p$value_median == 0) "â€”" else sprintf("%.2f", p$value_median))
         )
         
         if (clickable) {
@@ -1144,6 +1153,15 @@ nhl_handbuild_server <- function(id) {
       cap <- as.numeric(input$salary_cap) %||% 100
       if (stats$total_salary + player$salary > cap) {
         showNotification("Would exceed salary cap", type = "warning", duration = 2)
+        return()
+      }
+      
+      # Check max 3 players per team
+      current_team_count <- sum(sapply(rv$lineup_slots, function(s) {
+        if (!is.null(s) && !is.null(s$team)) s$team == player$team else FALSE
+      }))
+      if (current_team_count >= 3) {
+        showNotification(sprintf("Max 3 players per team (%s already has 3)", player$team), type = "warning", duration = 2)
         return()
       }
       
@@ -1212,7 +1230,7 @@ nhl_handbuild_server <- function(id) {
                 style = "flex: 1;",
                 tags$strong(slot_data$player_name),
                 tags$span(style = "color: var(--text-muted); margin-left: 6px; font-size: 0.85rem;",
-                          sprintf("%s • $%.1f", slot_data$team, slot_data$salary))
+                          sprintf("%s â€¢ $%.1f", slot_data$team, slot_data$salary))
               ),
               div(
                 style = "text-align: right; min-width: 80px;",
@@ -1523,8 +1541,8 @@ nhl_handbuild_server <- function(id) {
                       class = "nhl-lineup-row",
                       div(class = "nhl-pos-badge", style = "background: #E5E9F0;", substr(slot_name, 1, 2)),
                       div(style = "font-style: italic; color: #999;", "(empty)"),
-                      div("—"),
-                      div("—")
+                      div("â€”"),
+                      div("â€”")
                     )
                   } else {
                     pos_color <- NHL_POSITION_COLORS[[player$position]]$bg %||% "#E5E9F0"

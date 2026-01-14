@@ -36,10 +36,10 @@ nfl_projections_ui <- function(id) {
     season_selected <- NULL
   }
   
-  # Build week choices
+  # Build week choices with proper labels
   if (length(weeks) > 0) {
-    week_choices <- setNames(as.character(weeks), paste("Week", weeks))
-    week_selected <- as.character(weeks[1])
+    week_choices <- setNames(weeks, sapply(weeks, get_week_label))
+    week_selected <- weeks[1]
   } else {
     week_choices <- c("No weeks found" = "")
     week_selected <- NULL
@@ -221,7 +221,7 @@ nfl_projections_server <- function(id) {
       tryCatch({
         rv$player_data <- load_week_data_with_headshots(
           season, 
-          as.numeric(week), 
+          week,   # Pass week as-is (can be numeric string or playoff identifier)
           slate
         )
         
@@ -257,10 +257,10 @@ nfl_projections_server <- function(id) {
       log_debug(">>> Weeks found:", paste(weeks, collapse = ", "), level = "INFO")
       
       if (length(weeks) > 0) {
-        week_choices <- setNames(as.character(weeks), paste("Week", weeks))
+        week_choices <- setNames(weeks, sapply(weeks, get_week_label))
         updateSelectInput(session, "week",
                           choices = week_choices,
-                          selected = as.character(weeks[1])
+                          selected = weeks[1]
         )
         log_debug(">>> Week dropdown updated, selected:", weeks[1], level = "INFO")
       } else {
@@ -285,7 +285,8 @@ nfl_projections_server <- function(id) {
         return()
       }
       
-      slates <- get_available_slates(input$season, as.numeric(input$week))
+      # Pass week as-is (can be numeric string or playoff identifier)
+      slates <- get_available_slates(input$season, input$week)
       log_debug(">>> Slates found:", paste(slates, collapse = ", "), level = "INFO")
       
       if (length(slates) > 0) {
@@ -466,7 +467,7 @@ nfl_projections_server <- function(id) {
       # Sort indicator helper
       sort_indicator <- function(col_name) {
         if (sort_col() == col_name) {
-          if (sort_dir() == "desc") " Ã¢â€“Â¼" else " Ã¢â€“Â²"
+          if (sort_dir() == "desc") " ÃƒÂ¢Ã¢â‚¬â€œÃ‚Â¼" else " ÃƒÂ¢Ã¢â‚¬â€œÃ‚Â²"
         } else {
           ""
         }
