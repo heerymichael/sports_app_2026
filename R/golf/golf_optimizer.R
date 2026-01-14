@@ -225,7 +225,7 @@ optimize_golf_classic_lp <- function(players,
 #' @param players Data frame with player data
 #' @param projection_col Projection column to use
 #' @param num_lineups Number of unique lineups
-#' @param variance_pct Percentage variance (e.g., 15 for ±15%)
+#' @param variance_pct Percentage variance (e.g., 15 for Â±15%)
 #' @param salary_cap Maximum salary
 #' @param locked_players Players to lock in
 #' @param excluded_players Players to exclude

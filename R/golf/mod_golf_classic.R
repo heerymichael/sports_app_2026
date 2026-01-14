@@ -16,11 +16,18 @@ golf_classic_ui <- function(id) {
   
   log_debug("golf_classic_ui() called with id:", id, level = "INFO")
   
-  contests <- get_available_golf_contests(year = "2025", contest_type = "classic")
-  contest_choices <- if (length(contests) > 0) {
-    setNames(contests, sapply(contests, get_golf_contest_label))
+  # Get tournaments from Google Sheets
+  tournaments <- tryCatch({
+    get_golf_tournaments_gsheet()
+  }, error = function(e) {
+    log_debug("Error getting tournaments:", e$message, level = "ERROR")
+    character(0)
+  })
+  
+  contest_choices <- if (length(tournaments) > 0) {
+    setNames(tournaments, tournaments)
   } else {
-    c("No contests found" = "")
+    c("No tournaments found" = "")
   }
   
   tagList(
@@ -39,14 +46,11 @@ golf_classic_ui <- function(id) {
       color = GOLF_CARD_COLOR,
       
       fluidRow(
-        column(3,
-               selectizeInput(ns("contest_select"), "Contest",
+        column(4,
+               selectizeInput(ns("contest_select"), "Tournament",
                               choices = contest_choices,
-                              selected = if (length(contests) > 0) contests[1] else NULL
+                              selected = if (length(tournaments) > 0) tournaments[1] else NULL
                )
-        ),
-        column(3,
-               fileInput(ns("projections_upload"), "Upload Projections (CSV)", accept = ".csv")
         ),
         column(2,
                numericInput(ns("salary_cap"), "Salary Cap", value = 100, min = 50, max = 150, step = 0.5)
@@ -57,7 +61,7 @@ golf_classic_ui <- function(id) {
                               selected = "blended"
                )
         ),
-        column(2,
+        column(4,
                div(style = "margin-top: 25px;",
                    actionButton(ns("process_btn"), "Load Data", class = "btn btn-primary w-100", icon = icon("sync"))
                )
@@ -276,9 +280,6 @@ golf_classic_server <- function(id) {
     # REACTIVE VALUES
     # =========================================================================
     rv <- reactiveValues(
-      salaries = NULL,
-      projections = NULL,
-      headshots = NULL,
       player_data = NULL,
       unmatched_players = NULL,
       generated_lineups = list(),
@@ -298,82 +299,41 @@ golf_classic_server <- function(id) {
       req(input$contest_select != "")
       
       log_debug(">>> Process button clicked", level = "INFO")
+      log_debug(">>> Loading tournament:", input$contest_select, level = "INFO")
       
-      salaries <- load_golf_salaries(year = "2025", contest = input$contest_select)
+      # Load data from Google Sheets
+      showNotification("Loading data from Google Sheets...", type = "message", duration = 2)
       
-      if (is.null(salaries)) {
-        showNotification("Failed to load salary data", type = "error")
+      player_data <- load_golf_tournament_data(input$contest_select)
+      
+      if (is.null(player_data)) {
+        showNotification("Failed to load tournament data from Google Sheets", type = "error")
         return()
       }
       
-      rv$salaries <- salaries
-      rv$headshots <- load_golf_headshots()
+      rv$player_data <- player_data
       
-      if (!is.null(input$projections_upload)) {
-        proj_raw <- tryCatch({
-          read_csv(input$projections_upload$datapath, show_col_types = FALSE)
-        }, error = function(e) {
-          showNotification(paste("Error:", e$message), type = "error")
-          NULL
-        })
-        
-        if (!is.null(proj_raw)) {
-          rv$projections <- parse_golf_projections(proj_raw)
-        }
-      }
+      rv$unmatched_players <- rv$player_data %>%
+        filter(is.na(median)) %>%
+        pull(player_name)
       
-      if (!is.null(rv$salaries) && !is.null(rv$projections)) {
-        rv$player_data <- match_golf_players(rv$salaries, rv$projections, rv$headshots)
-        
-        rv$unmatched_players <- rv$player_data %>%
-          filter(is.na(median)) %>%
-          pull(player_name)
-        
-        matched_count <- sum(!is.na(rv$player_data$median))
-        showNotification(
-          sprintf("Loaded %d golfers (%d with projections)", nrow(rv$player_data), matched_count),
-          type = "message"
-        )
-        
-        player_choices <- rv$player_data %>%
-          filter(!is.na(median)) %>%
-          arrange(desc(blended)) %>%
-          pull(player_name)
-        
-        updateSelectizeInput(session, "lock_players", choices = player_choices, server = TRUE)
-        updateSelectizeInput(session, "exclude_players", choices = player_choices, server = TRUE)
-        updateSelectizeInput(session, "grouped_players", choices = player_choices, server = TRUE)
-        updateSelectizeInput(session, "corr_trigger", choices = c("Select trigger..." = "", player_choices))
-        updateSelectizeInput(session, "corr_boost_targets", choices = player_choices, server = TRUE)
-        updateSelectizeInput(session, "corr_dock_targets", choices = player_choices, server = TRUE)
-        
-      } else if (!is.null(rv$salaries)) {
-        normalize_name <- function(name) {
-          name %>%
-            tolower() %>%
-            stringr::str_replace_all("[^a-z0-9\\s]", "") %>%
-            stringr::str_squish()
-        }
-        
-        if (!is.null(rv$headshots)) {
-          rv$player_data <- rv$salaries %>%
-            mutate(match_key = normalize_name(player_name)) %>%
-            left_join(
-              rv$headshots %>%
-                mutate(match_key = normalize_name(player_name)) %>%
-                select(match_key, headshot_url),
-              by = "match_key"
-            ) %>%
-            mutate(headshot_url = if_else(is.na(headshot_url), GOLF_DEFAULT_HEADSHOT, headshot_url)) %>%
-            select(-match_key)
-        } else {
-          rv$player_data <- rv$salaries %>%
-            mutate(headshot_url = GOLF_DEFAULT_HEADSHOT)
-        }
-        
-        rv$unmatched_players <- rv$player_data$player_name
-        showNotification("Loaded salaries - upload projections to continue", type = "warning")
-      }
+      matched_count <- sum(!is.na(rv$player_data$median))
+      showNotification(
+        sprintf("Loaded %d golfers (%d with projections)", nrow(rv$player_data), matched_count),
+        type = "message"
+      )
+      
+      player_choices <- rv$player_data %>%
+        filter(!is.na(median)) %>%
+        arrange(desc(blended)) %>%
+        pull(player_name)
+      
+      updateSelectizeInput(session, "lock_players", choices = player_choices, server = TRUE)
+      updateSelectizeInput(session, "exclude_players", choices = player_choices, server = TRUE)
+      updateSelectizeInput(session, "grouped_players", choices = player_choices, server = TRUE)
+      updateSelectizeInput(session, "corr_trigger", choices = c("Select trigger..." = "", player_choices))
+      updateSelectizeInput(session, "corr_boost_targets", choices = player_choices, server = TRUE)
+      updateSelectizeInput(session, "corr_dock_targets", choices = player_choices, server = TRUE)
       
       # Reset state
       rv$generated_lineups <- list()

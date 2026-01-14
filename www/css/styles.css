@@ -207,6 +207,7 @@ a:hover {
 .card--coral .card-header { background-color: var(--accent-coral); }
 .card--sage .card-header { background-color: var(--accent-sage); }
 .card--yellow .card-header { background-color: var(--accent-yellow); }
+.card--gold .card-header { background-color: var(--accent-yellow); }
 .card--sky .card-header { background-color: var(--accent-sky); }
 
 /* Card with dropdowns gets elevated z-index */
@@ -776,7 +777,7 @@ details summary::-webkit-details-marker {
 }
 
 details summary::before {
-  content: 'â–¸';
+  content: 'Ã¢â€“Â¸';
   display: inline-block;
   margin-right: 0.5rem;
   transition: transform var(--transition-fast);
@@ -2012,4 +2013,168 @@ details > *:not(summary) {
 
 .pool-team-filter .selectize-dropdown {
   z-index: 1000 !important;
+}
+
+/* -----------------------------------------------------------------------------
+   GOLF SEASON LONG MODULE
+   ----------------------------------------------------------------------------- */
+
+/* Roster label styling */
+.roster-label {
+  display: flex;
+  align-items: center;
+  height: 38px;
+  font-weight: 600;
+}
+
+/* Rule input rows */
+.rule-input-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-sm);
+  font-size: 1rem;
+}
+
+.rule-label {
+  font-weight: 500;
+}
+
+.rule-select-wrapper {
+  min-width: 200px;
+  flex: 1;
+  max-width: 300px;
+}
+
+.rule-count-wrapper {
+  width: 70px;
+}
+
+/* Rule tags (locks/maxes) */
+.rule-tags-container {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-xs);
+}
+
+.rule-tag {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.4rem 0.8rem;
+  background: var(--bg-white);
+  border: 2px solid var(--outline);
+  border-radius: var(--radius-sm);
+  gap: var(--space-sm);
+}
+
+.rule-tag--min {
+  border-color: var(--accent-sage);
+}
+
+.rule-tag--max {
+  border-color: var(--accent-coral);
+}
+
+.rule-tag__type {
+  padding: 0.2rem 0.5rem;
+  border-radius: 4px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--bg-white);
+}
+
+.rule-tag--min .rule-tag__type {
+  background-color: var(--accent-sage);
+}
+
+.rule-tag--max .rule-tag__type {
+  background-color: var(--accent-coral);
+}
+
+.rule-tag__name {
+  font-weight: 600;
+}
+
+.rule-tag__detail {
+  font-size: 0.85rem;
+}
+
+.rule-tag__remove {
+  padding: 0 !important;
+  min-width: auto !important;
+  font-size: 0.8rem !important;
+  color: var(--text-muted) !important;
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+}
+
+.rule-tag__remove:hover {
+  color: var(--accent-red) !important;
+}
+
+/* Player cell in tables */
+.player-cell {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+}
+
+.player-name {
+  font-weight: 600;
+}
+
+/* Roster card summary */
+.roster-summary {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: var(--space-md);
+  padding: var(--space-sm);
+  background: var(--bg-secondary);
+  border-radius: var(--radius-sm);
+}
+
+.roster-stat__value {
+  font-weight: 700;
+}
+
+/* Roster player list */
+.roster-players {
+  font-size: 0.9rem;
+}
+
+.roster-player {
+  display: flex;
+  align-items: center;
+  padding: 0.4rem 0;
+  border-bottom: 1px solid var(--bg-secondary);
+  gap: var(--space-sm);
+}
+
+.roster-player:last-child {
+  border-bottom: none;
+}
+
+.roster-player__name {
+  font-weight: 600;
+  flex: 1;
+}
+
+.roster-player__salary {
+  color: var(--text-secondary);
+  font-weight: 500;
+  width: 55px;
+  text-align: right;
+}
+
+.roster-player__rank {
+  font-size: 0.8rem;
+  width: 35px;
+  text-align: right;
+}
+
+/* Player pool container height */
+.player-pool-container {
+  max-height: 500px;
+  overflow-y: auto;
 }

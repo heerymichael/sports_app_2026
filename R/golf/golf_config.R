@@ -13,7 +13,7 @@ library(janitor)
 # UI THEMING
 # =============================================================================
 
-GOLF_CARD_COLOR <- "yellow"  # Consistent card header color for all Golf modules
+GOLF_CARD_COLOR <- "gold"  # Consistent card header color for all Golf modules
 
 # =============================================================================
 # CONTEST CONFIGURATIONS
@@ -390,4 +390,129 @@ get_golf_contest_label <- function(contest) {
   label
 }
 
-cat("Golf config loaded: GOLF_CARD_COLOR, GOLF_CLASSIC_STRUCTURE, GOLF_SHOWDOWN_STRUCTURE, headshot support\n")
+# =============================================================================
+# GOOGLE SHEETS DATA LOADING
+# =============================================================================
+
+# Google Sheet IDs for golf data
+GOLF_PROJECTIONS_SHEET_ID <- "1yJJAOv5hzNZagYUG7FLpNmRIRC76L0fJNGPbzK61lbw"
+GOLF_SALARIES_SHEET_ID <- "12I3uMfY_V5apa0u6DGcQctIvJETJFonUJwm3aqiuvhI"
+
+#' Get available tournaments from Google Sheets
+#' @return Character vector of tournament names (sheet names)
+get_golf_tournaments_gsheet <- function() {
+  log_debug("get_golf_tournaments_gsheet() called", level = "DEBUG")
+  
+  tryCatch({
+    ss <- googlesheets4::gs4_get(GOLF_PROJECTIONS_SHEET_ID)
+    tournaments <- ss$sheets$name
+    log_debug("Found tournaments:", paste(tournaments, collapse = ", "), level = "INFO")
+    return(tournaments)
+  }, error = function(e) {
+    log_debug("Error getting tournaments from Google Sheets:", e$message, level = "ERROR")
+    return(character(0))
+  })
+}
+
+#' Load projections from Google Sheet for a specific tournament
+#' @param tournament Tournament name (sheet name)
+#' @return Data frame with projections
+load_golf_projections_gsheet <- function(tournament) {
+  log_debug("load_golf_projections_gsheet() for tournament:", tournament, level = "DEBUG")
+  
+  tryCatch({
+    projections <- googlesheets4::read_sheet(
+      GOLF_PROJECTIONS_SHEET_ID,
+      sheet = tournament
+    ) %>%
+      janitor::clean_names()
+    
+    log_debug("Loaded", nrow(projections), "rows from projections sheet", level = "INFO")
+    
+    # Use the existing parse function to standardize column names
+    projections <- parse_golf_projections(projections)
+    
+    return(projections)
+  }, error = function(e) {
+    log_debug("Error loading projections from Google Sheets:", e$message, level = "ERROR")
+    return(NULL)
+  })
+}
+
+#' Load salaries from Google Sheet for a specific tournament
+#' @param tournament Tournament name (sheet name)
+#' @return Data frame with player_id, player_name, salary
+load_golf_salaries_gsheet <- function(tournament) {
+  log_debug("load_golf_salaries_gsheet() for tournament:", tournament, level = "DEBUG")
+  
+  tryCatch({
+    salaries_raw <- googlesheets4::read_sheet(
+      GOLF_SALARIES_SHEET_ID,
+      sheet = tournament
+    ) %>%
+      janitor::clean_names()
+    
+    log_debug("Raw salary columns:", paste(names(salaries_raw), collapse = ", "), level = "DEBUG")
+    
+    # Check if we have f_name + name format (FanTeam style) or single player_name
+    if (all(c("f_name", "name") %in% names(salaries_raw))) {
+      # FanTeam format: concatenate first and last name
+      salaries <- salaries_raw %>%
+        filter(lineup != "refuted") %>%
+        mutate(
+          player_name = paste0(f_name, " ", name),
+          salary = as.numeric(price)
+        )
+    } else {
+      # Simple format: rename columns flexibly
+      salaries <- salaries_raw %>%
+        rename(
+          player_name = any_of(c("player_name", "player", "golfer", "name")),
+          salary = any_of(c("salary", "price", "sal"))
+        ) %>%
+        mutate(salary = as.numeric(salary))
+    }
+    
+    # Create player_id if not present
+    if (!"player_id" %in% names(salaries)) {
+      salaries$player_id <- seq_len(nrow(salaries))
+    }
+    
+    salaries <- salaries %>%
+      select(player_id, player_name, salary)
+    
+    log_debug("Loaded", nrow(salaries), "golfers from salaries sheet", level = "INFO")
+    return(salaries)
+  }, error = function(e) {
+    log_debug("Error loading salaries from Google Sheets:", e$message, level = "ERROR")
+    return(NULL)
+  })
+}
+
+#' Load and merge tournament data from Google Sheets
+#' @param tournament Tournament name
+#' @return Merged data frame with salaries, projections, headshots
+load_golf_tournament_data <- function(tournament) {
+  log_debug("load_golf_tournament_data() for tournament:", tournament, level = "DEBUG")
+  
+  salaries <- load_golf_salaries_gsheet(tournament)
+  projections <- load_golf_projections_gsheet(tournament)
+  headshots <- load_golf_headshots()
+  
+  if (is.null(salaries)) {
+    log_debug("Failed to load salaries", level = "ERROR")
+    return(NULL)
+  }
+  
+  if (is.null(projections)) {
+    log_debug("Failed to load projections", level = "ERROR")
+    return(NULL)
+  }
+  
+  # Use existing match function
+  player_data <- match_golf_players(salaries, projections, headshots)
+  
+  return(player_data)
+}
+
+cat("Golf config loaded: GOLF_CARD_COLOR, GOLF_CLASSIC_STRUCTURE, GOLF_SHOWDOWN_STRUCTURE, headshot support, Google Sheets functions\n")

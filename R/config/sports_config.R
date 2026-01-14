@@ -38,7 +38,7 @@ get_sports_config <- function() {
       color = APP_COLORS$gold,
       color_light = "#F5E0B8",
       icon_scale = 1.0,  # Base size (taller icon)
-      sections = c("classic", "showdown"),
+      sections = c("classic", "showdown", "season_long"),
       default_section = "classic"
     ),
     
@@ -156,6 +156,12 @@ get_sections_config <- function() {
       id = "showdown",
       name = "Showdown",
       icon = "zap"
+    ),
+    
+    season_long = list(
+      id = "season_long",
+      name = "Season Long",
+      icon = "calendar"
     )
   )
 }
