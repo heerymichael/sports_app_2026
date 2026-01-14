@@ -44,7 +44,7 @@ This document contains detailed examples, templates, and architecture documentat
 ### Header Styling
 - **Background**: Full-width `--bg-secondary` (#E5E9F0)
 - **No borders or shadows**
-- **Sport nav icons**: NFL/Soccer 38Ã—38px, Golf 32Ã—32px
+- **Sport nav icons**: NFL/Soccer 38Ãƒâ€”38px, Golf 32Ãƒâ€”32px
 - **Labels**: Weight 800, uppercase, 1.5px letter-spacing, 0.85rem
 - **States**: Active full opacity + colored underline, Inactive 0.6 opacity
 
@@ -54,45 +54,45 @@ This document contains detailed examples, templates, and architecture documentat
 
 ```
 sports_analytics/
-â”œâ”€â”€ app.R                        # Main app entry point
-â”œâ”€â”€ global.R                     # Global setup, source order
-â”œâ”€â”€ app_themes.R                 # Centralized themes
-â”œâ”€â”€ styles.css                   # All CSS
-â”œâ”€â”€ app.js                       # JavaScript enhancements
-â”‚
-â”œâ”€â”€ R/
-â”‚   â”œâ”€â”€ config/sports_config.R   # Sport definitions
-â”‚   â”œâ”€â”€ utils/
-â”‚   â”‚   â”œâ”€â”€ helpers.R            # log_debug(), formatting
-â”‚   â”‚   â”œâ”€â”€ data_loader.R        # Load CSVs
-â”‚   â”‚   â””â”€â”€ player_headshots.R   # NFL headshots
-â”‚   â”œâ”€â”€ modules/
-â”‚   â”‚   â”œâ”€â”€ mod_sport_nav.R
-â”‚   â”‚   â”œâ”€â”€ mod_section_nav.R
-â”‚   â”‚   â””â”€â”€ mod_page_container.R
-â”‚   â”œâ”€â”€ components/
-â”‚   â”‚   â”œâ”€â”€ ui_value_box.R
-â”‚   â”‚   â””â”€â”€ ui_card.R
-â”‚   â”œâ”€â”€ nfl/
-â”‚   â”‚   â”œâ”€â”€ nfl_config.R
-â”‚   â”‚   â”œâ”€â”€ nfl_optimizer.R
-â”‚   â”‚   â”œâ”€â”€ nfl_ui_helpers.R
-â”‚   â”‚   â””â”€â”€ mod_nfl_*.R
-â”‚   â””â”€â”€ soccer/
-â”‚       â”œâ”€â”€ soccer_config.R
-â”‚       â”œâ”€â”€ soccer_cache.R
-â”‚       â”œâ”€â”€ soccer_data_loader.R
-â”‚       â”œâ”€â”€ soccer_transforms.R
-â”‚       â””â”€â”€ mod_soccer_*.R
-â”‚
-â”œâ”€â”€ data/
-â”‚   â”œâ”€â”€ cache/                   # Soccer RDS cache
-â”‚   â”œâ”€â”€ projections/2025/
-â”‚   â””â”€â”€ fanteam_salaries/2025/
-â”‚
-â””â”€â”€ www/
-    â”œâ”€â”€ nfl_logos/               # {TEAM}.webp, {TEAM}.png
-    â””â”€â”€ soccer_logos/{League}/   # Team SVGs
+Ã¢â€Å“Ã¢â€â‚¬Ã¢â€â‚¬ app.R                        # Main app entry point
+Ã¢â€Å“Ã¢â€â‚¬Ã¢â€â‚¬ global.R                     # Global setup, source order
+Ã¢â€Å“Ã¢â€â‚¬Ã¢â€â‚¬ app_themes.R                 # Centralized themes
+Ã¢â€Å“Ã¢â€â‚¬Ã¢â€â‚¬ styles.css                   # All CSS
+Ã¢â€Å“Ã¢â€â‚¬Ã¢â€â‚¬ app.js                       # JavaScript enhancements
+Ã¢â€â€š
+Ã¢â€Å“Ã¢â€â‚¬Ã¢â€â‚¬ R/
+Ã¢â€â€š   Ã¢â€Å“Ã¢â€â‚¬Ã¢â€â‚¬ config/sports_config.R   # Sport definitions
+Ã¢â€â€š   Ã¢â€Å“Ã¢â€â‚¬Ã¢â€â‚¬ utils/
+Ã¢â€â€š   Ã¢â€â€š   Ã¢â€Å“Ã¢â€â‚¬Ã¢â€â‚¬ helpers.R            # log_debug(), formatting
+Ã¢â€â€š   Ã¢â€â€š   Ã¢â€Å“Ã¢â€â‚¬Ã¢â€â‚¬ data_loader.R        # Load CSVs
+Ã¢â€â€š   Ã¢â€â€š   Ã¢â€â€Ã¢â€â‚¬Ã¢â€â‚¬ player_headshots.R   # NFL headshots
+Ã¢â€â€š   Ã¢â€Å“Ã¢â€â‚¬Ã¢â€â‚¬ modules/
+Ã¢â€â€š   Ã¢â€â€š   Ã¢â€Å“Ã¢â€â‚¬Ã¢â€â‚¬ mod_sport_nav.R
+Ã¢â€â€š   Ã¢â€â€š   Ã¢â€Å“Ã¢â€â‚¬Ã¢â€â‚¬ mod_section_nav.R
+Ã¢â€â€š   Ã¢â€â€š   Ã¢â€â€Ã¢â€â‚¬Ã¢â€â‚¬ mod_page_container.R
+Ã¢â€â€š   Ã¢â€Å“Ã¢â€â‚¬Ã¢â€â‚¬ components/
+Ã¢â€â€š   Ã¢â€â€š   Ã¢â€Å“Ã¢â€â‚¬Ã¢â€â‚¬ ui_value_box.R
+Ã¢â€â€š   Ã¢â€â€š   Ã¢â€â€Ã¢â€â‚¬Ã¢â€â‚¬ ui_card.R
+Ã¢â€â€š   Ã¢â€Å“Ã¢â€â‚¬Ã¢â€â‚¬ nfl/
+Ã¢â€â€š   Ã¢â€â€š   Ã¢â€Å“Ã¢â€â‚¬Ã¢â€â‚¬ nfl_config.R
+Ã¢â€â€š   Ã¢â€â€š   Ã¢â€Å“Ã¢â€â‚¬Ã¢â€â‚¬ nfl_optimizer.R
+Ã¢â€â€š   Ã¢â€â€š   Ã¢â€Å“Ã¢â€â‚¬Ã¢â€â‚¬ nfl_ui_helpers.R
+Ã¢â€â€š   Ã¢â€â€š   Ã¢â€â€Ã¢â€â‚¬Ã¢â€â‚¬ mod_nfl_*.R
+Ã¢â€â€š   Ã¢â€â€Ã¢â€â‚¬Ã¢â€â‚¬ soccer/
+Ã¢â€â€š       Ã¢â€Å“Ã¢â€â‚¬Ã¢â€â‚¬ soccer_config.R
+Ã¢â€â€š       Ã¢â€Å“Ã¢â€â‚¬Ã¢â€â‚¬ soccer_cache.R
+Ã¢â€â€š       Ã¢â€Å“Ã¢â€â‚¬Ã¢â€â‚¬ soccer_data_loader.R
+Ã¢â€â€š       Ã¢â€Å“Ã¢â€â‚¬Ã¢â€â‚¬ soccer_transforms.R
+Ã¢â€â€š       Ã¢â€â€Ã¢â€â‚¬Ã¢â€â‚¬ mod_soccer_*.R
+Ã¢â€â€š
+Ã¢â€Å“Ã¢â€â‚¬Ã¢â€â‚¬ data/
+Ã¢â€â€š   Ã¢â€Å“Ã¢â€â‚¬Ã¢â€â‚¬ cache/                   # Soccer RDS cache
+Ã¢â€â€š   Ã¢â€Å“Ã¢â€â‚¬Ã¢â€â‚¬ projections/2025/
+Ã¢â€â€š   Ã¢â€â€Ã¢â€â‚¬Ã¢â€â‚¬ fanteam_salaries/2025/
+Ã¢â€â€š
+Ã¢â€â€Ã¢â€â‚¬Ã¢â€â‚¬ www/
+    Ã¢â€Å“Ã¢â€â‚¬Ã¢â€â‚¬ nfl_logos/               # {TEAM}.webp, {TEAM}.png
+    Ã¢â€â€Ã¢â€â‚¬Ã¢â€â‚¬ soccer_logos/{League}/   # Team SVGs
 ```
 
 ---
@@ -135,17 +135,79 @@ div(class = "player-headshot player-headshot--sm",
 tags$button(class = "btn btn-refresh-subtle", "Refresh")
 ```
 
+### UI Patterns - Remove/Cancel Buttons
+
+**Use `actionButton` with `class = "btn-secondary"` for remove/cancel/delete buttons.**
+
+This creates a consistent button appearance matching the NFL Handbuild remove buttons:
+- White background with dark border
+- Compact sizing with inline style overrides
+- Uses Font Awesome "times" icon
+
+```r
+# ✓ CORRECT - Use actionButton with btn-secondary
+actionButton(
+  ns(paste0("remove_", item_id)),
+  icon("times"),
+  class = "btn-secondary",
+  style = "padding: 0.2rem 0.4rem; min-width: auto; font-size: 0.7rem;",
+  onclick = sprintf("Shiny.setInputValue('%s', '%s', {priority: 'event'}); return false;", ns("remove_item"), key)
+)
+
+# ✗ WRONG - Plain HTML button with inline styles (inconsistent appearance)
+tags$button(
+  type = "button",
+  style = "background: none; border: none; cursor: pointer; ...",
+  onclick = sprintf("Shiny.setInputValue('%s', '%s', {priority: 'event'})", ns("remove_item"), key),
+  "x"
+)
+```
+
+**Note**: The `onclick` with `return false;` prevents the default Shiny action button behavior while still triggering our custom input value.
+
+Used in: NFL Handbuild lineup slots, Golf Classic rules
+
+### Rule Display Cards Pattern
+
+For displaying applied rules (locks, excludes, grouped adjustments, correlations), use full-width card rows:
+
+```r
+div(
+  style = "display: flex; align-items: center; padding: 0.4rem 0.6rem; background: white; border: 2px solid var(--accent-sage); border-radius: 6px;",
+  
+  # Badge (colored background)
+  div(
+    style = "background: var(--accent-sage); color: white; padding: 0.2rem 0.5rem; border-radius: 4px; font-size: 0.75rem; font-weight: 700; margin-right: 0.75rem;",
+    icon("lock"), " LOCKED"
+  ),
+  
+  # Content (flex: 1)
+  div(style = "flex: 1; font-weight: 600; font-size: 0.9rem;", player_name),
+  
+  # Remove button (actionButton)
+  actionButton(ns("remove_btn"), icon("times"), class = "btn-secondary", 
+               style = "padding: 0.2rem 0.4rem; min-width: auto; font-size: 0.7rem;")
+)
+```
+
+Border colors by rule type:
+- Lock: `var(--accent-sage)` (green)
+- Exclude: `var(--accent-coral)` (red/coral)
+- Boost: `var(--accent-sage)` 
+- Dock: `var(--accent-coral)`
+- Correlation: `var(--accent-plum)` (purple)
+
 ### req() vs return() Pattern
 
 ```r
-# âŒ WRONG - Breaks reactive chain
+# Ã¢ÂÅ’ WRONG - Breaks reactive chain
 observe({
   season <- input$season
   if (is.null(season) || season == "") return()
   # ... load data
 })
 
-# âœ… CORRECT - Maintains reactive dependency
+# Ã¢Å“â€¦ CORRECT - Maintains reactive dependency
 observe({
   season <- input$season
   week <- input$week
@@ -371,10 +433,10 @@ rule <- list(
 ### Data Flow
 
 ```
-Google Sheets â†’ soccer_data_loader.R (with caching) â†’ reactiveValues
-                         â†“
+Google Sheets Ã¢â€ â€™ soccer_data_loader.R (with caching) Ã¢â€ â€™ reactiveValues
+                         Ã¢â€ â€œ
               soccer_transforms.R (calculations)
-                         â†“
+                         Ã¢â€ â€œ
         mod_soccer_team_dashboard.R  |  mod_soccer_player_dashboard.R
 ```
 
@@ -432,9 +494,9 @@ SPORTS ANALYTICS APP - STARTUP
 ## Heatmap Color Scales
 
 ### Diverging (Value Column)
-- Below midpoint: Coral (#D08770) â†’ White
+- Below midpoint: Coral (#D08770) Ã¢â€ â€™ White
 - At midpoint: White
-- Above midpoint: White â†’ Teal (#8FBCBB)
+- Above midpoint: White Ã¢â€ â€™ Teal (#8FBCBB)
 
 ### Sequential (Projection/Salary)
 - Low: White

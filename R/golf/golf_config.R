@@ -1,647 +1,393 @@
 # =============================================================================
 # Golf Configuration
 # 
-# Configuration for Golf Season Long module:
-# - Contest rules (Underdog Scramble)
-# - Name matching utilities
-# - Weighted projection calculations
-# - Roster validation
+# Centralized configuration for Golf modules including:
+# - Contest rules and structure
+# - Player name corrections for data matching
+# - Data loading functions with headshot support
+# =============================================================================
+library(tidyverse)
+library(janitor)
+
+# =============================================================================
+# UI THEMING
 # =============================================================================
 
-# -----------------------------------------------------------------------------
-# Contest Configuration - Underdog Scramble
-# -----------------------------------------------------------------------------
+GOLF_CARD_COLOR <- "yellow"  # Consistent card header color for all Golf modules
 
-GOLF_SCRAMBLE_CONFIG <- list(
-  # Roster structure
-  roster_size = 10,           # Total players in roster
-  bench_size = 4,             # Players on bench
-  active_size = 6,            # Active lineup (roster - bench)
-  
-  # Budget
-  budget = 100,               # 100M budget
-  
-  # Scoring multipliers
-  captain_multiplier = 1.25,   # Captain scores 1.25x
-  underdog_multiplier = 1.25,  # Cheapest player scores 1.25x
-  
-  # Transfer rules
-  free_transfers_per_week = 1,
-  max_saved_transfers = 31,
-  transfer_penalty = -20,      # Points deducted per extra transfer
-  
-  # Season
-  total_gameweeks = 32,
-  
-  # Payout
-  payout_percentage = 10       # Top 10% paid
+# =============================================================================
+# CONTEST CONFIGURATIONS
+# =============================================================================
+
+#' Classic (Full Tournament) Configuration
+#' 6 golfers, 100M salary cap
+GOLF_CLASSIC_STRUCTURE <- list(
+  roster_size = 6,
+  salary_cap = 100,
+  slots = c("G1", "G2", "G3", "G4", "G5", "G6"),
+  slot_labels = c(
+    G1 = "Golfer", G2 = "Golfer", G3 = "Golfer",
+    G4 = "Golfer", G5 = "Golfer", G6 = "Golfer"
+  )
 )
 
-# -----------------------------------------------------------------------------
-# Quarter Weighting Profiles
-# -----------------------------------------------------------------------------
-
-#' Get weighting profile for projections
-#' @param profile Character: "early_season", "mid_season", "late_season", "equal"
-#' @return Named numeric vector of weights (Q1, Q2, Q3, Q4)
-get_quarter_weights <- function(profile = "early_season") {
-  weights <- switch(profile,
-                    "early_season" = c(Q1 = 0.35, Q2 = 0.30, Q3 = 0.20, Q4 = 0.15),
-                    "mid_season" = c(Q1 = 0.20, Q2 = 0.30, Q3 = 0.30, Q4 = 0.20),
-                    "late_season" = c(Q1 = 0.15, Q2 = 0.20, Q3 = 0.30, Q4 = 0.35),
-                    "equal" = c(Q1 = 0.25, Q2 = 0.25, Q3 = 0.25, Q4 = 0.25),
-                    # Default to early season
-                    c(Q1 = 0.35, Q2 = 0.30, Q3 = 0.20, Q4 = 0.15)
+#' Showdown (Single Day) Configuration
+#' 6 golfers: 1 CPT (1.5x), 1 VICE (1.25x), 4 FLEX
+GOLF_SHOWDOWN_STRUCTURE <- list(
+  roster_size = 6,
+  salary_cap = 100,
+  slots = c("CPT", "VICE", "FLEX1", "FLEX2", "FLEX3", "FLEX4"),
+  multipliers = list(
+    CPT = list(points = 1.5, salary = 1.5),
+    VICE = list(points = 1.25, salary = 1.25),
+    FLEX = list(points = 1.0, salary = 1.0)
+  ),
+  slot_labels = c(
+    CPT = "CPT", VICE = "VICE",
+    FLEX1 = "FLEX", FLEX2 = "FLEX", FLEX3 = "FLEX", FLEX4 = "FLEX"
   )
-  
-  # Ensure weights sum to 1
-  weights / sum(weights)
-}
+)
 
-#' Calculate weighted projection score
-#' @param q1 Quarter 1 projection
-#' @param q2 Quarter 2 projection
-#' @param q3 Quarter 3 projection
-#' @param q4 Quarter 4 projection
-#' @param weights Named vector of quarter weights
-#' @return Weighted projection score
-calculate_weighted_projection <- function(q1, q2, q3, q4, weights = NULL) {
-  if (is.null(weights)) {
-    weights <- get_quarter_weights("early_season")
-  }
-  
-  # Handle NA values
-  q1 <- ifelse(is.na(q1), 0, q1)
-  q2 <- ifelse(is.na(q2), 0, q2)
-  q3 <- ifelse(is.na(q3), 0, q3)
-  q4 <- ifelse(is.na(q4), 0, q4)
-  
-  weighted_score <- q1 * weights["Q1"] + 
-    q2 * weights["Q2"] + 
-    q3 * weights["Q3"] + 
-    q4 * weights["Q4"]
-  
-  round(weighted_score, 1)
-}
+# =============================================================================
+# NAME CORRECTIONS
+# FanTeam name -> Projection/Headshot name
+# =============================================================================
 
-# -----------------------------------------------------------------------------
-# Name Matching Utilities
-# -----------------------------------------------------------------------------
+GOLF_NAME_CORRECTIONS <- list(
+  # Capitalization fixes (FanTeam -> standard)
+  "Robert Macintyre" = "Robert MacIntyre",
+  "Maverick Mcnealy" = "Maverick McNealy",
+  "Denny Mccarthy" = "Denny McCarthy",
+  "Max Mcgreevy" = "Max McGreevy",
+  
+  # Name variants (FanTeam salaries -> Projection names)
+  "Christopher Gotterup" = "Chris Gotterup",
+  "Henry Lebioda" = "Hank Lebioda",
+  "Kota Yuta Kaneko" = "Kota Kaneko",
+  "Cam Davis" = "Cameron Davis",
+  "Matt McCarty" = "Matthew McCarty",
+  "Matthias Schmid" = "Matti Schmid",
+  "Zach Bauchou" = "Zachary Bauchou",
+  
+  # Full name handling
+  "Seong-Hyeon Kim" = "Seonghyeon Kim",
+  "Adrien Dumont" = "Adrien Dumont De Chassart"
+)
 
-#' Normalize golfer name for matching
-#' @param name Character string of player name
-#' @return Normalized name for matching
-normalize_golfer_name <- function(name) {
-  if (is.na(name) || name == "") return("")
-  
-  # Convert to lowercase
-  name <- tolower(trimws(name))
-  
-  # Handle "Last, First" format -> "First Last"
-  if (grepl(",", name)) {
-    parts <- strsplit(name, ",")[[1]]
-    if (length(parts) == 2) {
-      name <- paste(trimws(parts[2]), trimws(parts[1]))
-    }
-  }
-  
-  # Remove accents/diacritics
-  name <- iconv(name, to = "ASCII//TRANSLIT")
-  
-  # Remove common suffixes
-  name <- gsub("\\s+(jr|sr|ii|iii|iv)\\.?$", "", name)
-  
-  # Remove punctuation including hyphens and periods
-  name <- gsub("[^a-z0-9\\s]", " ", name)
-  
-  # Collapse multiple spaces
-  name <- gsub("\\s+", " ", name)
-  
-  name <- trimws(name)
-  
-  # Apply name corrections
-  if (exists("GOLF_NAME_CORRECTIONS") && name %in% names(GOLF_NAME_CORRECTIONS)) {
-    name <- GOLF_NAME_CORRECTIONS[[name]]
-  }
+#' Apply name corrections to a player name
+#' @param name Player name to correct
+#' @return Corrected name or original if no correction exists
+correct_golf_name <- function(name) {
+  correction <- GOLF_NAME_CORRECTIONS[[name]]
+  if (!is.null(correction)) return(correction)
   
   name
 }
 
-#' Create matching key from name
-#' @param name Character string of player name
-#' @return Simplified key for fuzzy matching
-create_name_key <- function(name) {
-  normalized <- normalize_golfer_name(name)
-  
-  # Split into parts
-  parts <- strsplit(normalized, " ")[[1]]
-  
-  # If we have first and last name, use first 3 chars of each
-  if (length(parts) >= 2) {
-    first <- substr(parts[1], 1, 3)
-    last <- substr(parts[length(parts)], 1, 4)
-    key <- paste0(first, "_", last)
-  } else if (length(parts) == 1) {
-    key <- substr(parts[1], 1, 6)
-  } else {
-    key <- ""
-  }
-  
-  key
-}
-
 # =============================================================================
-# GOLF NAME RECONCILIATION
-# =============================================================================
-#
-# This section handles name mismatches between salary files and rankings files.
-# 
-# HOW TO ADD NEW CORRECTIONS:
-# ---------------------------
-# 1. Find the unmatched player in the app (shown in "Unmatched Players" debug table)
-# 2. Look up their name in the rankings file
-# 3. Add a new line below in the format:
-#    "salary name" = "rankings name"
-#
-# IMPORTANT: Names should be LOWERCASE with spaces (no hyphens, no periods)
-# The system automatically normalizes names before lookup, so:
-#   - "Sung-Jae Im" becomes "sung jae im"
-#   - "J.T. Poston" becomes "jt poston"
-#
-# EXAMPLE:
-# If salary file has "Alexander Noren" but rankings has "Alex Noren":
-#   "alexander noren" = "alex noren"
-#
+# HEADSHOT LOADING
 # =============================================================================
 
-GOLF_NAME_CORRECTIONS <- list(
+#' Load golf player headshots
+#' @return Data frame with player_name, headshot_url
+load_golf_headshots <- function() {
+  headshot_path <- "data/golf/player_headshots/player_headshots.csv"
   
-  
-  # ---------------------------------------------------------------------------
-  # ABBREVIATED/NICKNAME DIFFERENCES
-  # Salary file uses full name, rankings uses nickname or vice versa
-  # ---------------------------------------------------------------------------
-  
-  "alexander noren"      = "alex noren",
-  "christopher gotterup" = "chris gotterup",
-  "nicolas echavarria"   = "nico echavarria",
-  "sam stevens"          = "samuel stevens",
-  "henry lebioda"        = "hank lebioda",
-  "kristoffer ventura"   = "kris ventura",
-  "matthias schmid"      = "matti schmid",
-  "zach bauchou"         = "zachary bauchou",
-  
-  
-  # ---------------------------------------------------------------------------
-  # SPACING/FORMATTING DIFFERENCES
-  # Names with hyphens, spaces, or different formatting between sources
-  # Note: Hyphens are converted to spaces during normalization
-  # ---------------------------------------------------------------------------
-  
-  "byeong hun an"        = "byeong hun an",
-  "hao tong li"          = "haotong li",
-  "sung jae im"          = "sungjae im",
-  "ze cheng dou"         = "zecheng dou",
-  "seong hyeon kim"      = "seonghyeon kim",
-  
-  
-  # ---------------------------------------------------------------------------
-  # SUFFIX/PREFIX DIFFERENCES
-  # Names with Jr, III, middle initials, etc.
-  # ---------------------------------------------------------------------------
-  
-  "jordan l smith"       = "jordan smith",
-  
-  
-  # ---------------------------------------------------------------------------
-  # EXTENDED NAME DIFFERENCES
-  # Names where one source has additional parts
-  # ---------------------------------------------------------------------------
-  
-  "adrien dumont"        = "adrien dumont de chassart"
-  
-  
-  # ---------------------------------------------------------------------------
-  # ADD NEW CORRECTIONS BELOW THIS LINE
-  # ---------------------------------------------------------------------------
-  # Format: "salary name lowercase" = "rankings name lowercase"
-  # 
-  # Example:
-  # "jon rahm"             = "jonathan rahm",
-  # "tiger woods"          = "eldrick woods"
-  # ---------------------------------------------------------------------------
-  
-)
-
-#' Apply name corrections
-#' @param names Vector of names to correct
-#' @return Corrected names
-apply_golf_name_corrections <- function(names) {
-  corrections <- GOLF_NAME_CORRECTIONS
-  
-  sapply(names, function(name) {
-    if (name %in% names(corrections)) {
-      corrections[[name]]
-    } else {
-      name
-    }
-  }, USE.NAMES = FALSE)
-}
-
-#' Match salary names to rankings names
-#' @param salary_df Data frame with salary data
-#' @param rankings_df Data frame with rankings data
-#' @param salary_name_col Name column in salary data
-#' @param rankings_name_col Name column in rankings data
-#' @return Salary data frame with matched rankings info
-match_golfer_names <- function(salary_df, rankings_df, 
-                               salary_name_col = "Name",
-                               salary_fname_col = "FName",
-                               rankings_name_col = "Golfer") {
-  
-  # Create full name from salary data (First Last format)
-  salary_df <- salary_df %>%
-    mutate(
-      full_name = paste(!!sym(salary_fname_col), !!sym(salary_name_col)),
-      full_name = trimws(full_name),
-      name_normalized = normalize_golfer_name(full_name),
-      name_key = sapply(full_name, create_name_key)
-    )
-  
-  # Create normalized names for rankings
-  rankings_df <- rankings_df %>%
-    mutate(
-      name_normalized = normalize_golfer_name(!!sym(rankings_name_col)),
-      name_key = sapply(!!sym(rankings_name_col), create_name_key)
-    )
-  
-  # Try exact match on normalized names first
-  matched <- salary_df %>%
-    left_join(
-      rankings_df %>% select(-any_of("name_key")),
-      by = "name_normalized",
-      suffix = c("", "_rankings")
-    )
-  
-  # For unmatched, try key-based matching
-  unmatched_mask <- is.na(matched$Rank)
-  if (any(unmatched_mask)) {
-    unmatched <- matched %>% filter(unmatched_mask) %>% select(names(salary_df))
-    
-    # Match on key
-    key_matched <- unmatched %>%
-      left_join(
-        rankings_df %>% select(-any_of("name_normalized")),
-        by = "name_key",
-        suffix = c("", "_rankings")
-      )
-    
-    # Combine
-    matched <- bind_rows(
-      matched %>% filter(!unmatched_mask),
-      key_matched
-    )
-  }
-  
-  # Report matching stats
-  match_rate <- sum(!is.na(matched$Rank)) / nrow(matched) * 100
-  if (exists("log_debug")) {
-    log_debug(sprintf("Name matching: %.1f%% matched (%d/%d)", 
-                      match_rate, sum(!is.na(matched$Rank)), nrow(matched)), 
-              level = "INFO")
-  }
-  
-  matched
-}
-
-# -----------------------------------------------------------------------------
-# Value Calculations
-# -----------------------------------------------------------------------------
-
-#' Calculate points per million value
-#' @param projection Projected points
-#' @param price Player price/salary
-#' @return Points per million
-calculate_value <- function(projection, price) {
-  if (is.na(projection) || is.na(price) || price == 0) {
-    return(NA)
-  }
-  round(projection / price, 2)
-}
-
-#' Calculate value vs average
-#' @param player_value Player's value score
-#' @param all_values Vector of all player values
-#' @return Percentage above/below average
-calculate_value_vs_avg <- function(player_value, all_values) {
-  avg_value <- mean(all_values, na.rm = TRUE)
-  if (is.na(player_value) || avg_value == 0) {
-    return(NA)
-  }
-  round((player_value - avg_value) / avg_value * 100, 1)
-}
-
-# -----------------------------------------------------------------------------
-# Roster Validation
-# -----------------------------------------------------------------------------
-
-#' Validate roster for Underdog Scramble rules
-#' @param roster Data frame of selected players
-#' @param config List of contest configuration
-#' @return List with valid (logical) and message (character)
-validate_scramble_roster <- function(roster, config = GOLF_SCRAMBLE_CONFIG) {
-  
-  messages <- c()
-  valid <- TRUE
-  
-  # Check roster size
-  if (nrow(roster) != config$roster_size) {
-    valid <- FALSE
-    messages <- c(messages, sprintf(
-      "Roster must have exactly %d players (currently %d)",
-      config$roster_size, nrow(roster)
-    ))
-  }
-  
-  # Check budget
-  total_salary <- sum(roster$Price, na.rm = TRUE)
-  if (total_salary > config$budget) {
-    valid <- FALSE
-    messages <- c(messages, sprintf(
-      "Over budget: %.1fM / %.0fM",
-      total_salary, config$budget
-    ))
-  }
-  
-  # Check for captain selection
-  if (!"is_captain" %in% names(roster) || sum(roster$is_captain) != 1) {
-    valid <- FALSE
-    messages <- c(messages, "Exactly one player must be designated as Captain")
-  }
-  
-  if (length(messages) == 0) {
-    messages <- "Roster is valid"
-  }
-  
-  list(
-    valid = valid,
-    message = paste(messages, collapse = "; "),
-    total_salary = total_salary,
-    remaining_budget = config$budget - total_salary
-  )
-}
-
-#' Identify underdog (cheapest player)
-#' @param roster Data frame of selected players
-#' @return PlayerID of cheapest player
-identify_underdog <- function(roster) {
-  if (nrow(roster) == 0) return(NULL)
-  
-  cheapest <- roster %>%
-    arrange(Price) %>%
-    slice(1)
-  
-  cheapest$PlayerID
-}
-
-# -----------------------------------------------------------------------------
-# Transfer Analysis
-# -----------------------------------------------------------------------------
-
-#' Calculate transfer value
-#' @param player_out Player being transferred out
-#' @param player_in Player being transferred in
-#' @param weeks_remaining Gameweeks remaining
-#' @return List with transfer details and value
-calculate_transfer_value <- function(player_out, player_in, weeks_remaining) {
-  
-  # Projected points difference over remaining season
-  proj_diff <- player_in$weighted_proj - player_out$weighted_proj
-  
-  # Normalize by weeks remaining
-  weekly_diff <- proj_diff / max(weeks_remaining, 1)
-  
-  # Salary difference (positive = savings)
-  salary_diff <- player_out$Price - player_in$Price
-  
-  list(
-    player_out = player_out$full_name,
-    player_in = player_in$full_name,
-    proj_difference = round(proj_diff, 1),
-    weekly_uplift = round(weekly_diff, 2),
-    salary_change = salary_diff,
-    recommended = proj_diff > 20  # Simple threshold
-  )
-}
-
-# -----------------------------------------------------------------------------
-# Logging Helper
-# -----------------------------------------------------------------------------
-
-#' Log golf module messages
-golf_log <- function(..., level = "INFO") {
-  if (exists("log_debug")) {
-    log_debug(paste0("[GOLF] ", ...), level = level)
-  } else {
-    cat(sprintf("[%s] [GOLF] %s\n", level, paste0(...)))
-  }
-}
-
-# =============================================================================
-# GOLF PLAYER HEADSHOTS
-# =============================================================================
-#
-# Headshot images are stored in data/golf_2025/player_headshots/
-# The headshot mapping file links player names to image URLs
-#
-# Expected file: data/golf_2025/player_headshots/player-headshots.csv
-# Expected columns: Name (or Golfer), HeadshotURL (or similar)
-# =============================================================================
-
-# Global cache for headshot data
-GOLF_HEADSHOTS_CACHE <- NULL
-
-#' Load golf player headshots from CSV
-#' @param force_refresh Logical, whether to reload even if cached
-#' @return Data frame with player names and headshot URLs
-load_golf_headshots <- function(force_refresh = FALSE) {
-  
-  # Return cached if available
-  if (!force_refresh && !is.null(GOLF_HEADSHOTS_CACHE)) {
-    return(GOLF_HEADSHOTS_CACHE)
-  }
-  
-  # Try multiple possible file paths and names
-  possible_paths <- c(
-    "data/golf_2025/player_headshots/player-headshots.csv",
-    "data/golf_2025/player_headshots/player_headshots.csv",
-    "data/golf_2025/player_headshots/headshots.csv"
-  )
-  
-  headshots_path <- NULL
-  for (path in possible_paths) {
-    if (file.exists(path)) {
-      headshots_path <- path
-      break
-    }
-  }
-  
-  if (is.null(headshots_path)) {
-    golf_log("No headshots file found in data/golf_2025/player_headshots/", level = "WARN")
-    return(data.frame(name_normalized = character(), headshot_url = character()))
+  if (!file.exists(headshot_path)) {
+    log_debug("Golf headshots file not found:", headshot_path, level = "WARN")
+    return(NULL)
   }
   
   tryCatch({
-    headshots_df <- read_csv(headshots_path, show_col_types = FALSE)
-    golf_log("Loaded headshots file:", headshots_path, "-", nrow(headshots_df), "entries", level = "INFO")
+    headshots <- read_csv(headshot_path, show_col_types = FALSE) %>%
+      clean_names() %>%
+      mutate(
+        player_name = paste0(f_name, " ", name),
+        headshot_url = headshot
+      ) %>%
+      select(player_name, headshot_url)
     
-    # Normalize column names to lowercase for easier matching
-    names(headshots_df) <- tolower(names(headshots_df))
-    
-    # Check for the specific format: Name (last), FName (first), Headshot (URL)
-    if (all(c("name", "fname", "headshot") %in% names(headshots_df))) {
-      # Format: Name=Last, FName=First, Headshot=URL (like salary file format)
-      result <- headshots_df %>%
-        mutate(
-          # Combine first and last name
-          player_name = paste(fname, name),
-          player_name = trimws(player_name),
-          headshot_url = headshot,
-          # Normalize for matching
-          name_normalized = sapply(player_name, function(n) {
-            n <- tolower(trimws(n))
-            n <- gsub("[^a-z0-9 ]", " ", n)
-            n <- gsub("\\s+", " ", n)
-            trimws(n)
-          })
-        ) %>%
-        filter(!is.na(headshot_url), headshot_url != "") %>%
-        select(player_name, name_normalized, headshot_url)
-      
-      golf_log("Processed headshots with Name/FName format:", nrow(result), "entries", level = "INFO")
-      
-    } else {
-      # Fallback: Try to find name and URL columns generically
-      
-      # Find name column
-      name_col <- NULL
-      for (col in c("golfer", "player", "player_name", "playername", "name")) {
-        if (col %in% names(headshots_df)) {
-          name_col <- col
-          break
-        }
-      }
-      
-      # Find URL column
-      url_col <- NULL
-      for (col in c("headshot", "headshoturl", "headshot_url", "url", "image", "image_url", "imageurl", "photo", "photo_url")) {
-        if (col %in% names(headshots_df)) {
-          url_col <- col
-          break
-        }
-      }
-      
-      if (is.null(name_col) || is.null(url_col)) {
-        golf_log("Could not identify name/URL columns. Found:", paste(names(headshots_df), collapse = ", "), level = "ERROR")
-        return(data.frame(name_normalized = character(), headshot_url = character()))
-      }
-      
-      # Normalize and standardize
-      result <- headshots_df %>%
-        select(player_name = !!sym(name_col), headshot_url = !!sym(url_col)) %>%
-        mutate(
-          name_normalized = sapply(player_name, function(n) {
-            n <- tolower(trimws(n))
-            n <- gsub("[^a-z0-9 ]", " ", n)
-            n <- gsub("\\s+", " ", n)
-            trimws(n)
-          })
-        ) %>%
-        filter(!is.na(headshot_url), headshot_url != "")
-      
-      golf_log("Processed headshots with generic format:", nrow(result), "entries", level = "INFO")
-    }
-    
-    # Cache the result
-    GOLF_HEADSHOTS_CACHE <<- result
-    
-    return(result)
-    
+    log_debug("Loaded", nrow(headshots), "golf headshots", level = "INFO")
+    return(headshots)
   }, error = function(e) {
-    golf_log("Error loading headshots:", e$message, level = "ERROR")
-    return(data.frame(name_normalized = character(), headshot_url = character()))
+    log_debug("Error loading golf headshots:", e$message, level = "ERROR")
+    return(NULL)
   })
 }
 
-#' Get headshot URL for a golfer
-#' @param player_name Character, the player's name
-#' @return Character, the headshot URL or NULL if not found
-get_golf_headshot <- function(player_name) {
-  if (is.na(player_name) || player_name == "") return(NULL)
+#' Default headshot URL for missing players
+GOLF_DEFAULT_HEADSHOT <- "https://datagolf.com/static/players/headshot_default.png"
+
+# =============================================================================
+# DATA LOADING FUNCTIONS
+# =============================================================================
+
+#' Get available golf contests
+#' @param year Year folder (default 2025)
+#' @param contest_type "classic" or "showdown"
+#' @return Vector of contest names
+get_available_golf_contests <- function(year = "2025", contest_type = "classic") {
+  log_debug("get_available_golf_contests() for year:", year, "type:", contest_type, level = "DEBUG")
   
-  headshots <- load_golf_headshots()
-  if (nrow(headshots) == 0) return(NULL)
+  salary_dir <- sprintf("data/golf/fanteam_salaries/%s", year)
   
-  # Normalize the input name
-  name_normalized <- tolower(trimws(player_name))
-  name_normalized <- gsub("[^a-z0-9 ]", " ", name_normalized)
-  name_normalized <- gsub("\\s+", " ", name_normalized)
-  name_normalized <- trimws(name_normalized)
-  
-  # Look up
-  match <- headshots %>% filter(name_normalized == !!name_normalized)
-  
-  if (nrow(match) > 0) {
-    return(match$headshot_url[1])
+  if (!dir.exists(salary_dir)) {
+    log_debug("Golf salary directory not found:", salary_dir, level = "WARN")
+    return(character(0))
   }
   
-  # Try partial matching on last name
-  name_parts <- strsplit(name_normalized, " ")[[1]]
-  if (length(name_parts) >= 1) {
-    last_name <- name_parts[length(name_parts)]
-    partial_match <- headshots %>% 
-      filter(grepl(last_name, name_normalized, fixed = TRUE))
-    
-    if (nrow(partial_match) == 1) {
-      return(partial_match$headshot_url[1])
-    }
+  pattern <- if (contest_type == "classic") {
+    "_classic_salaries\\.csv$"
+  } else {
+    "_day_\\d+_salaries\\.csv$"
   }
   
-  return(NULL)
+  files <- list.files(salary_dir, pattern = pattern)
+  
+  if (length(files) == 0) {
+    log_debug("No", contest_type, "files found", level = "DEBUG")
+    return(character(0))
+  }
+  
+  contests <- if (contest_type == "classic") {
+    gsub("_classic_salaries\\.csv$", "", files)
+  } else {
+    unique(gsub("_day_\\d+_salaries\\.csv$", "", files))
+  }
+  
+  log_debug("Found contests:", paste(contests, collapse = ", "), level = "INFO")
+  return(contests)
 }
 
-#' Create HTML for player cell with headshot
-#' @param player_name Character, the player's name
-#' @param price Numeric, optional price to display
-#' @param show_headshot Logical, whether to show headshot
-#' @return HTML string for the cell
-create_golf_player_cell <- function(player_name, price = NULL, show_headshot = TRUE) {
-  headshot_url <- if (show_headshot) get_golf_headshot(player_name) else NULL
+#' Get available showdown days for a tournament
+#' @param year Year folder
+#' @param tournament Tournament name
+#' @return Vector of day numbers
+get_showdown_days <- function(year = "2025", tournament) {
+  salary_dir <- sprintf("data/golf/fanteam_salaries/%s", year)
+  pattern <- sprintf("^%s_day_(\\d+)_salaries\\.csv$", tournament)
+  files <- list.files(salary_dir, pattern = pattern)
   
-  headshot_html <- if (!is.null(headshot_url)) {
-    sprintf(
-      '<img src="%s" style="width: 32px; height: 32px; border-radius: 50%%; object-fit: cover; margin-right: 8px; border: 2px solid var(--border-color);" onerror="this.style.display=\'none\'">',
-      headshot_url
-    )
-  } else {
-    # Placeholder circle with initials
-    initials <- toupper(substr(gsub("^(.).*\\s+(.).*$", "\\1\\2", player_name), 1, 2))
-    sprintf(
-      '<div style="width: 32px; height: 32px; border-radius: 50%%; background: var(--bg-secondary); display: inline-flex; align-items: center; justify-content: center; margin-right: 8px; font-size: 0.75rem; font-weight: 600; color: var(--text-secondary); border: 2px solid var(--border-color);">%s</div>',
-      initials
-    )
-  }
+  if (length(files) == 0) return(integer(0))
   
-  price_html <- if (!is.null(price)) {
-    sprintf('<span style="color: var(--text-secondary); font-size: 0.85rem; margin-left: 4px;">$%.1fM</span>', price)
-  } else {
-    ""
-  }
-  
-  sprintf(
-    '<div style="display: flex; align-items: center;">%s<span style="font-weight: 500;">%s</span>%s</div>',
-    headshot_html,
-    htmltools::htmlEscape(player_name),
-    price_html
-  )
+  days <- as.integer(gsub(pattern, "\\1", files))
+  sort(days)
 }
+
+#' Load golf salaries from FanTeam file
+#' @param year Year folder
+#' @param contest Contest identifier
+#' @return Data frame with player_id, player_name, salary
+load_golf_salaries <- function(year = "2025", contest) {
+  log_debug("load_golf_salaries() for contest:", contest, level = "DEBUG")
+  
+  # Determine file path - updated to new location
+  if (grepl("_classic$", contest)) {
+    file_path <- sprintf("data/golf/fanteam_salaries/%s/%s_salaries.csv", year, contest)
+  } else if (grepl("_day_\\d+$", contest)) {
+    file_path <- sprintf("data/golf/fanteam_salaries/%s/%s_salaries.csv", year, contest)
+  } else {
+    file_path <- sprintf("data/golf/fanteam_salaries/%s/%s_classic_salaries.csv", year, contest)
+  }
+  
+  if (!file.exists(file_path)) {
+    log_debug("Salary file not found:", file_path, level = "ERROR")
+    return(NULL)
+  }
+  
+  log_debug("Loading salaries from:", file_path, level = "INFO")
+  
+  tryCatch({
+    salaries <- read_csv(file_path, show_col_types = FALSE) %>%
+      clean_names() %>%
+      filter(lineup != "refuted") %>%
+      mutate(
+        player_name = paste0(f_name, " ", name),
+        player_id = player_id,
+        salary = price
+      ) %>%
+      select(player_id, player_name, salary)
+    
+    log_debug("Loaded", nrow(salaries), "golfers", level = "INFO")
+    return(salaries)
+  }, error = function(e) {
+    log_debug("Error loading salaries:", e$message, level = "ERROR")
+    return(NULL)
+  })
+}
+
+#' Parse projections from uploaded CSV (DraftKings format)
+#' @param projections_df Data frame from uploaded file
+#' @return Cleaned projections data frame
+parse_golf_projections <- function(projections_df) {
+  log_debug("parse_golf_projections() called with", nrow(projections_df), "rows", level = "DEBUG")
+  
+  tryCatch({
+    projections <- projections_df %>%
+      clean_names() %>%
+      rename_with(~ gsub("^x_", "", .), everything())
+    
+    # Log available columns for debugging
+    log_debug("Available columns:", paste(names(projections), collapse = ", "), level = "DEBUG")
+    
+    # Map column names flexibly
+    projections <- projections %>%
+      rename(
+        player_name = any_of(c("golfer", "player", "name")),
+        median = any_of(c("dk_points", "points", "proj", "median", "projection")),
+        ceiling = any_of(c("dk_ceiling", "ceiling", "ceil")),
+        cut_odds = any_of(c("make_cut_odds", "cut_odds", "make_cut")),
+        dk_salary = any_of(c("dk_salary", "salary")),
+        own_large = any_of(c("dk_ownership", "dk_large_ownership", "own_large", "ownership_large", "large_ownership")),
+        own_small = any_of(c("small_field_dk_ownership", "dk_small_ownership", "own_small", "ownership_small", "small_ownership")),
+        etr_value = any_of(c("dk_value", "value", "etr_value"))
+      )
+    
+    projections <- projections %>%
+      mutate(
+        own_large = if ("own_large" %in% names(.)) {
+          as.numeric(gsub("%", "", own_large))
+        } else NA_real_,
+        own_small = if ("own_small" %in% names(.)) {
+          as.numeric(gsub("%", "", own_small))
+        } else NA_real_,
+        cut_odds = if ("cut_odds" %in% names(.)) {
+          as.numeric(gsub("%", "", cut_odds))
+        } else NA_real_,
+        etr_value = if ("etr_value" %in% names(.)) {
+          as.numeric(etr_value)
+        } else NA_real_,
+        median = as.numeric(median),
+        ceiling = as.numeric(ceiling),
+        blended = (median + ceiling) / 2
+      ) %>%
+      select(player_name, median, ceiling, blended, 
+             any_of(c("own_large", "own_small", "cut_odds", "dk_salary", "volatility", "etr_value")))
+    
+    log_debug("Parsed", nrow(projections), "golfers", level = "INFO")
+    return(projections)
+  }, error = function(e) {
+    log_debug("Error parsing projections:", e$message, level = "ERROR")
+    return(NULL)
+  })
+}
+
+#' Match projections and headshots to salaries by name
+#' @param salaries Data frame from load_golf_salaries()
+#' @param projections Data frame from parse_golf_projections()
+#' @param headshots Data frame from load_golf_headshots() (optional)
+#' @return Merged data frame with projection and headshot info
+match_golf_players <- function(salaries, projections, headshots = NULL) {
+  log_debug("match_golf_players() called", level = "DEBUG")
+  log_debug("  Salaries:", nrow(salaries), "golfers", level = "DEBUG")
+  log_debug("  Projections:", nrow(projections), "golfers", level = "DEBUG")
+  
+  normalize_name <- function(name) {
+    name %>%
+      tolower() %>%
+      stringr::str_replace_all("[^a-z0-9\\s]", "") %>%
+      stringr::str_squish()
+  }
+  
+  # Apply corrections and create match keys
+  salaries <- salaries %>%
+    mutate(
+      corrected_name = sapply(player_name, correct_golf_name),
+      match_key = normalize_name(corrected_name)
+    )
+  
+  projections <- projections %>%
+    mutate(match_key = normalize_name(player_name))
+  
+  # Match projections
+  matched <- salaries %>%
+    left_join(
+      projections %>% select(-player_name),
+      by = "match_key"
+    )
+  
+  # Match headshots if provided
+  if (!is.null(headshots) && nrow(headshots) > 0) {
+    headshots <- headshots %>%
+      mutate(match_key = normalize_name(player_name))
+    
+    matched <- matched %>%
+      left_join(
+        headshots %>% select(match_key, headshot_url),
+        by = "match_key"
+      )
+  } else {
+    matched$headshot_url <- NA_character_
+  }
+  
+  # Clean up headshots and calculate value
+  matched <- matched %>%
+    mutate(
+      headshot_url = if_else(is.na(headshot_url), GOLF_DEFAULT_HEADSHOT, headshot_url)
+    )
+  
+  # Use ETR's value if available in projections, otherwise calculate our own
+  has_etr_value <- "etr_value" %in% names(matched) && sum(!is.na(matched$etr_value)) > 0
+  
+  if (has_etr_value) {
+    log_debug("Using ETR value column from projections", level = "INFO")
+    matched <- matched %>%
+      mutate(value = etr_value) %>%
+      select(-any_of("etr_value"))
+  } else {
+    log_debug("Calculating salary-adjusted value", level = "INFO")
+    # Calculate salary-adjusted value (higher-priced players have higher baseline)
+    matched <- matched %>%
+      mutate(
+        pts_per_dollar = if_else(!is.na(blended) & salary > 0, blended / salary, NA_real_)
+      )
+    
+    avg_salary <- mean(matched$salary, na.rm = TRUE)
+    avg_pts_per_dollar <- mean(matched$pts_per_dollar, na.rm = TRUE)
+    
+    # 15% higher expectation per unit above avg salary
+    salary_premium_factor <- 0.15
+    
+    matched <- matched %>%
+      mutate(
+        salary_ratio = (salary - avg_salary) / avg_salary,
+        expected_pts_per_dollar = avg_pts_per_dollar * (1 + salary_premium_factor * salary_ratio),
+        value = pts_per_dollar - expected_pts_per_dollar
+      ) %>%
+      select(-pts_per_dollar, -salary_ratio, -expected_pts_per_dollar)
+  }
+  
+  # Ensure expected columns exist
+  if (!"own_large" %in% names(matched)) matched$own_large <- NA_real_
+  if (!"own_small" %in% names(matched)) matched$own_small <- NA_real_
+  if (!"cut_odds" %in% names(matched)) matched$cut_odds <- NA_real_
+  if (!"volatility" %in% names(matched)) matched$volatility <- NA_real_
+  
+  # Remove match helper columns and any leftover temp columns
+  matched <- matched %>%
+    select(-any_of(c("corrected_name", "match_key", "etr_value")))
+  
+  # Log results
+  matched_proj <- sum(!is.na(matched$median))
+  matched_headshot <- sum(matched$headshot_url != GOLF_DEFAULT_HEADSHOT)
+  
+  log_debug("Matched projections:", matched_proj, "of", nrow(matched), level = "INFO")
+  log_debug("Matched headshots:", matched_headshot, "of", nrow(matched), level = "INFO")
+  
+  return(matched)
+}
+
+#' Get human-readable label for contest
+#' @param contest Contest identifier
+#' @return Display label
+get_golf_contest_label <- function(contest) {
+  label <- contest %>%
+    gsub("_", " ", .) %>%
+    tools::toTitleCase()
+  
+  label <- gsub("Classic$", "(Classic)", label)
+  label <- gsub("Day (\\d+)$", "(Day \\1)", label)
+  label
+}
+
+cat("Golf config loaded: GOLF_CARD_COLOR, GOLF_CLASSIC_STRUCTURE, GOLF_SHOWDOWN_STRUCTURE, headshot support\n")

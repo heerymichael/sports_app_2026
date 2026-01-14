@@ -38,8 +38,8 @@ get_sports_config <- function() {
       color = APP_COLORS$gold,
       color_light = "#F5E0B8",
       icon_scale = 1.0,  # Base size (taller icon)
-      sections = c("season_long", "dashboard", "optimizer", "projections"),
-      default_section = "season_long"
+      sections = c("classic", "showdown"),
+      default_section = "classic"
     ),
     
     f1 = list(
@@ -120,13 +120,6 @@ get_sections_config <- function() {
       icon = "trophy"
     ),
     
-    # Golf sections
-    season_long = list(
-      id = "season_long",
-      name = "Season Long",
-      icon = "calendar"
-    ),
-    
     # Common sections
     dashboard = list(
       id = "dashboard",
@@ -150,6 +143,19 @@ get_sections_config <- function() {
       id = "ownership",
       name = "Ownership",
       icon = "percent"
+    ),
+    
+    # Golf sections
+    classic = list(
+      id = "classic",
+      name = "Classic",
+      icon = "flag"
+    ),
+    
+    showdown = list(
+      id = "showdown",
+      name = "Showdown",
+      icon = "zap"
     )
   )
 }
