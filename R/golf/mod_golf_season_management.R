@@ -229,6 +229,19 @@ load_tournament_projections <- function(tournament_name) {
       projections$projection <- NA_real_
     }
     
+    # Find salary column (for underdog calculation)
+    salary_col <- intersect(names(projections), c(
+      "salary", "dk_salary", "price", "sal", "cost"
+    ))
+    if (length(salary_col) > 0) {
+      log_debug("Using salary column:", salary_col[1], level = "DEBUG")
+      projections <- projections %>%
+        mutate(salary = as.numeric(.data[[salary_col[1]]]))
+    } else {
+      log_debug("No salary column found - underdog bonus may not work correctly", level = "WARN")
+      projections$salary <- NA_real_
+    }
+    
     # Find ownership column
     own_col <- intersect(names(projections), c(
       "dk_ownership", "ownership", "own", "own_large", "ownership_large"
@@ -243,7 +256,7 @@ load_tournament_projections <- function(tournament_name) {
     # Create match key
     projections <- projections %>%
       mutate(match_key = sapply(player_name, normalize_management_name)) %>%
-      select(player_name, projection, ownership, match_key) %>%
+      select(player_name, projection, salary, ownership, match_key) %>%
       filter(!is.na(projection))
     
     log_debug("Loaded", nrow(projections), "projections", level = "INFO")
@@ -264,7 +277,7 @@ match_roster_to_projections <- function(roster_data, projections) {
   # Join on match_key
   matched <- roster_data %>%
     left_join(
-      projections %>% select(match_key, projection, ownership, proj_name = player_name),
+      projections %>% select(match_key, projection, salary, ownership, proj_name = player_name),
       by = "match_key"
     )
   
@@ -274,26 +287,214 @@ match_roster_to_projections <- function(roster_data, projections) {
     log_debug("Unmatched players:", paste(unmatched, collapse = ", "), level = "WARN")
   }
   
+  # Log salary availability
+  has_salary <- sum(!is.na(matched$salary))
+  log_debug("Players with salary data:", has_salary, "of", nrow(matched), level = "INFO")
+  
   matched_count <- sum(!is.na(matched$projection))
   log_debug("Matched", matched_count, "of", nrow(matched), "players", level = "INFO")
   
   return(matched)
 }
 
-#' Select best 6 players from a roster based on projection
-#' Also designates captain (highest projection gets 1.25x multiplier)
-#' Unmatched players are sorted to the bottom
+#' Select optimal 6 players from a roster considering Captain AND Underdog bonuses
+#' Captain = highest projection in lineup (1.25x) - always assigned to top projected
+#' Underdog = cheapest salary in lineup (1.25x)
+#' Uses brute force over all C(n,6) combinations to find true optimal
 select_best_six <- function(roster_players) {
-  roster_players %>%
-    mutate(is_unmatched = is.na(projection)) %>%
-    arrange(is_unmatched, desc(projection)) %>%  # Unmatched go to bottom
+  
+  # Separate matched and unmatched players
+  matched_players <- roster_players %>% filter(!is.na(projection))
+  unmatched_players <- roster_players %>% filter(is.na(projection))
+  
+  n_matched <- nrow(matched_players)
+  
+  # If 6 or fewer matched players, they're all starters by default
+  if (n_matched <= 6) {
+    max_proj <- max(matched_players$projection, na.rm = TRUE)
+    min_sal <- if ("salary" %in% names(matched_players) && sum(!is.na(matched_players$salary)) > 0) {
+      min(matched_players$salary, na.rm = TRUE)
+    } else {
+      NA_real_
+    }
+    
+    result <- matched_players %>%
+      arrange(desc(projection)) %>%
+      mutate(
+        lineup_rank = row_number(),
+        is_starter = TRUE,
+        is_captain = projection == max_proj,
+        is_underdog = !is.na(min_sal) & !is.na(salary) & salary == min_sal & !is_captain,
+        effective_projection = case_when(
+          is_captain ~ projection * 1.25,
+          is_underdog ~ projection * 1.25,
+          TRUE ~ projection
+        ),
+        is_unmatched = FALSE
+      )
+    
+    # Add unmatched players at the bottom
+    if (nrow(unmatched_players) > 0) {
+      unmatched_result <- unmatched_players %>%
+        mutate(
+          lineup_rank = n_matched + row_number(),
+          is_starter = FALSE,
+          is_captain = FALSE,
+          is_underdog = FALSE,
+          effective_projection = NA_real_,
+          is_unmatched = TRUE
+        )
+      result <- bind_rows(result, unmatched_result)
+    }
+    
+    return(result)
+  }
+  
+  # Check salary column exists and has data
+  has_salary <- "salary" %in% names(matched_players) && sum(!is.na(matched_players$salary)) > 0
+  
+  if (!has_salary) {
+    # Fallback to simple projection-based selection if no salary data
+    matched_players <- matched_players %>%
+      arrange(desc(projection)) %>%
+      mutate(
+        lineup_rank = row_number(),
+        is_starter = row_number() <= 6,
+        is_captain = row_number() == 1,
+        is_underdog = FALSE,
+        effective_projection = if_else(is_captain, projection * 1.25, projection),
+        is_unmatched = FALSE
+      )
+    
+    if (nrow(unmatched_players) > 0) {
+      unmatched_result <- unmatched_players %>%
+        mutate(
+          lineup_rank = n_matched + row_number(),
+          is_starter = FALSE,
+          is_captain = FALSE,
+          is_underdog = FALSE,
+          effective_projection = NA_real_,
+          is_unmatched = TRUE
+        )
+      matched_players <- bind_rows(matched_players, unmatched_result)
+    }
+    
+    return(matched_players)
+  }
+  
+  # Generate all combinations of 6 from n matched players
+  combos <- combn(n_matched, 6)
+  
+  best_total <- -Inf
+  best_combo <- NULL
+  
+  # Evaluate each combination
+  for (i in 1:ncol(combos)) {
+    idx <- combos[, i]
+    lineup <- matched_players[idx, ]
+    
+    # Skip if any salary is NA (can't determine underdog)
+    if (any(is.na(lineup$salary))) next
+    
+    # Captain = highest projection, Underdog = lowest salary
+    captain_proj <- max(lineup$projection)
+    underdog_proj <- lineup$projection[which.min(lineup$salary)]
+    
+    # Calculate effective total with bonuses
+    total <- sum(lineup$projection)
+    total <- total + captain_proj * 0.25      # Captain bonus
+    total <- total + underdog_proj * 0.25     # Underdog bonus
+    
+    if (total > best_total) {
+      best_total <- total
+      best_combo <- idx
+    }
+  }
+  
+  # If no valid combo found (all had NA salaries), fall back to projection-only
+  if (is.null(best_combo)) {
+    log_debug("No valid lineup with salary data, falling back to projection-only", level = "WARN")
+    matched_players <- matched_players %>%
+      arrange(desc(projection)) %>%
+      mutate(
+        lineup_rank = row_number(),
+        is_starter = row_number() <= 6,
+        is_captain = row_number() == 1,
+        is_underdog = FALSE,
+        effective_projection = if_else(is_captain, projection * 1.25, projection),
+        is_unmatched = FALSE
+      )
+    
+    if (nrow(unmatched_players) > 0) {
+      unmatched_result <- unmatched_players %>%
+        mutate(
+          lineup_rank = nrow(matched_players) + row_number(),
+          is_starter = FALSE,
+          is_captain = FALSE,
+          is_underdog = FALSE,
+          effective_projection = NA_real_,
+          is_unmatched = TRUE
+        )
+      matched_players <- bind_rows(matched_players, unmatched_result)
+    }
+    
+    return(matched_players)
+  }
+  
+  # Build result with best lineup
+  starter_indices <- best_combo
+  bench_indices <- setdiff(1:n_matched, best_combo)
+  
+  starters <- matched_players[starter_indices, ]
+  captain_player <- starters$player_name[which.max(starters$projection)]
+  underdog_player <- starters$player_name[which.min(starters$salary)]
+  
+  # Arrange starters by projection (captain first)
+  starters <- starters %>%
+    arrange(desc(projection)) %>%
     mutate(
       lineup_rank = row_number(),
-      is_starter = lineup_rank <= 6 & !is_unmatched,
-      is_captain = lineup_rank == 1 & !is_unmatched,
-      # Captain gets 1.25x multiplier on their projection
-      effective_projection = if_else(is_captain, projection * 1.25, projection)
+      is_starter = TRUE,
+      is_captain = player_name == captain_player,
+      is_underdog = player_name == underdog_player,
+      effective_projection = case_when(
+        is_captain ~ projection * 1.25,
+        is_underdog ~ projection * 1.25,
+        TRUE ~ projection
+      ),
+      is_unmatched = FALSE
     )
+  
+  # Add bench players
+  if (length(bench_indices) > 0) {
+    bench <- matched_players[bench_indices, ] %>%
+      arrange(desc(projection)) %>%
+      mutate(
+        lineup_rank = 6 + row_number(),
+        is_starter = FALSE,
+        is_captain = FALSE,
+        is_underdog = FALSE,
+        effective_projection = projection,
+        is_unmatched = FALSE
+      )
+    starters <- bind_rows(starters, bench)
+  }
+  
+  # Add unmatched players at the bottom
+  if (nrow(unmatched_players) > 0) {
+    unmatched_result <- unmatched_players %>%
+      mutate(
+        lineup_rank = n_matched + row_number(),
+        is_starter = FALSE,
+        is_captain = FALSE,
+        is_underdog = FALSE,
+        effective_projection = NA_real_,
+        is_unmatched = TRUE
+      )
+    starters <- bind_rows(starters, unmatched_result)
+  }
+  
+  return(starters)
 }
 
 # =============================================================================
@@ -314,7 +515,7 @@ golf_season_management_ui <- function(id) {
     div(
       class = "page-header",
       tags$h2("Season Long Management"),
-      tags$p(class = "text-muted", "Manage your 5 rosters and determine optimal weekly lineups")
+      tags$p(class = "text-muted", "Manage your 5 rosters - optimizes CPT (highest proj) + DOG (cheapest) bonuses")
     ),
     
     # =========================================================================
@@ -444,7 +645,7 @@ golf_season_management_server <- function(id) {
       if (unmatched_count == 0) {
         div(
           class = "alert alert-success mt-3 mb-0",
-          icon("check-circle"), sprintf(" All %d players matched! Captain (1.25x) recommendations shown.", total_count)
+          icon("check-circle"), sprintf(" All %d players matched! CPT + DOG (1.25x each) optimized.", total_count)
         )
       } else {
         div(
@@ -476,7 +677,7 @@ golf_season_management_server <- function(id) {
           filter(roster == roster_name) %>%
           select_best_six()
         
-        # Calculate totals for starters (including captain 1.5x multiplier)
+        # Calculate totals for starters (using effective projections with bonuses)
         starters <- roster_players %>% filter(is_starter & !is_unmatched)
         total_projection <- sum(starters$effective_projection, na.rm = TRUE)
         
@@ -504,6 +705,7 @@ golf_season_management_server <- function(id) {
               player <- roster_players[i, ]
               is_bench <- !player$is_starter
               is_captain <- player$is_captain && !player$is_unmatched
+              is_underdog <- player$is_underdog && !player$is_unmatched
               is_unmatched <- player$is_unmatched
               
               # Determine row background
@@ -511,10 +713,35 @@ golf_season_management_server <- function(id) {
                 "rgba(208, 135, 112, 0.25)"  # Light coral for unmatched
               } else if (is_captain) {
                 "rgba(180, 142, 173, 0.25)"  # Light plum for captain
+              } else if (is_underdog) {
+                "rgba(235, 203, 139, 0.25)"  # Light gold for underdog
               } else if (is_bench) {
                 "var(--bg-secondary)"
               } else {
                 "var(--bg-tertiary)"
+              }
+              
+              # Determine badge text and color
+              badge_text <- if (is_unmatched) {
+                "?"
+              } else if (is_captain) {
+                "CPT"
+              } else if (is_underdog) {
+                "DOG"
+              } else {
+                player$lineup_rank
+              }
+              
+              badge_bg <- if (is_unmatched) {
+                "background: var(--accent-coral); color: white;"
+              } else if (is_captain) {
+                "background: #B48EAD; color: white;"
+              } else if (is_underdog) {
+                "background: #EBCB8B; color: var(--text-primary);"
+              } else if (is_bench) {
+                "background: var(--text-muted); color: white;"
+              } else {
+                "background: var(--accent-sage); color: white;"
               }
               
               div(
@@ -527,18 +754,10 @@ golf_season_management_server <- function(id) {
                 # Rank/Role badge
                 div(
                   style = sprintf(
-                    "width: 28px; height: 24px; border-radius: 4px; display: flex; align-items: center; justify-content: center; font-size: 0.6rem; font-weight: 700; %s",
-                    if (is_unmatched) {
-                      "background: var(--accent-coral); color: white;"
-                    } else if (is_captain) {
-                      "background: #B48EAD; color: white;"  # Plum for captain
-                    } else if (is_bench) {
-                      "background: var(--text-muted); color: white;"
-                    } else {
-                      "background: var(--accent-sage); color: white;"
-                    }
+                    "width: 28px; height: 24px; border-radius: 4px; display: flex; align-items: center; justify-content: center; font-size: 0.55rem; font-weight: 700; %s",
+                    badge_bg
                   ),
-                  if (is_unmatched) "?" else if (is_captain) "CPT" else player$lineup_rank
+                  badge_text
                 ),
                 
                 # Player name
@@ -550,22 +769,35 @@ golf_season_management_server <- function(id) {
                   player$player_name
                 ),
                 
-                # Projection (or N/A for unmatched)
+                # Salary (show for starters to explain underdog)
+                if (!is_unmatched && player$is_starter) {
+                  div(
+                    style = "text-align: right; width: 40px;",
+                    div(style = "font-size: 0.5rem; color: var(--text-muted);", "SAL"),
+                    div(
+                      style = sprintf("font-size: 0.7rem; %s", if (is_underdog) "color: #EBCB8B; font-weight: 700;" else "color: var(--text-secondary);"),
+                      if ("salary" %in% names(player) && !is.na(player$salary)) sprintf("$%.1f", player$salary) else "—"
+                    )
+                  )
+                },
+                
+                # Projection / Effective
                 div(
                   style = "text-align: right; width: 50px;",
                   div(style = "font-size: 0.5rem; color: var(--text-muted);", 
-                      if (is_captain && !is_unmatched) "EFF" else "PROJ"),
+                      if ((is_captain || is_underdog) && !is_unmatched) "EFF" else "PROJ"),
                   div(
                     style = sprintf(
                       "font-size: 0.75rem; font-weight: 600; %s",
                       if (is_unmatched) "color: var(--accent-coral);" 
                       else if (is_captain) "color: #B48EAD;"
+                      else if (is_underdog) "color: #EBCB8B;"
                       else if (is_bench) "" 
                       else "color: var(--accent-coral);"
                     ),
                     if (is_unmatched) {
                       "N/A"
-                    } else if (is_captain) {
+                    } else if (is_captain || is_underdog) {
                       sprintf("%.1f", player$effective_projection)
                     } else {
                       sprintf("%.1f", player$projection)
@@ -588,7 +820,8 @@ golf_season_management_server <- function(id) {
           # Footer legend
           div(
             style = "margin-top: 0.5rem; padding-top: 0.5rem; border-top: 1px solid var(--border); font-size: 0.65rem; color: var(--text-muted); display: flex; flex-wrap: wrap; gap: 0.75rem;",
-            span(tags$span(style = "display: inline-block; width: 10px; height: 10px; border-radius: 2px; background: #B48EAD; margin-right: 4px;"), "Captain (1.25x)"),
+            span(tags$span(style = "display: inline-block; width: 10px; height: 10px; border-radius: 2px; background: #B48EAD; margin-right: 4px;"), "CPT (1.25x)"),
+            span(tags$span(style = "display: inline-block; width: 10px; height: 10px; border-radius: 2px; background: #EBCB8B; margin-right: 4px;"), "DOG (1.25x)"),
             span(tags$span(style = "display: inline-block; width: 10px; height: 10px; border-radius: 2px; background: var(--accent-sage); margin-right: 4px;"), "Starter"),
             span(tags$span(style = "display: inline-block; width: 10px; height: 10px; border-radius: 2px; background: var(--text-muted); margin-right: 4px;"), "Bench"),
             if (unmatched_count > 0) {
@@ -610,4 +843,4 @@ golf_season_management_server <- function(id) {
 }
 
 cat("Golf Season Management module loaded: golf_season_management_ui(), golf_season_management_server()\n")
-cat("  Loads rosters from Google Sheets, matches to projections, recommends best 6 starters + captain (1.25x)\n")
+cat("  Optimizes lineup selection with CPT (highest proj, 1.25x) + DOG (cheapest, 1.25x) bonuses\n")
