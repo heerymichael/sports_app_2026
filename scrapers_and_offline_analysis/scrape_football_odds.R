@@ -1,22 +1,25 @@
 ################################################################################
-# FOOTBALL ODDS SCRAPER
+# FOOTBALL ODDS & MATCH STATS SCRAPER - MULTI-SEASON
 # 
-# Downloads betting odds data from football-data.co.uk and writes to Google Sheets
-# Run this weekly to build up historical odds for regression analysis
+# Downloads betting odds AND match statistics from football-data.co.uk
+# Captures 5 seasons of data for regression modeling
 #
 # DATA SOURCE:
 #   https://www.football-data.co.uk/englandm.php
-#   Direct CSV: https://www.football-data.co.uk/mmz4281/2526/E0.csv (2025-26 season)
+#   Historical data available back to 1993-94 season
+#
+# PURPOSE:
+#   Build regression models to translate odds adjustments into fantasy impact:
+#   "If I boost a team's implied goals by 0.3, how does that affect expected
+#    shots, shots on target, goals, and card risk?"
 #
 # OUTPUT:
-#   Google Sheet with pre-match odds per fixture:
-#   - Clean sheet probability (derived from odds)
-#   - Implied goals for/against (derived from over/under odds)
-#   - 1X2 probabilities
+#   Google Sheet with comprehensive historical data:
+#   - 5 seasons of Premier League data (~3,800 team-match observations)
+#   - Pre-match odds AND actual match statistics
 #
-# USAGE:
-#   Run weekly before the gameweek kicks off to capture pre-match odds
-#   The script is incremental - only adds new fixtures not already in the sheet
+# CHANGELOG:
+#   v3.0 - Multi-season support for regression modeling
 #
 ################################################################################
 
@@ -25,41 +28,95 @@ library(tidyr)
 library(readr)
 library(lubridate)
 library(googlesheets4)
+library(purrr)
 
 ################################################################################
 # CONFIGURATION
 ################################################################################
-# Season configuration - UPDATE THIS EACH SEASON
-CURRENT_SEASON <- "2526"  # Format: 2526 for 2025-26 season
-SEASON_DISPLAY <- "2025-26"
 
-# Football-data.co.uk URL pattern
-# E0 = Premier League, E1 = Championship, etc.
-ODDS_URL <- sprintf("https://www.football-data.co.uk/mmz4281/%s/E0.csv", CURRENT_SEASON)
+# Seasons to scrape (most recent first)
+# Format: list with code (for URL) and display name
+SEASONS <- list(
+  list(code = "2526", display = "2025-26", current = TRUE),
+  list(code = "2425", display = "2024-25", current = FALSE),
+  list(code = "2324", display = "2023-24", current = FALSE),
+  list(code = "2223", display = "2022-23", current = FALSE),
+  list(code = "2122", display = "2021-22", current = FALSE)
+  # Can add more: 2021, 1920, etc.
+)
 
-# Google Sheet configuration - same sheet as FanTeam data
+# League configurations
+# E0 = Premier League, E1 = Championship, I1 = Serie A, SP1 = La Liga, D1 = Bundesliga
+LEAGUES <- list(
+  premier_league = list(
+    code = "E0",
+    name = "Premier League",
+    country = "England"
+  )
+  # Can add more leagues here if needed
+)
+
+# Base URL pattern
+BASE_URL <- "https://www.football-data.co.uk/mmz4281/%s/%s.csv"
+
+# Google Sheet configuration
 GOOGLE_SHEET_ID <- "1EM_Xiqy5Kyvc-AlvpfLT7yjLl_7vcVbBgmj3GwNuIKg"
 ODDS_SHEET_NAME <- "match_odds"
 
 # Team name mapping: football-data.co.uk -> FanTeam names
-# Update this if team names don't match between sources
+# This handles variations across seasons
 TEAM_NAME_MAP <- c(
+  # Manchester clubs
+  
   "Man United" = "Manchester United",
   "Man City" = "Manchester City",
+  
+  # London clubs
   "Spurs" = "Spurs",
   "Tottenham" = "Spurs",
-  "Newcastle" = "Newcastle",
+  "Arsenal" = "Arsenal",
+  "Chelsea" = "Chelsea",
   "West Ham" = "West Ham",
+  "Crystal Palace" = "Crystal Palace",
+  "Fulham" = "Fulham",
+  "Brentford" = "Brentford",
+  
+  # Midlands
   "Wolves" = "Wolves",
+  "Wolverhampton" = "Wolves",
+  "Wolverhampton Wanderers" = "Wolves",
+  "Aston Villa" = "Aston Villa",
+  "Leicester" = "Leicester",
+  "Leicester City" = "Leicester",
   "Nott'm Forest" = "Nottingham Forest",
   "Nottingham Forest" = "Nottingham Forest",
+  
+  # North
+  "Liverpool" = "Liverpool",
+  "Everton" = "Everton",
+  "Newcastle" = "Newcastle",
+  "Newcastle United" = "Newcastle",
+  "Leeds" = "Leeds",
+  "Leeds United" = "Leeds",
   "Sheffield United" = "Sheffield United",
   "Sheffield Utd" = "Sheffield United",
+  
+  # South
   "Brighton" = "Brighton",
-  "Crystal Palace" = "Crystal Palace",
-  "Leicester" = "Leicester",
-  "Leeds" = "Leeds",
-  "Leeds United" = "Leeds"
+  "Brighton & Hove Albion" = "Brighton",
+  "Southampton" = "Southampton",
+  "Bournemouth" = "Bournemouth",
+  "AFC Bournemouth" = "Bournemouth",
+  
+  # Promoted/Relegated teams (recent seasons)
+  "Ipswich" = "Ipswich",
+  "Ipswich Town" = "Ipswich",
+  "Luton" = "Luton",
+  "Luton Town" = "Luton",
+  "Burnley" = "Burnley",
+  "Norwich" = "Norwich",
+  "Norwich City" = "Norwich",
+  "Watford" = "Watford"
 )
 
 ################################################################################
@@ -67,37 +124,24 @@ TEAM_NAME_MAP <- c(
 ################################################################################
 
 #' Convert decimal odds to implied probability
-#' @param odds Decimal odds (e.g., 2.5)
-#' @return Implied probability (0-1)
 odds_to_prob <- function(odds) {
   if (is.na(odds) || odds <= 0) return(NA_real_)
   1 / odds
 }
 
 #' Normalize team name to match FanTeam naming
-#' @param team Team name from football-data.co.uk
-#' @return Normalized team name
 normalize_team_name <- function(team) {
+  if (is.na(team)) return(NA_character_)
   if (team %in% names(TEAM_NAME_MAP)) {
-    return(TEAM_NAME_MAP[team])
+    return(unname(TEAM_NAME_MAP[team]))
   }
   return(team)
 }
 
-#' Calculate implied goals from over/under 2.5 odds
-#' 
-#' Uses a simplified Poisson assumption:
-#' P(over 2.5) ≈ 1 - P(0) - P(1) - P(2) where goals ~ Poisson(λ)
-#' 
-#' This is an approximation - we solve for λ numerically
-#' 
-#' @param over_odds Decimal odds for over 2.5 goals
-#' @param under_odds Decimal odds for under 2.5 goals
-#' @return Estimated total match goals (λ for both teams combined)
+#' Calculate implied goals from over/under 2.5 odds using Poisson
 calculate_implied_total_goals <- function(over_odds, under_odds) {
   if (is.na(over_odds) || is.na(under_odds)) return(NA_real_)
   
-  # Convert to probabilities (removing vig by normalizing)
   over_prob_raw <- odds_to_prob(over_odds)
   under_prob_raw <- odds_to_prob(under_odds)
   
@@ -107,28 +151,19 @@ calculate_implied_total_goals <- function(over_odds, under_odds) {
   total_prob <- over_prob_raw + under_prob_raw
   over_prob <- over_prob_raw / total_prob
   
-  # For Poisson with mean λ:
-  # P(X <= 2) = exp(-λ) * (1 + λ + λ²/2)
-  # P(X > 2) = 1 - P(X <= 2) = over_prob
-  # 
-  # Solve numerically for λ
-  target_over <- over_prob
-  
-  # Binary search for λ
+  # Binary search for lambda where P(X > 2) = over_prob
   lambda_low <- 0.5
   lambda_high <- 6.0
   
   for (i in 1:50) {
     lambda_mid <- (lambda_low + lambda_high) / 2
-    # P(X > 2) for Poisson(lambda_mid)
-    p_under <- ppois(2, lambda_mid)
-    p_over <- 1 - p_under
+    p_over <- 1 - ppois(2, lambda_mid)
     
-    if (abs(p_over - target_over) < 0.001) {
+    if (abs(p_over - over_prob) < 0.001) {
       return(lambda_mid)
     }
     
-    if (p_over < target_over) {
+    if (p_over < over_prob) {
       lambda_low <- lambda_mid
     } else {
       lambda_high <- lambda_mid
@@ -139,21 +174,11 @@ calculate_implied_total_goals <- function(over_odds, under_odds) {
 }
 
 #' Calculate implied goals for each team from 1X2 odds and total goals
-#' 
-#' Uses the relationship between win probability and goal difference
-#' Combined with total goals to estimate each team's expected goals
-#' 
-#' @param home_odds Decimal odds for home win
-#' @param draw_odds Decimal odds for draw
-#' @param away_odds Decimal odds for away win
-#' @param total_goals Implied total match goals
-#' @return List with home_goals and away_goals
 calculate_team_goals <- function(home_odds, draw_odds, away_odds, total_goals) {
   if (is.na(total_goals) || is.na(home_odds) || is.na(away_odds)) {
     return(list(home_goals = NA_real_, away_goals = NA_real_))
   }
   
-  # Convert to probabilities and normalize
   home_prob_raw <- odds_to_prob(home_odds)
   draw_prob_raw <- odds_to_prob(draw_odds)
   away_prob_raw <- odds_to_prob(away_odds)
@@ -162,13 +187,7 @@ calculate_team_goals <- function(home_odds, draw_odds, away_odds, total_goals) {
   home_prob <- home_prob_raw / total_prob
   away_prob <- away_prob_raw / total_prob
   
-  # Approximate: favorite gets more of the goals
-  # Simple heuristic: split total goals based on win probability ratio
   home_share <- home_prob / (home_prob + away_prob)
-  away_share <- 1 - home_share
-  
-  # Adjust for typical home advantage (~0.3 goals)
-  # and regression toward 50/50 split
   home_share_adj <- 0.5 + (home_share - 0.5) * 0.8
   
   home_goals <- total_goals * home_share_adj
@@ -178,164 +197,200 @@ calculate_team_goals <- function(home_odds, draw_odds, away_odds, total_goals) {
 }
 
 #' Calculate clean sheet probability from opponent's implied goals
-#' 
-#' P(CS) ≈ P(opponent scores 0) = exp(-opponent_goals) for Poisson
-#' 
-#' @param opponent_goals Opponent's implied goals
-#' @return Clean sheet probability (0-1)
 calculate_cs_prob <- function(opponent_goals) {
   if (is.na(opponent_goals) || opponent_goals < 0) return(NA_real_)
-  # P(X = 0) for Poisson(λ) = exp(-λ)
   exp(-opponent_goals)
 }
 
+#' Safely extract numeric column, returning NA if missing
+safe_col <- function(df, col_name) {
+  if (col_name %in% names(df)) {
+    return(suppressWarnings(as.numeric(df[[col_name]])))
+  }
+  return(rep(NA_real_, nrow(df)))
+}
+
 ################################################################################
-# MAIN FUNCTIONS
+# DOWNLOAD FUNCTIONS
 ################################################################################
 
-#' Download and parse odds data from football-data.co.uk
-#' @return Data frame with match odds
-download_odds_data <- function() {
-  message(sprintf("Downloading odds data from football-data.co.uk..."))
-  message(sprintf("URL: %s", ODDS_URL))
+#' Build URL for a specific season and league
+build_url <- function(season_code, league_code) {
+  sprintf(BASE_URL, season_code, league_code)
+}
+
+#' Download data for a single season
+#' @param season List with code and display name
+#' @param league List with code and name
+#' @return Data frame or NULL
+download_season_data <- function(season, league) {
+  url <- build_url(season$code, league$code)
+  
+  message(sprintf("  Downloading %s %s...", season$display, league$name))
+  message(sprintf("    URL: %s", url))
   
   tryCatch({
-    # Read CSV directly from URL
-    raw_data <- read_csv(ODDS_URL, show_col_types = FALSE)
+    raw_data <- read_csv(url, show_col_types = FALSE)
     
-    message(sprintf("✓ Downloaded %d matches", nrow(raw_data)))
+    # Add metadata
+    raw_data$season <- season$display
+    raw_data$league <- league$name
     
-    # Check available columns
-    message(sprintf("  Available columns: %s", 
-                    paste(names(raw_data)[1:min(15, length(names(raw_data)))], collapse = ", ")))
+    message(sprintf("    ✓ Downloaded %d matches", nrow(raw_data)))
     
     return(raw_data)
     
   }, error = function(e) {
-    message(sprintf("✗ Error downloading data: %s", e$message))
+    message(sprintf("    ✗ Error: %s", e$message))
     return(NULL)
   })
 }
 
-#' Process raw odds data into analysis-ready format
-#' @param raw_data Raw data from football-data.co.uk
+#' Download all seasons for a league
+#' @param league League configuration
+#' @param seasons List of season configurations
+#' @return Combined data frame
+download_all_seasons <- function(league, seasons = SEASONS) {
+  message(sprintf("\n📥 Downloading %s data (%d seasons)...\n", 
+                  league$name, length(seasons)))
+  
+  all_data <- map(seasons, ~download_season_data(.x, league))
+  
+  # Remove NULLs and combine
+  all_data <- all_data[!sapply(all_data, is.null)]
+  
+  if (length(all_data) == 0) {
+    message("✗ No data downloaded")
+    return(NULL)
+  }
+  
+  # Combine - handle different column sets across seasons
+  combined <- bind_rows(all_data)
+  
+  message(sprintf("\n✓ Combined: %d total matches across %d seasons", 
+                  nrow(combined), length(all_data)))
+  
+  return(combined)
+}
+
+################################################################################
+# PROCESSING FUNCTIONS
+################################################################################
+
+#' Process raw data into analysis-ready format
+#' @param raw_data Combined raw data from multiple seasons
 #' @return Processed data frame
 process_odds_data <- function(raw_data) {
   if (is.null(raw_data) || nrow(raw_data) == 0) {
     return(NULL)
   }
   
-  message("Processing odds data...")
+  message("\n🔧 Processing odds and match stats...\n")
   
-  # Select and rename relevant columns
-  # Try different column name patterns as they vary slightly
+  # Check available columns across all data
+  message("  Available columns: ", paste(head(names(raw_data), 20), collapse = ", "), "...")
   
-  # Identify available odds columns
+  # Identify odds columns (may vary by season)
   has_b365 <- all(c("B365H", "B365D", "B365A") %in% names(raw_data))
-  has_avg <- all(c("AvgH", "AvgD", "AvgA") %in% names(raw_data))
   has_pinnacle <- all(c("PSH", "PSD", "PSA") %in% names(raw_data))
   
-  # Identify over/under columns
-  ou_cols <- names(raw_data)[grepl(">2.5|<2.5|Over|Under", names(raw_data), ignore.case = TRUE)]
-  message(sprintf("  Over/Under columns found: %s", paste(ou_cols, collapse = ", ")))
+  # Match stats columns
+  stat_cols <- c("HS", "AS", "HST", "AST", "HF", "AF", "HC", "AC", "HY", "AY", "HR", "AR")
+  available_stats <- stat_cols[stat_cols %in% names(raw_data)]
+  message(sprintf("  Match stats available: %s", paste(available_stats, collapse = ", ")))
   
-  # Start building processed data
+  # Start processing
   processed <- raw_data %>%
-    select(
-      # Core match info
-      date = Date,
-      home_team = HomeTeam,
-      away_team = AwayTeam,
-      # Actual results (for later validation)
-      home_goals_actual = FTHG,
-      away_goals_actual = FTAG,
-      result = FTR,
-      # We'll add odds columns dynamically
-      everything()
+    # Handle date parsing - try multiple formats
+    mutate(
+      match_date = case_when(
+        !is.na(suppressWarnings(dmy(Date))) ~ dmy(Date),
+        !is.na(suppressWarnings(ymd(Date))) ~ ymd(Date),
+        !is.na(suppressWarnings(mdy(Date))) ~ mdy(Date),
+        TRUE ~ as.Date(NA)
+      )
+    ) %>%
+    filter(!is.na(match_date)) %>%
+    # Normalize team names
+    mutate(
+      home_team = sapply(HomeTeam, normalize_team_name),
+      away_team = sapply(AwayTeam, normalize_team_name)
     )
   
-  # Add 1X2 odds - prefer Pinnacle (sharp), then Bet365, then Average
+  # Add match stats
+  processed <- processed %>%
+    mutate(
+      # Results
+      home_goals_actual = safe_col(., "FTHG"),
+      away_goals_actual = safe_col(., "FTAG"),
+      result = FTR,
+      # Shots
+      home_shots = safe_col(., "HS"),
+      away_shots = safe_col(., "AS"),
+      home_shots_on_target = safe_col(., "HST"),
+      away_shots_on_target = safe_col(., "AST"),
+      # Cards
+      home_yellow_cards = safe_col(., "HY"),
+      away_yellow_cards = safe_col(., "AY"),
+      home_red_cards = safe_col(., "HR"),
+      away_red_cards = safe_col(., "AR"),
+      # Corners & Fouls
+      home_corners = safe_col(., "HC"),
+      away_corners = safe_col(., "AC"),
+      home_fouls = safe_col(., "HF"),
+      away_fouls = safe_col(., "AF")
+    )
+  
+  # Add odds - prefer Pinnacle, then Bet365
   if (has_pinnacle) {
-    processed <- processed %>%
-      mutate(
-        home_win_odds = PSH,
-        draw_odds = PSD,
-        away_win_odds = PSA
-      )
+    processed$home_win_odds <- processed$PSH
+    processed$draw_odds <- processed$PSD
+    processed$away_win_odds <- processed$PSA
     message("  Using Pinnacle odds for 1X2")
   } else if (has_b365) {
-    processed <- processed %>%
-      mutate(
-        home_win_odds = B365H,
-        draw_odds = B365D,
-        away_win_odds = B365A
-      )
+    processed$home_win_odds <- processed$B365H
+    processed$draw_odds <- processed$B365D
+    processed$away_win_odds <- processed$B365A
     message("  Using Bet365 odds for 1X2")
-  } else if (has_avg) {
-    processed <- processed %>%
-      mutate(
-        home_win_odds = AvgH,
-        draw_odds = AvgD,
-        away_win_odds = AvgA
-      )
-    message("  Using Average odds for 1X2")
   }
   
   # Add over/under odds
-  if ("B365>2.5" %in% names(raw_data) && "B365<2.5" %in% names(raw_data)) {
-    processed <- processed %>%
-      mutate(
-        over_2_5_odds = `B365>2.5`,
-        under_2_5_odds = `B365<2.5`
-      )
-    message("  Using Bet365 odds for Over/Under 2.5")
-  } else if ("Avg>2.5" %in% names(raw_data) && "Avg<2.5" %in% names(raw_data)) {
-    processed <- processed %>%
-      mutate(
-        over_2_5_odds = `Avg>2.5`,
-        under_2_5_odds = `Avg<2.5`
-      )
-    message("  Using Average odds for Over/Under 2.5")
+  if ("B365>2.5" %in% names(raw_data)) {
+    processed$over_2_5_odds <- processed$`B365>2.5`
+    processed$under_2_5_odds <- processed$`B365<2.5`
+    message("  Using Bet365 Over/Under 2.5 odds")
+  } else if ("Avg>2.5" %in% names(raw_data)) {
+    processed$over_2_5_odds <- processed$`Avg>2.5`
+    processed$under_2_5_odds <- processed$`Avg<2.5`
+    message("  Using Average Over/Under 2.5 odds")
   }
   
-  # Calculate derived metrics
+  # Calculate derived metrics (vectorized where possible)
+  message("  Calculating derived metrics...")
+  
   processed <- processed %>%
     rowwise() %>%
     mutate(
-      # Normalize team names
-      home_team = normalize_team_name(home_team),
-      away_team = normalize_team_name(away_team),
+      # 1X2 probabilities
+      prob_total = odds_to_prob(home_win_odds) + odds_to_prob(draw_odds) + odds_to_prob(away_win_odds),
+      home_win_prob = if_else(is.na(prob_total) | prob_total == 0, NA_real_, 
+                              odds_to_prob(home_win_odds) / prob_total),
+      draw_prob = if_else(is.na(prob_total) | prob_total == 0, NA_real_,
+                          odds_to_prob(draw_odds) / prob_total),
+      away_win_prob = if_else(is.na(prob_total) | prob_total == 0, NA_real_,
+                              odds_to_prob(away_win_odds) / prob_total),
       
-      # Parse date
-      match_date = dmy(date),
-      
-      # 1X2 probabilities (normalized)
-      home_win_prob = {
-        total <- odds_to_prob(home_win_odds) + odds_to_prob(draw_odds) + odds_to_prob(away_win_odds)
-        odds_to_prob(home_win_odds) / total
-      },
-      draw_prob = {
-        total <- odds_to_prob(home_win_odds) + odds_to_prob(draw_odds) + odds_to_prob(away_win_odds)
-        odds_to_prob(draw_odds) / total
-      },
-      away_win_prob = {
-        total <- odds_to_prob(home_win_odds) + odds_to_prob(draw_odds) + odds_to_prob(away_win_odds)
-        odds_to_prob(away_win_odds) / total
-      },
-      
-      # Implied total goals
+      # Implied goals
       implied_total_goals = calculate_implied_total_goals(over_2_5_odds, under_2_5_odds),
-      
-      # Team-specific implied goals
       team_goals_calc = list(calculate_team_goals(home_win_odds, draw_odds, away_win_odds, implied_total_goals)),
       home_implied_goals = team_goals_calc$home_goals,
       away_implied_goals = team_goals_calc$away_goals,
       
       # Clean sheet probabilities
-      home_cs_prob = calculate_cs_prob(away_implied_goals),  # Home CS = away team scores 0
-      away_cs_prob = calculate_cs_prob(home_implied_goals),  # Away CS = home team scores 0
+      home_cs_prob = calculate_cs_prob(away_implied_goals),
+      away_cs_prob = calculate_cs_prob(home_implied_goals),
       
-      # Convert to percentages for easier reading
+      # Convert to percentages
       home_cs_pct = round(home_cs_prob * 100, 1),
       away_cs_pct = round(away_cs_prob * 100, 1),
       home_win_pct = round(home_win_prob * 100, 1),
@@ -343,212 +398,194 @@ process_odds_data <- function(raw_data) {
       draw_pct = round(draw_prob * 100, 1)
     ) %>%
     ungroup() %>%
-    select(-team_goals_calc)  # Remove temporary list column
+    select(-team_goals_calc, -prob_total)
   
-  # Select final columns for output
-  output <- processed %>%
-    select(
-      match_date,
-      home_team,
-      away_team,
-      # Derived metrics (key for regression)
-      home_implied_goals,
-      away_implied_goals,
-      home_cs_pct,
-      away_cs_pct,
-      implied_total_goals,
-      # Win probabilities
-      home_win_pct,
-      draw_pct,
-      away_win_pct,
-      # Raw odds (for reference)
-      home_win_odds,
-      draw_odds,
-      away_win_odds,
-      over_2_5_odds,
-      under_2_5_odds,
-      # Actual results (for validation after matches complete)
-      home_goals_actual,
-      away_goals_actual,
-      result
-    ) %>%
-    arrange(match_date)
+  message(sprintf("  ✓ Processed %d matches", nrow(processed)))
   
-  # Round numeric columns
-  output <- output %>%
-    mutate(
-      across(c(home_implied_goals, away_implied_goals, implied_total_goals), ~round(., 2))
-    )
-  
-  message(sprintf("✓ Processed %d matches", nrow(output)))
-  
-  return(output)
+  return(processed)
 }
 
 #' Create team-centric view (one row per team per match)
-#' This format is easier to join with FanTeam player data
-#' @param match_data Processed match odds data
+#' @param match_data Processed match data
 #' @return Data frame with one row per team per match
 create_team_view <- function(match_data) {
   if (is.null(match_data) || nrow(match_data) == 0) {
     return(NULL)
   }
   
-  message("Creating team-centric view...")
+  message("\n📊 Creating team-centric view...\n")
   
   # Home team rows
   home_rows <- match_data %>%
     transmute(
       match_date,
+      season,
+      league,
       team = home_team,
       opponent = away_team,
       venue = "Home",
-      implied_goals_for = home_implied_goals,
-      implied_goals_against = away_implied_goals,
+      
+      # === PRE-MATCH ODDS (for model inputs) ===
+      implied_goals_for = round(home_implied_goals, 2),
+      implied_goals_against = round(away_implied_goals, 2),
+      implied_total_goals = round(implied_total_goals, 2),
       clean_sheet_pct = home_cs_pct,
       win_pct = home_win_pct,
-      implied_total_goals,
-      # Actual results
-      goals_scored_actual = home_goals_actual,
-      goals_conceded_actual = away_goals_actual,
+      draw_pct,
+      
+      # Raw odds
+      win_odds = home_win_odds,
+      draw_odds,
+      lose_odds = away_win_odds,
+      over_2_5_odds,
+      under_2_5_odds,
+      
+      # === ACTUAL RESULTS (for model outputs) ===
+      goals_scored = home_goals_actual,
+      goals_conceded = away_goals_actual,
       result_actual = case_when(
         result == "H" ~ "Win",
         result == "D" ~ "Draw",
         result == "A" ~ "Loss",
         TRUE ~ NA_character_
       ),
-      clean_sheet_actual = (away_goals_actual == 0)
+      clean_sheet_actual = (away_goals_actual == 0),
+      
+      # === MATCH STATS (for fantasy modeling) ===
+      shots = home_shots,
+      shots_on_target = home_shots_on_target,
+      yellow_cards = home_yellow_cards,
+      red_cards = home_red_cards,
+      corners = home_corners,
+      fouls_committed = home_fouls,
+      
+      # Opponent/defensive stats
+      shots_faced = away_shots,
+      shots_on_target_faced = away_shots_on_target,
+      opp_yellow_cards = away_yellow_cards,
+      opp_red_cards = away_red_cards,
+      opp_corners = away_corners,
+      fouls_won = away_fouls
     )
   
   # Away team rows
   away_rows <- match_data %>%
     transmute(
       match_date,
+      season,
+      league,
       team = away_team,
       opponent = home_team,
       venue = "Away",
-      implied_goals_for = away_implied_goals,
-      implied_goals_against = home_implied_goals,
+      
+      # PRE-MATCH ODDS
+      implied_goals_for = round(away_implied_goals, 2),
+      implied_goals_against = round(home_implied_goals, 2),
+      implied_total_goals = round(implied_total_goals, 2),
       clean_sheet_pct = away_cs_pct,
       win_pct = away_win_pct,
-      implied_total_goals,
-      # Actual results
-      goals_scored_actual = away_goals_actual,
-      goals_conceded_actual = home_goals_actual,
+      draw_pct,
+      
+      # Raw odds (from away perspective)
+      win_odds = away_win_odds,
+      draw_odds,
+      lose_odds = home_win_odds,
+      over_2_5_odds,
+      under_2_5_odds,
+      
+      # ACTUAL RESULTS
+      goals_scored = away_goals_actual,
+      goals_conceded = home_goals_actual,
       result_actual = case_when(
         result == "A" ~ "Win",
         result == "D" ~ "Draw",
         result == "H" ~ "Loss",
         TRUE ~ NA_character_
       ),
-      clean_sheet_actual = (home_goals_actual == 0)
+      clean_sheet_actual = (home_goals_actual == 0),
+      
+      # MATCH STATS
+      shots = away_shots,
+      shots_on_target = away_shots_on_target,
+      yellow_cards = away_yellow_cards,
+      red_cards = away_red_cards,
+      corners = away_corners,
+      fouls_committed = away_fouls,
+      
+      # Opponent stats
+      shots_faced = home_shots,
+      shots_on_target_faced = home_shots_on_target,
+      opp_yellow_cards = home_yellow_cards,
+      opp_red_cards = home_red_cards,
+      opp_corners = home_corners,
+      fouls_won = home_fouls
     )
   
-  # Combine and sort
+  # Combine
   team_view <- bind_rows(home_rows, away_rows) %>%
-    arrange(match_date, team)
+    arrange(desc(match_date), team)
   
-  # Add season and scrape metadata
-  team_view <- team_view %>%
-    mutate(
-      season = SEASON_DISPLAY,
-      scrape_date = format(Sys.time(), "%Y-%m-%d %H:%M:%S")
-    )
+  # Add scrape timestamp
+  team_view$scrape_date <- format(Sys.time(), "%Y-%m-%d %H:%M:%S")
   
-  message(sprintf("✓ Created %d team-match rows", nrow(team_view)))
+  message(sprintf("  ✓ Created %d team-match rows", nrow(team_view)))
+  message(sprintf("    Seasons: %s", paste(unique(team_view$season), collapse = ", ")))
+  message(sprintf("    Date range: %s to %s", min(team_view$match_date), max(team_view$match_date)))
   
   return(team_view)
 }
 
-#' Get existing matches from Google Sheet to avoid duplicates
-#' @param sheet_id Google Sheet ID
-#' @param sheet_name Worksheet name
-#' @return Vector of existing match identifiers (date_home_away)
-get_existing_matches <- function(sheet_id, sheet_name) {
-  tryCatch({
-    existing <- read_sheet(sheet_id, sheet = sheet_name, col_types = "c")
-    
-    if (nrow(existing) == 0) {
-      return(character(0))
-    }
-    
-    # Create match identifier
-    match_ids <- paste(existing$match_date, existing$team, sep = "_")
-    
-    message(sprintf("  Found %d existing team-match records", length(match_ids)))
-    return(match_ids)
-    
-  }, error = function(e) {
-    message(sprintf("  Note: Could not read existing data (%s)", e$message))
-    return(character(0))
-  })
-}
+################################################################################
+# GOOGLE SHEETS FUNCTIONS
+################################################################################
 
-#' Write odds data to Google Sheet
-#' @param data Data frame to write
-#' @param sheet_id Google Sheet ID
-#' @param sheet_name Worksheet name
-#' @param incremental If TRUE, only add new matches
-write_odds_to_sheet <- function(data, sheet_id, sheet_name, incremental = TRUE) {
+#' Write data to Google Sheet (full replace for multi-season)
+write_to_sheet <- function(data, sheet_id, sheet_name) {
   if (is.null(data) || nrow(data) == 0) {
     message("  No data to write")
     return(FALSE)
   }
   
-  message(sprintf("Writing to Google Sheet: %s", sheet_name))
+  message(sprintf("\n📤 Writing to Google Sheet: %s", sheet_name))
+  message(sprintf("   Rows: %d", nrow(data)))
   
   tryCatch({
-    # Check if sheet exists
     sheet_info <- gs4_get(sheet_id)
     existing_sheets <- sheet_info$sheets$name
     
-    if (!sheet_name %in% existing_sheets) {
-      # Create new sheet
-      message(sprintf("  Creating new worksheet: %s", sheet_name))
-      sheet_write(data, ss = sheet_id, sheet = sheet_name)
-      message(sprintf("  ✓ Wrote %d rows", nrow(data)))
-      return(TRUE)
-    }
-    
-    if (incremental) {
-      # Get existing matches
-      existing_ids <- get_existing_matches(sheet_id, sheet_name)
-      
-      # Create match IDs for new data
-      data <- data %>%
-        mutate(match_id = paste(match_date, team, sep = "_"))
-      
-      # Filter to new matches only
-      new_data <- data %>%
-        filter(!match_id %in% existing_ids) %>%
-        select(-match_id)
-      
-      if (nrow(new_data) == 0) {
-        message("  ✓ No new matches to add (already up to date)")
-        return(TRUE)
-      }
-      
-      message(sprintf("  Adding %d new team-match records", nrow(new_data)))
-      
-      # Read existing to check column order
-      existing_headers <- names(read_sheet(sheet_id, sheet = sheet_name, n_max = 1, col_types = "c"))
-      
-      # Reorder columns to match
-      if (all(names(new_data) %in% existing_headers)) {
-        new_data <- new_data[, existing_headers]
-      }
-      
-      sheet_append(new_data, ss = sheet_id, sheet = sheet_name)
-      
-    } else {
-      # Full replace
-      message("  Replacing all data...")
+    if (sheet_name %in% existing_sheets) {
+      message("  Clearing existing data...")
       range_clear(ss = sheet_id, sheet = sheet_name)
       Sys.sleep(1)
-      range_write(ss = sheet_id, sheet = sheet_name, data = data, range = "A1", col_names = TRUE)
     }
     
-    message(sprintf("  ✓ Write successful"))
+    message("  Writing data...")
+    
+    # For large datasets, write in chunks
+    if (nrow(data) > 5000) {
+      # Write header + first chunk
+      chunk_size <- 2500
+      n_chunks <- ceiling(nrow(data) / chunk_size)
+      
+      for (i in 1:n_chunks) {
+        start_row <- (i - 1) * chunk_size + 1
+        end_row <- min(i * chunk_size, nrow(data))
+        chunk <- data[start_row:end_row, ]
+        
+        if (i == 1) {
+          sheet_write(chunk, ss = sheet_id, sheet = sheet_name)
+        } else {
+          sheet_append(chunk, ss = sheet_id, sheet = sheet_name)
+        }
+        
+        message(sprintf("    Chunk %d/%d written (rows %d-%d)", i, n_chunks, start_row, end_row))
+        Sys.sleep(0.5)  # Rate limiting
+      }
+    } else {
+      sheet_write(data, ss = sheet_id, sheet = sheet_name)
+    }
+    
+    message("  ✓ Write successful")
     return(TRUE)
     
   }, error = function(e) {
@@ -558,46 +595,115 @@ write_odds_to_sheet <- function(data, sheet_id, sheet_name, incremental = TRUE) 
 }
 
 ################################################################################
+# ANALYSIS HELPERS
+################################################################################
+
+#' Print summary statistics for the dataset
+print_data_summary <- function(team_view) {
+  message("\n================================================================================")
+  message("                         DATA SUMMARY")
+  message("================================================================================\n")
+  
+  message(sprintf("Total observations: %d team-matches", nrow(team_view)))
+  message(sprintf("Unique teams: %d", length(unique(team_view$team))))
+  message(sprintf("Seasons: %s", paste(sort(unique(team_view$season)), collapse = ", ")))
+  message(sprintf("Date range: %s to %s", min(team_view$match_date), max(team_view$match_date)))
+  
+  message("\n--- Observations by Season ---")
+  season_counts <- team_view %>% 
+    group_by(season) %>% 
+    summarise(n = n(), matches = n()/2, .groups = "drop") %>%
+    arrange(desc(season))
+  print(as.data.frame(season_counts))
+  
+  message("\n--- Stats Coverage ---")
+  stats_cols <- c("shots", "shots_on_target", "yellow_cards", "red_cards", 
+                  "corners", "fouls_committed", "implied_goals_for")
+  
+  coverage <- sapply(stats_cols, function(col) {
+    if (col %in% names(team_view)) {
+      round(sum(!is.na(team_view[[col]])) / nrow(team_view) * 100, 1)
+    } else {
+      0
+    }
+  })
+  
+  coverage_df <- data.frame(
+    stat = names(coverage),
+    pct_available = coverage
+  )
+  print(coverage_df)
+  
+  message("\n--- Key Averages (for model validation) ---")
+  avgs <- team_view %>%
+    filter(!is.na(shots)) %>%
+    summarise(
+      avg_goals = round(mean(goals_scored, na.rm = TRUE), 2),
+      avg_shots = round(mean(shots, na.rm = TRUE), 1),
+      avg_sot = round(mean(shots_on_target, na.rm = TRUE), 1),
+      avg_yellows = round(mean(yellow_cards, na.rm = TRUE), 2),
+      avg_reds = round(mean(red_cards, na.rm = TRUE), 3),
+      avg_corners = round(mean(corners, na.rm = TRUE), 1),
+      avg_implied_goals = round(mean(implied_goals_for, na.rm = TRUE), 2)
+    )
+  print(as.data.frame(avgs))
+  
+  message("\n--- Home vs Away Split ---")
+  venue_split <- team_view %>%
+    filter(!is.na(shots)) %>%
+    group_by(venue) %>%
+    summarise(
+      n = n(),
+      avg_goals = round(mean(goals_scored, na.rm = TRUE), 2),
+      avg_shots = round(mean(shots, na.rm = TRUE), 1),
+      avg_sot = round(mean(shots_on_target, na.rm = TRUE), 1),
+      win_rate = round(mean(result_actual == "Win", na.rm = TRUE) * 100, 1),
+      .groups = "drop"
+    )
+  print(as.data.frame(venue_split))
+  
+  message("\n================================================================================\n")
+}
+
+################################################################################
 # MAIN EXECUTION
 ################################################################################
 
 main <- function() {
   message("================================================================================")
-  message("          FOOTBALL ODDS SCRAPER")
+  message("     FOOTBALL ODDS & MATCH STATS SCRAPER - MULTI-SEASON (v3.0)")
   message("================================================================================")
   message("")
-  message(sprintf("📊 DATA SOURCE: football-data.co.uk (%s Premier League)", SEASON_DISPLAY))
-  message(sprintf("   URL: %s", ODDS_URL))
+  message(sprintf("📊 Scraping %d seasons of Premier League data", length(SEASONS)))
+  message(sprintf("   Seasons: %s", paste(sapply(SEASONS, function(x) x$display), collapse = ", ")))
   message("")
-  message("📝 OUTPUT:")
+  message("📝 Output:")
   message(sprintf("   Google Sheet: https://docs.google.com/spreadsheets/d/%s/edit", GOOGLE_SHEET_ID))
   message(sprintf("   Worksheet: %s", ODDS_SHEET_NAME))
   message("")
-  message("📈 DERIVED METRICS:")
-  message("   - Implied goals for/against (from over/under odds)")
-  message("   - Clean sheet probability (from implied goals)")
-  message("   - Win/draw/loss probabilities (from 1X2 odds)")
+  message("🎯 Purpose: Build regression models for fantasy impact analysis")
+  message("   - Predict goals, shots, SoT, cards from pre-match odds")
+  message("   - Enable scenario modeling: 'What if implied goals = X?'")
   message("================================================================================")
-  message("")
   
-  # Authenticate with Google Sheets
-  message("Authenticating with Google Sheets...")
+  # Authenticate
+  message("\n🔐 Authenticating with Google Sheets...")
   tryCatch({
     gs4_auth()
-    message("✓ Authentication successful\n")
+    message("✓ Authentication successful")
   }, error = function(e) {
-    stop("Failed to authenticate with Google Sheets: ", e$message)
+    stop("Failed to authenticate: ", e$message)
   })
   
-  # Download raw data
-  raw_data <- download_odds_data()
+  # Download all seasons
+  raw_data <- download_all_seasons(LEAGUES$premier_league, SEASONS)
   
   if (is.null(raw_data)) {
     message("\n✗ Failed to download data. Exiting.")
     return(NULL)
   }
   
-  # Process odds
+  # Process
   processed <- process_odds_data(raw_data)
   
   if (is.null(processed)) {
@@ -605,35 +711,24 @@ main <- function() {
     return(NULL)
   }
   
-  # Create team-centric view
+  # Create team view
   team_view <- create_team_view(processed)
   
-  # Write to Google Sheets (incremental - only new matches)
-  message("")
-  write_odds_to_sheet(team_view, GOOGLE_SHEET_ID, ODDS_SHEET_NAME, incremental = TRUE)
+  # Print summary
+  print_data_summary(team_view)
   
-  # Summary
-  message("\n")
+  # Write to Google Sheets
+  write_to_sheet(team_view, GOOGLE_SHEET_ID, ODDS_SHEET_NAME)
+  
+  message("\n================================================================================")
+  message("                              COMPLETE")
   message("================================================================================")
-  message("                              SUMMARY")
-  message("================================================================================")
-  message(sprintf("Season: %s", SEASON_DISPLAY))
-  message(sprintf("Matches in source: %d", nrow(processed)))
-  message(sprintf("Team-match rows created: %d", nrow(team_view)))
+  message(sprintf("✓ %d team-match observations written", nrow(team_view)))
+  message(sprintf("✓ Data ready for regression modeling"))
   message("")
-  
-  # Show sample of latest matches
-  message("Latest matches with odds:")
-  latest <- team_view %>%
-    filter(venue == "Home") %>%  # Show each match once
-    arrange(desc(match_date)) %>%
-    head(5) %>%
-    select(match_date, team, opponent, implied_goals_for, clean_sheet_pct)
-  
-  print(as.data.frame(latest))
-  
-  message("")
-  message(sprintf("Data saved to: https://docs.google.com/spreadsheets/d/%s/edit#gid=0", GOOGLE_SHEET_ID))
+  message("Next steps:")
+  message("  1. Run fanteam_regression_analysis.R to build models")
+  message("  2. Use models to translate odds adjustments -> fantasy impact")
   message("================================================================================\n")
   
   return(list(

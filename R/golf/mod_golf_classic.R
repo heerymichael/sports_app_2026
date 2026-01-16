@@ -8,6 +8,240 @@
 library(lpSolve)
 
 # =============================================================================
+# GOLF MODULE CONSTANTS
+# =============================================================================
+
+# Default headshot for players without images
+GOLF_DEFAULT_HEADSHOT <- "https://a.espncdn.com/combiner/i?img=/i/headshots/nophoto.png&w=200&h=146"
+
+# Card color for Golf UI elements (gold from APP_COLORS)
+GOLF_CARD_COLOR <- "#D4A84B"
+
+# Path to golf headshots CSV file
+GOLF_HEADSHOTS_PATH <- "data/golf/player_headshots/player_headshots.csv"
+
+# =============================================================================
+# HEADSHOT LOADING FUNCTION
+# =============================================================================
+
+#' Load golf player headshots from CSV
+#' File format: PlayerID, Name (last), FName (first), Headshot (URL)
+#' @return Data frame with full_name and headshot_url columns for joining
+load_golf_headshots <- function() {
+  log_debug("load_golf_headshots() called", level = "DEBUG")
+  
+  if (!file.exists(GOLF_HEADSHOTS_PATH)) {
+    log_debug("Headshots file not found:", GOLF_HEADSHOTS_PATH, level = "WARN")
+    return(NULL)
+  }
+  
+  tryCatch({
+    headshots_df <- readr::read_csv(GOLF_HEADSHOTS_PATH, show_col_types = FALSE)
+    log_debug("Loaded", nrow(headshots_df), "headshots from CSV", level = "INFO")
+    
+    # Normalize column names
+    names(headshots_df) <- tolower(names(headshots_df))
+    
+    # Build full name from FName (first) + Name (last)
+    if (all(c("fname", "name", "headshot") %in% names(headshots_df))) {
+      headshots_df <- headshots_df %>%
+        mutate(
+          full_name = trimws(paste(fname, name)),
+          headshot_url = headshot,
+          # Create normalized match key
+          match_key = tolower(gsub("[^a-z0-9 ]", " ", full_name)),
+          match_key = gsub("\\s+", " ", trimws(match_key))
+        ) %>%
+        select(full_name, headshot_url, match_key) %>%
+        filter(!is.na(full_name) & full_name != "")
+      
+      log_debug("Processed", nrow(headshots_df), "headshots for matching", level = "INFO")
+      return(headshots_df)
+    } else {
+      log_debug("Missing required columns (fname, name, headshot)", level = "ERROR")
+      return(NULL)
+    }
+    
+  }, error = function(e) {
+    log_debug("Error loading headshots:", e$message, level = "ERROR")
+    return(NULL)
+  })
+}
+
+#' Join headshots to player data
+#' @param player_df Data frame with player_name column
+#' @return Data frame with headshot_url column added
+join_golf_headshots <- function(player_df) {
+  if (is.null(player_df) || nrow(player_df) == 0) return(player_df)
+  
+  log_debug("join_golf_headshots() for", nrow(player_df), "players", level = "DEBUG")
+  
+  headshots <- load_golf_headshots()
+  
+  if (is.null(headshots) || nrow(headshots) == 0) {
+    log_debug("No headshots available, using defaults", level = "WARN")
+    player_df$headshot_url <- GOLF_DEFAULT_HEADSHOT
+    return(player_df)
+  }
+  
+  # Create match key for players
+  player_df <- player_df %>%
+    mutate(
+      match_key = tolower(gsub("[^a-z0-9 ]", " ", player_name)),
+      match_key = gsub("\\s+", " ", trimws(match_key))
+    )
+  
+  # Join headshots
+  result <- player_df %>%
+    left_join(
+      headshots %>% select(match_key, headshot_url),
+      by = "match_key"
+    ) %>%
+    mutate(
+      headshot_url = ifelse(is.na(headshot_url) | headshot_url == "", 
+                            GOLF_DEFAULT_HEADSHOT, headshot_url)
+    ) %>%
+    select(-match_key)
+  
+  matched <- sum(result$headshot_url != GOLF_DEFAULT_HEADSHOT)
+  log_debug(sprintf("Matched headshots: %d of %d players", matched, nrow(result)), level = "INFO")
+  
+  return(result)
+}
+
+# =============================================================================
+# DATA LOADING FUNCTIONS
+# =============================================================================
+
+# Google Sheet ID for projections (shared with season management)
+GOLF_CLASSIC_PROJECTIONS_SHEET_ID <- "1yJJAOv5hzNZagYUG7FLpNmRIRC76L0fJNGPbzK61lbw"
+
+#' Get available tournaments from Google Sheets
+#' Returns sheet names from the projections workbook (full tournaments only, not daily rounds)
+get_golf_tournaments_gsheet <- function() {
+  log_debug("get_golf_tournaments_gsheet() called", level = "DEBUG")
+  
+  tryCatch({
+    # Deauth for public sheet access (required for shinyapps.io)
+    googlesheets4::gs4_deauth()
+    
+    ss <- googlesheets4::gs4_get(GOLF_CLASSIC_PROJECTIONS_SHEET_ID)
+    tournaments <- ss$sheets$name
+    
+    # Filter out showdown/daily sheets (typically have "R1", "R2", "Day" in name)
+    # Keep full tournament sheets
+    full_tournaments <- tournaments[!grepl("R[1-4]|Day|Round", tournaments, ignore.case = TRUE)]
+    
+    log_debug("Found tournaments:", paste(full_tournaments, collapse = ", "), level = "INFO")
+    return(full_tournaments)
+    
+  }, error = function(e) {
+    log_debug("Error getting tournaments:", e$message, level = "ERROR")
+    return(character(0))
+  })
+}
+
+#' Load tournament data from Google Sheets for Classic format
+#' @param tournament_name Name of the sheet/tournament to load
+#' @return Data frame with player projections and salaries
+load_golf_tournament_data <- function(tournament_name) {
+  log_debug("load_golf_tournament_data() for:", tournament_name, level = "INFO")
+  
+  tryCatch({
+    # Deauth for public sheet access (required for shinyapps.io)
+    googlesheets4::gs4_deauth()
+    
+    data_raw <- googlesheets4::read_sheet(
+      GOLF_CLASSIC_PROJECTIONS_SHEET_ID,
+      sheet = tournament_name
+    ) %>%
+      janitor::clean_names()
+    
+    log_debug("Raw columns:", paste(names(data_raw), collapse = ", "), level = "DEBUG")
+    
+    # Map columns flexibly
+    data <- data_raw
+    
+    # Find player name column
+    name_col <- intersect(names(data), c("golfer", "player_name", "player", "name"))
+    if (length(name_col) > 0) {
+      data <- data %>% rename(player_name = !!name_col[1])
+    } else {
+      log_debug("No player name column found", level = "ERROR")
+      return(NULL)
+    }
+    
+    # Find median projection column
+    median_col <- intersect(names(data), c("median", "dk_points", "projection", "proj", "pts", "fpts", "points"))
+    if (length(median_col) > 0) {
+      log_debug("Using median column:", median_col[1], level = "DEBUG")
+      data <- data %>% mutate(median = as.numeric(.data[[median_col[1]]]))
+    } else {
+      log_debug("No median column found", level = "WARN")
+      data$median <- NA_real_
+    }
+    
+    # Find ceiling projection column
+    ceiling_col <- intersect(names(data), c("ceiling", "ceil", "upside", "high"))
+    if (length(ceiling_col) > 0) {
+      data <- data %>% mutate(ceiling = as.numeric(.data[[ceiling_col[1]]]))
+    } else {
+      # Default ceiling to median * 1.2 if not provided
+      data$ceiling <- data$median * 1.2
+    }
+    
+    # Find salary column
+    salary_col <- intersect(names(data), c("salary", "dk_salary", "price", "sal", "cost"))
+    if (length(salary_col) > 0) {
+      data <- data %>% mutate(salary = as.numeric(.data[[salary_col[1]]]))
+    } else {
+      log_debug("No salary column found", level = "WARN")
+      data$salary <- NA_real_
+    }
+    
+    # Find ownership columns
+    own_lg_col <- intersect(names(data), c("own_large", "ownership_large", "dk_ownership", "ownership", "own"))
+    if (length(own_lg_col) > 0) {
+      data <- data %>% mutate(own_large = as.numeric(gsub("%", "", .data[[own_lg_col[1]]])))
+    } else {
+      data$own_large <- NA_real_
+    }
+    
+    own_sm_col <- intersect(names(data), c("own_small", "ownership_small", "fd_ownership"))
+    if (length(own_sm_col) > 0) {
+      data <- data %>% mutate(own_small = as.numeric(gsub("%", "", .data[[own_sm_col[1]]])))
+    } else {
+      data$own_small <- NA_real_
+    }
+    
+    # Create blended projection (median weighted toward ceiling for GPP)
+    data <- data %>%
+      mutate(
+        blended = median * 0.7 + ceiling * 0.3,
+        value = ifelse(!is.na(salary) & salary > 0, blended / salary, NA_real_)
+      )
+    
+    # Select and clean final columns
+    data <- data %>%
+      select(
+        player_name, salary, median, ceiling, blended, value,
+        own_large, own_small
+      ) %>%
+      filter(!is.na(player_name) & player_name != "")
+    
+    # Join headshots from CSV file
+    data <- join_golf_headshots(data)
+    
+    log_debug("Loaded", nrow(data), "golfers", level = "INFO")
+    return(data)
+    
+  }, error = function(e) {
+    log_debug("Error loading tournament data:", e$message, level = "ERROR")
+    return(NULL)
+  })
+}
+
+# =============================================================================
 # UI
 # =============================================================================
 
