@@ -27,8 +27,8 @@ get_sports_config <- function() {
       color = APP_COLORS$sage,
       color_light = "#C5D4B8",
       icon_scale = 1.2,  # 20% larger than base
-      sections = c("team_dashboard", "player_dashboard", "fanteam_contests", "projections", "performance"),
-      default_section = "team_dashboard"
+      sections = c("fanteam_contests", "team_dashboard", "player_dashboard"),
+      default_section = "fanteam_contests"
     ),
     
     golf = list(

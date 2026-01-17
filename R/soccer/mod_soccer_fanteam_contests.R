@@ -30,7 +30,7 @@
 
 FANTEAM_COEFFICIENTS <- list(
   # HOME SHOTS: shots = intercept + (win_pct * coef) + (total_goals * coef)
-  # R² = 0.2940
+  # RÂ² = 0.2940
   home_shots = list(
     intercept = 3.9941,
     win_pct = 0.150385,
@@ -38,7 +38,7 @@ FANTEAM_COEFFICIENTS <- list(
   ),
   
   # AWAY SHOTS
-  # R² = 0.2570
+  # RÂ² = 0.2570
   away_shots = list(
     intercept = 4.4395,
     win_pct = 0.152701,
@@ -46,7 +46,7 @@ FANTEAM_COEFFICIENTS <- list(
   ),
   
   # HOME SOT
-  # R² = 0.1883
+  # RÂ² = 0.1883
   home_sot = list(
     intercept = 0.2532,
     win_pct = 0.051147,
@@ -54,7 +54,7 @@ FANTEAM_COEFFICIENTS <- list(
   ),
   
   # AWAY SOT
-  # R² = 0.1988
+  # RÂ² = 0.1988
   away_sot = list(
     intercept = 0.5083,
     win_pct = 0.060438,
@@ -62,7 +62,7 @@ FANTEAM_COEFFICIENTS <- list(
   ),
   
   # HOME GOALS: goals = intercept + (win_pct * coef) + (draw_pct * coef) + (total * coef)
-  # R² = 0.1431
+  # RÂ² = 0.1431
   home_goals = list(
     intercept = -1.3634,
     win_pct = 0.024723,
@@ -71,7 +71,7 @@ FANTEAM_COEFFICIENTS <- list(
   ),
   
   # AWAY GOALS
-  # R² = 0.1373
+  # RÂ² = 0.1373
   away_goals = list(
     intercept = -0.5941,
     win_pct = 0.025267,
@@ -320,19 +320,19 @@ soccer_fanteam_contests_ui <- function(id) {
         
         if (homeShotsArrow) {
           homeShotsArrow.className = 'fanteam-arrow' + (msg.home_shots_arrow === 'up' ? ' up' : (msg.home_shots_arrow === 'down' ? ' down' : ''));
-          homeShotsArrow.innerHTML = msg.home_shots_arrow === 'up' ? '▲' : (msg.home_shots_arrow === 'down' ? '▼' : '');
+          homeShotsArrow.innerHTML = msg.home_shots_arrow === 'up' ? '\u25B2' : (msg.home_shots_arrow === 'down' ? '\u25BC' : '');
         }
         if (awayShotsArrow) {
           awayShotsArrow.className = 'fanteam-arrow' + (msg.away_shots_arrow === 'up' ? ' up' : (msg.away_shots_arrow === 'down' ? ' down' : ''));
-          awayShotsArrow.innerHTML = msg.away_shots_arrow === 'up' ? '▲' : (msg.away_shots_arrow === 'down' ? '▼' : '');
+          awayShotsArrow.innerHTML = msg.away_shots_arrow === 'up' ? '\u25B2' : (msg.away_shots_arrow === 'down' ? '\u25BC' : '');
         }
         if (homeCSArrow) {
           homeCSArrow.className = 'fanteam-arrow' + (msg.home_cs_arrow === 'up' ? ' up' : (msg.home_cs_arrow === 'down' ? ' down' : ''));
-          homeCSArrow.innerHTML = msg.home_cs_arrow === 'up' ? '▲' : (msg.home_cs_arrow === 'down' ? '▼' : '');
+          homeCSArrow.innerHTML = msg.home_cs_arrow === 'up' ? '\u25B2' : (msg.home_cs_arrow === 'down' ? '\u25BC' : '');
         }
         if (awayCSArrow) {
           awayCSArrow.className = 'fanteam-arrow' + (msg.away_cs_arrow === 'up' ? ' up' : (msg.away_cs_arrow === 'down' ? ' down' : ''));
-          awayCSArrow.innerHTML = msg.away_cs_arrow === 'up' ? '▲' : (msg.away_cs_arrow === 'down' ? '▼' : '');
+          awayCSArrow.innerHTML = msg.away_cs_arrow === 'up' ? '\u25B2' : (msg.away_cs_arrow === 'down' ? '\u25BC' : '');
         }
       });
     "))),
@@ -374,63 +374,75 @@ soccer_fanteam_contests_ui <- function(id) {
     
     # PROJECTIONS CARD  
     ui_card(title = "Projected Points", color = "sage",
-            # Chart controls row 1
-            div(style = "display: flex; align-items: center; gap: 1.5rem; margin-bottom: 0.75rem; flex-wrap: wrap;",
-                # View toggle
-                div(style = "display: flex; align-items: center; gap: 0.5rem;",
-                    span(style = "font-weight: 600; color: #3B3226; margin-right: 0.25rem;", "View:"),
-                    actionButton(ns("view_value"), "Value", class = "btn-position-filter btn-view-toggle active"),
-                    actionButton(ns("view_delta"), "Adjustments", class = "btn-position-filter btn-view-toggle")
-                ),
-                # Position filter
-                div(style = "display: flex; align-items: center; gap: 0.5rem;",
-                    span(style = "font-weight: 600; color: #3B3226; margin-right: 0.25rem;", "Position:"),
-                    actionButton(ns("pos_gk"), "GK", class = "btn-position-filter btn-pos-toggle"),
-                    actionButton(ns("pos_def"), "DEF", class = "btn-position-filter btn-pos-toggle"),
-                    actionButton(ns("pos_mid"), "MID", class = "btn-position-filter btn-pos-toggle"),
-                    actionButton(ns("pos_fwd"), "FWD", class = "btn-position-filter btn-pos-toggle active")
-                ),
-                # Team highlight selector
-                div(style = "display: flex; align-items: center; gap: 0.5rem;",
-                    span(style = "font-weight: 600; color: #3B3226; margin-right: 0.25rem;", "Highlight:"),
-                    shinyWidgets::pickerInput(
-                      ns("highlight_team"), 
-                      label = NULL,
-                      choices = c("None" = ""),
-                      selected = "",
-                      options = list(
-                        style = "btn-outline-secondary",
-                        size = 10,
-                        `live-search` = TRUE
-                      ),
-                      width = "180px"
+            # Row 0: Table/Plot toggle
+            div(style = "display: flex; align-items: center; gap: 0.5rem; margin-bottom: 1rem;",
+                actionButton(ns("output_table"), "Table", class = "btn-position-filter btn-output-toggle"),
+                actionButton(ns("output_plot"), "Plot", class = "btn-position-filter btn-output-toggle active")
+            ),
+            # Plot controls container (hidden when table is selected)
+            div(id = ns("plot_controls"),
+                # Chart controls row 1
+                div(style = "display: flex; align-items: center; gap: 1.5rem; margin-bottom: 0.75rem; flex-wrap: wrap;",
+                    # View toggle
+                    div(style = "display: flex; align-items: center; gap: 0.5rem;",
+                        span(style = "font-weight: 600; color: #3B3226; margin-right: 0.25rem;", "View:"),
+                        actionButton(ns("view_value"), "Value", class = "btn-position-filter btn-view-toggle active"),
+                        actionButton(ns("view_delta"), "Adjustments", class = "btn-position-filter btn-view-toggle")
+                    ),
+                    # Position filter
+                    div(style = "display: flex; align-items: center; gap: 0.5rem;",
+                        span(style = "font-weight: 600; color: #3B3226; margin-right: 0.25rem;", "Position:"),
+                        actionButton(ns("pos_gk"), "GK", class = "btn-position-filter btn-pos-toggle"),
+                        actionButton(ns("pos_def"), "DEF", class = "btn-position-filter btn-pos-toggle"),
+                        actionButton(ns("pos_mid"), "MID", class = "btn-position-filter btn-pos-toggle"),
+                        actionButton(ns("pos_fwd"), "FWD", class = "btn-position-filter btn-pos-toggle active")
+                    ),
+                    # Team highlight selector
+                    div(style = "display: flex; align-items: center; gap: 0.5rem;",
+                        span(style = "font-weight: 600; color: #3B3226; margin-right: 0.25rem;", "Highlight:"),
+                        shinyWidgets::pickerInput(
+                          ns("highlight_team"), 
+                          label = NULL,
+                          choices = c("None" = ""),
+                          selected = "",
+                          options = list(
+                            style = "btn-outline-secondary",
+                            size = 10,
+                            `live-search` = TRUE
+                          ),
+                          width = "180px"
+                        )
                     )
-                )
-            ),
-            # Chart controls row 2 - FOS weight presets
-            div(style = "display: flex; align-items: center; gap: 1rem; margin-bottom: 1rem; flex-wrap: wrap;",
-                span(style = "font-weight: 600; color: #3B3226; font-size: 0.9rem;", "FOS Weights:"),
-                # Preset buttons
-                div(style = "display: flex; align-items: center; gap: 0.5rem;",
-                    actionButton(ns("fos_cs_heavy"), "CS Heavy", class = "btn-position-filter btn-fos-toggle", 
-                                 title = "80% Clean Sheet / 20% Goals"),
-                    actionButton(ns("fos_balanced"), "Balanced", class = "btn-position-filter btn-fos-toggle",
-                                 title = "50% Clean Sheet / 50% Goals"),
-                    actionButton(ns("fos_attack_lean"), "Attack Lean", class = "btn-position-filter btn-fos-toggle",
-                                 title = "25% Clean Sheet / 75% Goals"),
-                    actionButton(ns("fos_attack_heavy"), "Attack Heavy", class = "btn-position-filter btn-fos-toggle active",
-                                 title = "10% Clean Sheet / 90% Goals")
                 ),
-                # Current weights display
-                div(style = "display: flex; align-items: center; gap: 0.25rem; padding: 6px 12px; background: #F5F3F0; border-radius: 6px; font-size: 0.85rem;",
-                    span(style = "color: #5C4E3D;", "CS:"),
-                    span(style = "font-weight: 600; color: #3B3226;", textOutput(ns("fos_cs_weight_display"), inline = TRUE)),
-                    span(style = "color: #5C4E3D; margin-left: 8px;", "Goals:"),
-                    span(style = "font-weight: 600; color: #3B3226;", textOutput(ns("fos_gf_weight_display"), inline = TRUE))
-                )
+                # Chart controls row 2 - FOS weight presets
+                div(style = "display: flex; align-items: center; gap: 1rem; margin-bottom: 1rem; flex-wrap: wrap;",
+                    span(style = "font-weight: 600; color: #3B3226; font-size: 0.9rem;", "FOS Weights:"),
+                    # Preset buttons
+                    div(style = "display: flex; align-items: center; gap: 0.5rem;",
+                        actionButton(ns("fos_cs_heavy"), "CS Heavy", class = "btn-position-filter btn-fos-toggle", 
+                                     title = "80% Clean Sheet / 20% Goals"),
+                        actionButton(ns("fos_balanced"), "Balanced", class = "btn-position-filter btn-fos-toggle",
+                                     title = "50% Clean Sheet / 50% Goals"),
+                        actionButton(ns("fos_attack_lean"), "Attack Lean", class = "btn-position-filter btn-fos-toggle",
+                                     title = "25% Clean Sheet / 75% Goals"),
+                        actionButton(ns("fos_attack_heavy"), "Attack Heavy", class = "btn-position-filter btn-fos-toggle active",
+                                     title = "10% Clean Sheet / 90% Goals")
+                    ),
+                    # Current weights display
+                    div(style = "display: flex; align-items: center; gap: 0.25rem; padding: 6px 12px; background: #F5F3F0; border-radius: 6px; font-size: 0.85rem;",
+                        span(style = "color: #5C4E3D;", "CS:"),
+                        span(style = "font-weight: 600; color: #3B3226;", textOutput(ns("fos_cs_weight_display"), inline = TRUE)),
+                        span(style = "color: #5C4E3D; margin-left: 8px;", "Goals:"),
+                        span(style = "font-weight: 600; color: #3B3226;", textOutput(ns("fos_gf_weight_display"), inline = TRUE))
+                    )
+                ),
+                # Chart output with external axis labels wrapper
+                uiOutput(ns("chart_wrapper"))
             ),
-            # Chart output with external axis labels wrapper
-            uiOutput(ns("chart_wrapper"))
+            # Table output container (hidden by default)
+            div(id = ns("table_container"), style = "display: none;",
+                reactableOutput(ns("projections_table"))
+            )
     ),
     
     # CSS - Part 1: Grid wrapper rules (need ns() interpolation)
@@ -462,6 +474,9 @@ soccer_fanteam_contests_ui <- function(id) {
       }
       
       /* Fixed widths for button groups */
+      .btn-output-toggle {
+        min-width: 80px !important;
+      }
       .btn-view-toggle {
         min-width: 100px !important;
       }
@@ -599,12 +614,12 @@ soccer_fanteam_contests_ui <- function(id) {
       .fanteam-prob-segment.draw { background: #D5D5D5; }
       .fanteam-prob-segment.away { background: #8FB3C4; }
       
-      /* Goals stepper section */
+      /* Goals stepper - aligned with inputs and bar */
       .fanteam-goals-section {
         display: flex;
         flex-direction: column;
         align-items: center;
-        min-width: 60px;
+        margin-left: 1rem;
       }
       .fanteam-goals-section .fanteam-input-label {
         margin-bottom: 0.25rem;
@@ -613,28 +628,57 @@ soccer_fanteam_contests_ui <- function(id) {
         display: flex;
         flex-direction: column;
         align-items: center;
+        height: calc(36px + 0.5rem + 44px); /* Match inputs + gap + bar */
         justify-content: space-between;
-        height: calc(36px + 0.5rem + 44px);
       }
       .fanteam-goals-btn {
-        width: 44px;
-        height: 20px;
-        border: 3px solid #3B3226;
-        border-radius: 6px;
-        background: #F5F0EB;
+        width: 26px;
+        height: 14px;
+        border: 1px solid #a0a0a0 !important;
+        background: #f3f3f3 !important;
+        border-radius: 7px !important;
         cursor: pointer;
-        font-size: 0.7rem;
-        line-height: 1;
+        padding: 0 !important;
         display: flex;
         align-items: center;
         justify-content: center;
-        color: #3B3226;
-        font-weight: bold;
+        box-shadow: none !important;
+        transform: none !important;
+        text-transform: none !important;
+        letter-spacing: normal !important;
+        font-size: inherit !important;
       }
-      .fanteam-goals-btn:hover { background: #E5E9F0; }
-      .fanteam-goals-btn:active { background: #D8DEE9; }
+      .fanteam-goals-btn:hover { 
+        background: #e8e8e8 !important; 
+        box-shadow: none !important; 
+        transform: none !important;
+      }
+      .fanteam-goals-btn:active { 
+        background: #ddd !important; 
+        box-shadow: none !important; 
+        transform: none !important;
+      }
+      .fanteam-goals-btn:focus { 
+        outline: none; 
+        box-shadow: none !important; 
+      }
       
-      /* Style the numericInput inside goals stepper to look like plain value */
+      /* Chevron arrows using CSS borders */
+      .spinner-arrow {
+        width: 6px;
+        height: 6px;
+        border-right: 2px solid #3a3a3a;
+        border-bottom: 2px solid #3a3a3a;
+      }
+      .spinner-arrow.up {
+        transform: rotate(-135deg);
+        margin-top: 3px;
+      }
+      .spinner-arrow.down {
+        transform: rotate(45deg);
+        margin-bottom: 3px;
+      }
+      
       .fanteam-goals-stepper .shiny-input-container {
         width: auto !important;
         margin: 0 !important;
@@ -645,12 +689,13 @@ soccer_fanteam_contests_ui <- function(id) {
       .fanteam-goals-stepper input[type=number] {
         width: 50px !important;
         text-align: center !important;
-        font-size: 1.3rem !important;
+        font-size: 1.6rem !important;
         font-weight: 700 !important;
         color: #3B3226 !important;
         border: none !important;
         background: transparent !important;
         padding: 0 !important;
+        height: auto !important;
         -moz-appearance: textfield !important;
       }
       .fanteam-goals-stepper input[type=number]::-webkit-inner-spin-button,
@@ -660,7 +705,6 @@ soccer_fanteam_contests_ui <- function(id) {
       }
       .fanteam-goals-stepper input[type=number]:focus {
         outline: none !important;
-        box-shadow: none !important;
       }
       
       /* Results */
@@ -721,6 +765,7 @@ soccer_fanteam_contests_server <- function(id, soccer_data = NULL) {
     rv <- reactiveValues(
       salaries = NULL, odds = NULL, matches = NULL,
       projections = NULL, initialized = FALSE,
+      output_view = "plot",      # "table" or "plot"
       chart_view = "value",      # "value" or "delta"
       chart_position = "FWD",    # "GK", "DEF", "MID", "FWD"
       fos_preset = "attack_heavy" # "cs_heavy", "balanced", "attack_lean", "attack_heavy"
@@ -729,6 +774,37 @@ soccer_fanteam_contests_server <- function(id, soccer_data = NULL) {
     # =========================================================================
     # CHART FILTER BUTTON OBSERVERS
     # =========================================================================
+    
+    # Helper to update output toggle button active states
+    update_output_buttons <- function(active_output) {
+      outputs <- c("table", "plot")
+      for (o in outputs) {
+        btn_id <- paste0("output_", o)
+        if (o == active_output) {
+          shinyjs::addClass(id = btn_id, class = "active")
+        } else {
+          shinyjs::removeClass(id = btn_id, class = "active")
+        }
+      }
+      # Show/hide containers
+      if (active_output == "table") {
+        shinyjs::hide(id = "plot_controls")
+        shinyjs::show(id = "table_container")
+      } else {
+        shinyjs::show(id = "plot_controls")
+        shinyjs::hide(id = "table_container")
+      }
+    }
+    
+    # Output toggle button observers
+    observeEvent(input$output_table, {
+      rv$output_view <- "table"
+      update_output_buttons("table")
+    })
+    observeEvent(input$output_plot, {
+      rv$output_view <- "plot"
+      update_output_buttons("plot")
+    })
     
     # Helper to update view button active states
     update_view_buttons <- function(active_view) {
@@ -1115,15 +1191,17 @@ soccer_fanteam_contests_server <- function(id, soccer_data = NULL) {
                               style = sprintf("width:%.1f%%;", norm_a))
                       )
                   ),
-                  # Right: Goals stepper - using numericInput styled as display
+                  # Right: Goals stepper - up arrow, number, down arrow
                   div(class = "fanteam-goals-section",
                       span(class = "fanteam-input-label", "GOALS"),
                       div(class = "fanteam-goals-stepper",
                           tags$button(type = "button", class = "fanteam-goals-btn goals-up", 
-                                      `data-target` = ns(paste0("total_", i)), HTML("&#9650;")),
+                                      `data-target` = ns(paste0("total_", i)),
+                                      span(class = "spinner-arrow up")),
                           numericInput(ns(paste0("total_", i)), NULL, round(m$market_total, 1), 0.5, 8, 0.1),
                           tags$button(type = "button", class = "fanteam-goals-btn goals-down", 
-                                      `data-target` = ns(paste0("total_", i)), HTML("&#9660;"))
+                                      `data-target` = ns(paste0("total_", i)),
+                                      span(class = "spinner-arrow down"))
                       )
                   )
               ),
@@ -1524,7 +1602,7 @@ soccer_fanteam_contests_server <- function(id, soccer_data = NULL) {
                      paste0("<img src='", logo_path, "' style='width:32px;height:32px;vertical-align:middle;margin-right:8px;'>"), ""),
               "<strong style='font-size:14px;'>", toupper(team_normalized), "</strong><br>",
               "<span style='color:#5C4E3D;'>FOS: <strong>", sprintf("%.1f", fantasy_opp_score), "</strong></span><br>",
-              "<span style='color:#5C4E3D;'>Salary: <strong>£", sprintf("%.2fM", avg_salary), "</strong></span><br>",
+              "<span style='color:#5C4E3D;'>Salary: <strong>Â£", sprintf("%.2fM", avg_salary), "</strong></span><br>",
               "<span style='color:#5C4E3D;'>CS%: <strong>", sprintf("%.0f%%", clean_sheet_pct), "</strong></span><br>",
               "<span style='color:#5C4E3D;'>xG: <strong>", sprintf("%.2f", implied_team_goals), "</strong></span>",
               "</div>"
@@ -1582,7 +1660,7 @@ soccer_fanteam_contests_server <- function(id, soccer_data = NULL) {
           scale_x_continuous(limits = c(x_min, x_max), expand = c(0, 0),
                              labels = function(x) sprintf("%.0f", x)) +
           scale_y_continuous(limits = c(y_min, y_max), expand = c(0, 0),
-                             labels = function(y) sprintf("£%.1fM", y)) +
+                             labels = function(y) sprintf("Â£%.1fM", y)) +
           labs(x = NULL, y = NULL) +
           theme_minimal(base_size = 14) +
           theme(
@@ -1827,6 +1905,204 @@ soccer_fanteam_contests_server <- function(id, soccer_data = NULL) {
           )
         )
       }
+    })
+    
+    # =========================================================================
+    # PROJECTIONS TABLE (Team-level comparison: Market vs My Adjusted)
+    # =========================================================================
+    
+    output$projections_table <- renderReactable({
+      req(rv$matches)
+      matches <- rv$matches
+      
+      if (nrow(matches) == 0) return(NULL)
+      
+      # Build team-level data from matches
+      table_data <- lapply(1:nrow(matches), function(i) {
+        m <- matches[i, ]
+        
+        # User adjusted values
+        h <- input[[paste0("home_", i)]] %||% m$market_home_win
+        d <- input[[paste0("draw_", i)]] %||% m$market_draw
+        a <- input[[paste0("away_", i)]] %||% m$market_away_win
+        t <- input[[paste0("total_", i)]] %||% m$market_total
+        
+        # Market baseline values
+        mkt_h <- m$market_home_win
+        mkt_d <- m$market_draw
+        mkt_a <- m$market_away_win
+        mkt_t <- m$market_total
+        
+        # Calculate adjusted goals
+        goals_adj <- calc_goals_from_probs(h, d, a, t)
+        
+        # Calculate market goals
+        goals_mkt <- calc_goals_from_probs(mkt_h, mkt_d, mkt_a, mkt_t)
+        
+        # Shots calculations
+        adj_home_shots <- calc_shots(h, t, TRUE)
+        adj_away_shots <- calc_shots(a, t, FALSE)
+        adj_home_sot <- calc_sot(h, t, TRUE)
+        adj_away_sot <- calc_sot(a, t, FALSE)
+        
+        mkt_home_shots <- calc_shots(mkt_h, mkt_t, TRUE)
+        mkt_away_shots <- calc_shots(mkt_a, mkt_t, FALSE)
+        mkt_home_sot <- calc_sot(mkt_h, mkt_t, TRUE)
+        mkt_away_sot <- calc_sot(mkt_a, mkt_t, FALSE)
+        
+        # Clean sheet % (Poisson: CS% = exp(-goals_against))
+        adj_home_cs <- exp(-goals_adj$away) * 100
+        adj_away_cs <- exp(-goals_adj$home) * 100
+        mkt_home_cs <- exp(-goals_mkt$away) * 100
+        mkt_away_cs <- exp(-goals_mkt$home) * 100
+        
+        # Return both home and away team rows
+        list(
+          # Home team
+          data.frame(
+            team = m$home_team,
+            logo = get_soccer_team_logo(m$home_team) %||% "",
+            is_home = TRUE,
+            opponent = m$away_team,
+            # Market columns - store raw goals for win/loss calc
+            mkt_team_goals = goals_mkt$home,
+            mkt_opp_goals = goals_mkt$away,
+            mkt_shots = mkt_home_shots,
+            mkt_sot = mkt_home_sot,
+            mkt_shots_conceded = mkt_away_shots,
+            mkt_sot_conceded = mkt_away_sot,
+            mkt_cs = mkt_home_cs,
+            mkt_opp_cs = mkt_away_cs,
+            # Adjusted columns
+            adj_team_goals = goals_adj$home,
+            adj_opp_goals = goals_adj$away,
+            adj_shots = adj_home_shots,
+            adj_sot = adj_home_sot,
+            adj_shots_conceded = adj_away_shots,
+            adj_sot_conceded = adj_away_sot,
+            adj_cs = adj_home_cs,
+            adj_opp_cs = adj_away_cs,
+            stringsAsFactors = FALSE
+          ),
+          # Away team
+          data.frame(
+            team = m$away_team,
+            logo = get_soccer_team_logo(m$away_team) %||% "",
+            is_home = FALSE,
+            opponent = m$home_team,
+            # Market columns
+            mkt_team_goals = goals_mkt$away,
+            mkt_opp_goals = goals_mkt$home,
+            mkt_shots = mkt_away_shots,
+            mkt_sot = mkt_away_sot,
+            mkt_shots_conceded = mkt_home_shots,
+            mkt_sot_conceded = mkt_home_sot,
+            mkt_cs = mkt_away_cs,
+            mkt_opp_cs = mkt_home_cs,
+            # Adjusted columns
+            adj_team_goals = goals_adj$away,
+            adj_opp_goals = goals_adj$home,
+            adj_shots = adj_away_shots,
+            adj_sot = adj_away_sot,
+            adj_shots_conceded = adj_home_shots,
+            adj_sot_conceded = adj_home_sot,
+            adj_cs = adj_away_cs,
+            adj_opp_cs = adj_home_cs,
+            stringsAsFactors = FALSE
+          )
+        )
+      })
+      
+      # Flatten the list
+      table_df <- do.call(rbind, unlist(table_data, recursive = FALSE))
+      
+      # Sort by team name
+      table_df <- table_df[order(table_df$team), ]
+      
+      reactable(
+        table_df,
+        theme = app_reactable_theme(compact = TRUE),
+        defaultColDef = colDef(
+          align = "center",
+          minWidth = 63,
+          headerStyle = list(fontWeight = 600, fontSize = "0.75rem")
+        ),
+        columnGroups = list(
+          colGroup(name = "Market", columns = c("mkt_team_goals", "mkt_shots", "mkt_sot", "mkt_shots_conceded", "mkt_sot_conceded", "mkt_cs", "mkt_opp_cs")),
+          colGroup(name = "My Adjusted", columns = c("adj_team_goals", "adj_shots", "adj_sot", "adj_shots_conceded", "adj_sot_conceded", "adj_cs", "adj_opp_cs"))
+        ),
+        columns = list(
+          team = colDef(
+            name = "Team",
+            minWidth = 204,
+            align = "left",
+            style = list(borderRight = "2px solid #E5E9F0"),
+            headerStyle = list(fontWeight = 600, fontSize = "0.75rem", borderRight = "2px solid #E5E9F0"),
+            cell = function(value, index) {
+              logo <- table_df$logo[index]
+              is_home <- table_df$is_home[index]
+              opponent <- table_df$opponent[index]
+              opp_abbr <- toupper(get_team_abbreviation(opponent))
+              prefix <- if (is_home) "vs" else "@"
+              
+              div(
+                style = "display: flex; align-items: center; gap: 10px; padding: 4px 0;",
+                if (!is.null(logo) && logo != "") {
+                  tags$img(src = logo, style = "width: 29px; height: 29px; object-fit: contain;")
+                },
+                div(
+                  style = "display: flex; flex-direction: column; line-height: 1.3;",
+                  span(style = "font-weight: 600; font-size: 0.9rem;", value),
+                  span(style = "font-size: 0.75rem; color: #7A7A7A;", paste(prefix, opp_abbr))
+                )
+              )
+            }
+          ),
+          logo = colDef(show = FALSE),
+          is_home = colDef(show = FALSE),
+          opponent = colDef(show = FALSE),
+          mkt_opp_goals = colDef(show = FALSE),
+          adj_opp_goals = colDef(show = FALSE),
+          # Market columns
+          mkt_team_goals = colDef(
+            name = "Result", 
+            minWidth = 95,
+            cell = function(value, index) {
+              sprintf("%.1f - %.1f", value, table_df$mkt_opp_goals[index])
+            }
+          ),
+          mkt_shots = colDef(name = "Sh", format = colFormat(digits = 1)),
+          mkt_sot = colDef(name = "SoT", format = colFormat(digits = 1)),
+          mkt_shots_conceded = colDef(name = "ShC", format = colFormat(digits = 1)),
+          mkt_sot_conceded = colDef(name = "SoTC", format = colFormat(digits = 1)),
+          mkt_cs = colDef(name = "CS%", format = colFormat(digits = 0, suffix = "%")),
+          mkt_opp_cs = colDef(
+            name = "OppCS%", 
+            format = colFormat(digits = 0, suffix = "%"),
+            style = list(borderRight = "2px solid #E5E9F0"),
+            headerStyle = list(fontWeight = 600, fontSize = "0.75rem", borderRight = "2px solid #E5E9F0")
+          ),
+          # Adjusted columns
+          adj_team_goals = colDef(
+            name = "Result", 
+            minWidth = 95,
+            cell = function(value, index) {
+              sprintf("%.1f - %.1f", value, table_df$adj_opp_goals[index])
+            }
+          ),
+          adj_shots = colDef(name = "Sh", format = colFormat(digits = 1)),
+          adj_sot = colDef(name = "SoT", format = colFormat(digits = 1)),
+          adj_shots_conceded = colDef(name = "ShC", format = colFormat(digits = 1)),
+          adj_sot_conceded = colDef(name = "SoTC", format = colFormat(digits = 1)),
+          adj_cs = colDef(name = "CS%", format = colFormat(digits = 0, suffix = "%")),
+          adj_opp_cs = colDef(name = "OppCS%", format = colFormat(digits = 0, suffix = "%"))
+        ),
+        striped = TRUE,
+        highlight = TRUE,
+        bordered = FALSE,
+        compact = TRUE,
+        rownames = FALSE
+      )
     })
     
     observeEvent(input$refresh_data, {

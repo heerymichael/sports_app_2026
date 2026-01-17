@@ -27,8 +27,8 @@ get_sports_config <- function() {
       color = APP_COLORS$sage,
       color_light = "#C5D4B8",
       icon_scale = 1.2,  # 20% larger than base
-      sections = c("team_dashboard", "player_dashboard", "fanteam_contests", "projections", "performance"),
-      default_section = "team_dashboard"
+      sections = c("fanteam_contests", "team_dashboard", "player_dashboard"),
+      default_section = "fanteam_contests"
     ),
     
     golf = list(
@@ -133,18 +133,6 @@ get_sections_config <- function() {
       icon = "sliders"
     ),
     
-    performance = list(
-      id = "performance",
-      name = "Performance",
-      icon = "trending-up"
-    ),
-    
-    ownership = list(
-      id = "ownership",
-      name = "Ownership",
-      icon = "percent"
-    ),
-    
     # Golf sections
     classic = list(
       id = "classic",
@@ -168,7 +156,7 @@ get_sections_config <- function() {
 
 #' Get sections available for a specific sport
 #' @param sport_id Character, the sport identifier
-#' @return List of section configs for that sport
+#' @return List of section configs for that sport (in order specified by sport config)
 get_sport_sections <- function(sport_id) {
   sports <- get_sports_config()
   sections <- get_sections_config()
@@ -176,8 +164,12 @@ get_sport_sections <- function(sport_id) {
   sport <- sports[[sport_id]]
   if (is.null(sport)) return(list())
   
-  # Return only sections available for this sport
-  sections[sport$sections]
+  
+  # Return sections in the order specified by sport$sections
+  # Use setNames to ensure proper ordering is preserved
+  result <- lapply(sport$sections, function(s) sections[[s]])
+  names(result) <- sport$sections
+  result[!sapply(result, is.null)]
 }
 
 #' Get sport config by ID
