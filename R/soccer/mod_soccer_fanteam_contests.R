@@ -1,15 +1,91 @@
 # =============================================================================
-# Module: Soccer FanTeam Contests - REWORKED
+# Module: Soccer FanTeam Contests - v18 SHOTS + CS% + FIXED BUTTON WIDTHS
 # 
-# Player salary tables for FanTeam Monster contests
-# Team summary with FBref xG data and odds integration
+# Layout:
+#   1. Team header with logos
+#   2. HOME | DRAW | AWAY inputs (with native spinners)
+#   3. [Probability Bar] [GOALS input] side by side
+#   4. Market Implied | My View results (Result, Shots/SOT, Home CS%, Away CS%)
+#
+# v18 Changes:
+#   - Match cards now show: Result, Home Shots, Away Shots, Home CS%, Away CS%
+#   - Fixed button widths: View buttons 100px, Position buttons 55px
+#   - ggiraph interactive plots with hover tooltips
+#   - Value plot: tooltip shows team logo, name, FOS, Salary, CS%, xG
+#   - Adjustments plot: y-axis labels with team logo + CAPS name (ggtext)
+#   - Plot container height: 630px (~66% taller)
+#
+# v15-17 Changes:
+#   - FOS vs Salary scatter plot (Fantasy Opportunity Score)
+#   - Position-specific FOS weights (GK: 80% CS, FWD: 90% GF, etc.)
+#   - Dumbbell plot showing baseline vs adjusted FOS per team
 # =============================================================================
-# Soccer card color
-SOCCER_CARD_COLOR <- APP_COLORS$sage
-# FanTeam Stats Google Sheet ID
-FANTEAM_STATS_SHEET_ID <- "1EM_Xiqy5Kyvc-AlvpfLT7yjLl_7vcVbBgmj3GwNuIKg"
-# Cache for stats overview data
-FANTEAM_STATS_CACHE <- new.env()
+
+# =============================================================================
+# EMPIRICAL COEFFICIENTS - Derived from 5 seasons of Premier League data
+# Generated: 2026-01-16
+# Source: Google Sheet match_odds (football-data.co.uk historical data)
+# Weighting: Time-weighted with 2.0-year half-life
+# =============================================================================
+
+FANTEAM_COEFFICIENTS <- list(
+  # HOME SHOTS: shots = intercept + (win_pct * coef) + (total_goals * coef)
+  # R² = 0.2940
+  home_shots = list(
+    intercept = 3.9941,
+    win_pct = 0.150385,
+    total_goals = 1.1583
+  ),
+  
+  # AWAY SHOTS
+  # R² = 0.2570
+  away_shots = list(
+    intercept = 4.4395,
+    win_pct = 0.152701,
+    total_goals = 0.8070
+  ),
+  
+  # HOME SOT
+  # R² = 0.1883
+  home_sot = list(
+    intercept = 0.2532,
+    win_pct = 0.051147,
+    total_goals = 0.7963
+  ),
+  
+  # AWAY SOT
+  # R² = 0.1988
+  away_sot = list(
+    intercept = 0.5083,
+    win_pct = 0.060438,
+    total_goals = 0.5695
+  ),
+  
+  # HOME GOALS: goals = intercept + (win_pct * coef) + (draw_pct * coef) + (total * coef)
+  # R² = 0.1431
+  home_goals = list(
+    intercept = -1.3634,
+    win_pct = 0.024723,
+    draw_pct = 0.020101,
+    total_goals = 0.4762
+  ),
+  
+  # AWAY GOALS
+  # R² = 0.1373
+  away_goals = list(
+    intercept = -0.5941,
+    win_pct = 0.025267,
+    draw_pct = 0.004321,
+    total_goals = 0.3474
+  ),
+  
+  # SOT ratios (for quick conversion if needed)
+  sot_ratio = list(
+    home = 0.3511,
+    away = 0.3614,
+    overall = 0.3562
+  )
+)
 
 # =============================================================================
 # ODDS DATA LOADING
@@ -19,8 +95,8 @@ FANTEAM_STATS_CACHE <- new.env()
 #' @param gameweek Optional gameweek number to match specific file
 #' @return Data frame with odds data or NULL if not found
 load_fanteam_odds <- function(gameweek = NULL) {
-  if (!dir.exists(FANTEAM_SOCCER_DIR)) {
-    log_debug("Odds: Directory not found:", FANTEAM_SOCCER_DIR, level = "DEBUG")
+  if (!exists("FANTEAM_SOCCER_DIR") || !dir.exists(FANTEAM_SOCCER_DIR)) {
+    log_debug("Odds: Directory not found or FANTEAM_SOCCER_DIR not defined", level = "DEBUG")
     return(NULL)
   }
   
@@ -125,528 +201,1198 @@ load_fanteam_odds <- function(gameweek = NULL) {
   return(odds_data)
 }
 
-#' Merge odds data with player salary data
-merge_fanteam_with_odds <- function(salary_data, odds_data) {
-  if (is.null(salary_data) || nrow(salary_data) == 0) return(salary_data)
-  
-  # Add empty columns if no odds data
-  if (is.null(odds_data) || nrow(odds_data) == 0) {
-    log_debug("Merge: No odds data provided", level = "DEBUG")
-    salary_data$opponent <- NA_character_
-    salary_data$home_away <- NA_character_
-    salary_data$implied_team_goals <- NA_real_
-    salary_data$implied_opp_goals <- NA_real_
-    salary_data$clean_sheet_pct <- NA_real_
-    return(salary_data)
-  }
-  
-  log_debug(sprintf("Merge: Odds data has %d rows", nrow(odds_data)), level = "DEBUG")
-  log_debug(sprintf("Merge: Odds columns: %s", paste(names(odds_data), collapse = ", ")), level = "DEBUG")
-  
-  # Select odds columns for join
-  odds_cols <- c("odds_team_normalized", "odds_opponent_normalized", "home_away",
-                 "implied_team_goals", "implied_opp_goals", "win_pct", "clean_sheet_pct")
-  odds_cols <- intersect(odds_cols, names(odds_data))
-  
-  log_debug(sprintf("Merge: Using columns: %s", paste(odds_cols, collapse = ", ")), level = "DEBUG")
-  
-  if (!"odds_team_normalized" %in% odds_cols) {
-    log_debug("Merge: ERROR - odds_team_normalized not found!", level = "WARN")
-    salary_data$opponent <- NA_character_
-    salary_data$home_away <- NA_character_
-    salary_data$implied_team_goals <- NA_real_
-    salary_data$implied_opp_goals <- NA_real_
-    salary_data$clean_sheet_pct <- NA_real_
-    return(salary_data)
-  }
-  
-  # Check team name overlap - debug output
-  odds_teams <- unique(odds_data$odds_team_normalized)
-  salary_teams <- unique(salary_data$team_normalized)
-  overlap <- intersect(odds_teams, salary_teams)
-  log_debug(sprintf("Merge: %d odds teams, %d salary teams, %d overlap", 
-                    length(odds_teams), length(salary_teams), length(overlap)), level = "DEBUG")
-  
-  if (length(overlap) == 0) {
-    log_debug("Merge: NO TEAM OVERLAP! Showing team names for debugging:", level = "WARN")
-    log_debug(sprintf("  Odds teams: %s", paste(sort(odds_teams), collapse = ", ")), level = "WARN")
-    log_debug(sprintf("  Salary teams: %s", paste(sort(salary_teams), collapse = ", ")), level = "WARN")
-  }
-  
-  odds_subset <- odds_data %>% select(all_of(odds_cols))
-  
-  merged <- salary_data %>%
-    left_join(odds_subset, by = c("team_normalized" = "odds_team_normalized"))
-  
-  if ("odds_opponent_normalized" %in% names(merged)) {
-    merged <- merged %>% rename(opponent = odds_opponent_normalized)
-  } else {
-    merged$opponent <- NA_character_
-  }
-  
-  if (!"home_away" %in% names(merged)) merged$home_away <- NA_character_
-  if (!"implied_team_goals" %in% names(merged)) merged$implied_team_goals <- NA_real_
-  if (!"implied_opp_goals" %in% names(merged)) merged$implied_opp_goals <- NA_real_
-  if (!"clean_sheet_pct" %in% names(merged)) merged$clean_sheet_pct <- NA_real_
-  
-  # Log merge results
-  matched <- sum(!is.na(merged$opponent))
-  log_debug(sprintf("Merge: %d/%d players matched (%.1f%%)", 
-                    matched, nrow(merged), 100 * matched / nrow(merged)), level = "INFO")
-  
-  return(merged)
-}
-
-#' Load FanTeam stats overview data from Google Sheet
-load_fanteam_stats_overview <- function(force_refresh = FALSE) {
-  cache_key <- "stats_overview"
-  cache_time_key <- "stats_overview_time"
-  
-  if (!force_refresh && 
-      exists(cache_key, envir = FANTEAM_STATS_CACHE) &&
-      exists(cache_time_key, envir = FANTEAM_STATS_CACHE)) {
-    cache_age <- difftime(Sys.time(), get(cache_time_key, envir = FANTEAM_STATS_CACHE), units = "mins")
-    if (cache_age < 10) {
-      return(get(cache_key, envir = FANTEAM_STATS_CACHE))
-    }
-  }
-  
-  stats <- tryCatch({
-    raw_data <- read_sheet(FANTEAM_STATS_SHEET_ID, sheet = "stats_overview") %>%
-      clean_names()
-    
-    col_renames <- c(
-      "name" = "player",
-      "total_pts" = "total_points",
-      "avg_pts" = "average_points",
-      "g" = "goals",
-      "shots_on_target" = "sot",
-      "a" = "assists",
-      "x60_mp" = "mins_60",
-      "x90_mp" = "mins_90",
-      "cs" = "clean_sheets",
-      "sv" = "saves",
-      "gc" = "goals_conceded",
-      "yel" = "yellows",
-      "red" = "reds"
-    )
-    
-    for (old_name in names(col_renames)) {
-      new_name <- col_renames[old_name]
-      if (old_name %in% names(raw_data) && !new_name %in% names(raw_data)) {
-        names(raw_data)[names(raw_data) == old_name] <- new_name
-      }
-    }
-    
-    numeric_cols <- c("total_points", "average_points", "goals", "sot", "assists",
-                      "mins_60", "mins_90", "clean_sheets", "saves", "goals_conceded",
-                      "yellows", "reds")
-    
-    for (col in numeric_cols) {
-      if (col %in% names(raw_data)) {
-        raw_data[[col]] <- suppressWarnings(as.numeric(raw_data[[col]]))
-      }
-    }
-    
-    raw_data
-  }, error = function(e) {
-    log_debug("Error loading stats_overview:", e$message, level = "WARN")
-    return(NULL)
-  })
-  
-  if (!is.null(stats) && nrow(stats) > 0) {
-    assign(cache_key, stats, envir = FANTEAM_STATS_CACHE)
-    assign(cache_time_key, Sys.time(), envir = FANTEAM_STATS_CACHE)
-  }
-  
-  return(stats)
-}
-
-#' Merge FanTeam salary data with stats overview
-merge_fanteam_with_stats <- function(salary_data, stats_data) {
-  if (is.null(salary_data) || nrow(salary_data) == 0) return(salary_data)
-  if (is.null(stats_data) || nrow(stats_data) == 0) return(salary_data)
-  
-  if (!"player" %in% names(stats_data)) return(salary_data)
-  
-  cols_to_exclude <- c("salary", "price", "cost", "value", "weekly_salary")
-  stats_cols_to_drop <- intersect(cols_to_exclude, names(stats_data))
-  if (length(stats_cols_to_drop) > 0) {
-    stats_data <- stats_data %>% select(-all_of(stats_cols_to_drop))
-  }
-  
-  local_normalize <- function(x) {
-    if (is.null(x) || length(x) == 0) return(x)
-    x <- tolower(trimws(as.character(x)))
-    if (requireNamespace("stringi", quietly = TRUE)) {
-      x <- stringi::stri_trans_general(x, "Latin-ASCII")
-    }
-    gsub("\\s+", " ", x)
-  }
-  
-  salary_data <- salary_data %>% mutate(player_norm = local_normalize(player))
-  stats_data <- stats_data %>% mutate(player_norm = local_normalize(player))
-  
-  stat_cols <- c("total_points", "average_points", "goals", "sot", "assists",
-                 "mins_60", "mins_90", "clean_sheets", "saves", "goals_conceded", 
-                 "yellows", "reds")
-  available_stat_cols <- intersect(stat_cols, names(stats_data))
-  
-  if (length(available_stat_cols) == 0) {
-    return(salary_data %>% select(-player_norm))
-  }
-  
-  merged <- tryCatch({
-    salary_data %>%
-      left_join(
-        stats_data %>% select(player_norm, all_of(available_stat_cols)),
-        by = "player_norm"
-      ) %>%
-      select(-player_norm)
-  }, error = function(e) {
-    salary_data %>% select(-player_norm)
-  })
-  
-  return(merged)
-}
-
-# =============================================================================
-# UI
-# =============================================================================
 soccer_fanteam_contests_ui <- function(id) {
   ns <- NS(id)
   
-  gameweeks <- get_fanteam_soccer_gameweeks()
-  
-  if (length(gameweeks) > 0) {
-    gw_choices <- setNames(as.character(gameweeks), paste("Gameweek", gameweeks))
-    gw_selected <- as.character(gameweeks[1])
-  } else {
-    gw_choices <- c("No data found" = "")
-    gw_selected <- NULL
-  }
+  log_debug("soccer_fanteam_contests_ui() called with id:", id, level = "INFO")
   
   tagList(
-    # Page header
-    div(
-      class = "page-header",
-      tags$h2("FanTeam Contests"),
-      tags$p(class = "text-muted", "Team analysis and player salaries for FanTeam Monster contests")
-    ),
+    # Enable shinyjs for button active state toggling
+    shinyjs::useShinyjs(),
     
-    # Top filters: Gameweek and Status only
-    ui_card(
-      title = "Filters",
-      color = SOCCER_CARD_COLOR,
-      fluidRow(
-        column(4,
-               selectInput(ns("gameweek"), "Gameweek",
-                           choices = gw_choices,
-                           selected = gw_selected)
-        ),
-        column(4,
-               shinyWidgets::pickerInput(ns("status"), "Availability",
-                                         choices = c("Expected" = "expected",
-                                                     "Possible" = "possible",
-                                                     "Unexpected" = "unexpected",
-                                                     "Injured" = "injured",
-                                                     "Suspended" = "suspended"),
-                                         selected = c("expected", "possible", "unexpected"),
-                                         multiple = TRUE,
-                                         options = shinyWidgets::pickerOptions(
-                                           actionsBox = TRUE,
-                                           selectedTextFormat = "count > 2"
-                                         ))
-        ),
-        column(4,
-               div(style = "padding-top: 25px; font-size: 0.85rem; color: var(--text-muted);",
-                   "11 players: 1 GK, 3+ DEF, 3+ MID, 1+ FWD"))
-      )
-    ),
-    
-    tags$br(),
-    
-    # Team Summary Table - Position filter without ALL option, defaults to FWD
-    ui_card(
-      title = "Team Summary",
-      color = SOCCER_CARD_COLOR,
-      fluidRow(
-        column(3,
-               selectInput(ns("summary_position"), "Position Group",
-                           choices = c("Forwards" = "FWD",
-                                       "Midfielders" = "MID",
-                                       "Defenders" = "DEF",
-                                       "Goalkeepers" = "GK"),
-                           selected = "FWD")
-        ),
-        column(2,
-               selectInput(ns("summary_view"), "View",
-                           choices = c("Table" = "table",
-                                       "Plots" = "plots"),
-                           selected = "table")
-        ),
-        column(3,
-               # Only show when Plots view is selected
-               conditionalPanel(
-                 condition = sprintf("input['%s'] == 'plots'", ns("summary_view")),
-                 selectInput(ns("summary_plot_type"), "Plot Type",
-                             choices = c("Avg Salary vs Fantasy Opportunity" = "salary_vs_fos",
-                                         "Avg Salary vs Clean Sheet %" = "salary_vs_cs",
-                                         "Avg Salary vs Implied Goals For" = "salary_vs_gf",
-                                         "Avg Salary vs Implied Goals Against" = "salary_vs_ga"),
-                             selected = "salary_vs_fos")
-               )
-        ),
-        column(3,
-               # Only show xG Timeframe when Table view is selected
-               conditionalPanel(
-                 condition = sprintf("input['%s'] == 'table'", ns("summary_view")),
-                 selectInput(ns("xg_timeframe"), "xG Timeframe",
-                             choices = c("Whole Season" = "season",
-                                         "Last 6 Games" = "last6"),
-                             selected = "season")
-               )
-        )
-      ),
+    # JavaScript for bar updates, goals stepper, and auto-balancing
+    tags$head(tags$script(HTML("
+      $(document).ready(function() {
+        console.log('FanTeam module JS loaded');
+        
+        // Auto-balance probability inputs when one changes
+        $(document).on('change', '.fanteam-prob-inputs input[type=number]', function() {
+          var changed = $(this);
+          var container = changed.closest('.fanteam-prob-inputs');
+          var inputs = container.find('input[type=number]');
+          
+          // Get all three inputs
+          var homeInput = inputs.eq(0);
+          var drawInput = inputs.eq(1);
+          var awayInput = inputs.eq(2);
+          
+          var homeVal = parseFloat(homeInput.val()) || 0;
+          var drawVal = parseFloat(drawInput.val()) || 0;
+          var awayVal = parseFloat(awayInput.val()) || 0;
+          
+          var total = homeVal + drawVal + awayVal;
+          
+          if (total !== 100 && total > 0) {
+            // Figure out which input changed
+            var changedIdx = inputs.index(changed);
+            var changedVal = parseFloat(changed.val()) || 0;
+            
+            // Get the other two inputs
+            var others = inputs.not(changed);
+            var other1 = others.eq(0);
+            var other2 = others.eq(1);
+            var other1Val = parseFloat(other1.val()) || 0;
+            var other2Val = parseFloat(other2.val()) || 0;
+            var othersTotal = other1Val + other2Val;
+            
+            // Calculate remaining to distribute
+            var remaining = 100 - changedVal;
+            
+            if (remaining < 0) remaining = 0;
+            if (remaining > 100) remaining = 100;
+            
+            // Distribute proportionally among the other two
+            if (othersTotal > 0) {
+              var new1 = Math.round(remaining * (other1Val / othersTotal));
+              var new2 = remaining - new1;
+              other1.val(Math.max(0, new1));
+              other2.val(Math.max(0, new2));
+            } else {
+              // Split evenly if both are zero
+              other1.val(Math.round(remaining / 2));
+              other2.val(remaining - Math.round(remaining / 2));
+            }
+            
+            // Trigger change on the adjusted inputs to update Shiny
+            other1.trigger('change');
+            other2.trigger('change');
+          }
+        });
+        
+        // Goals stepper buttons
+        $(document).on('click', '.fanteam-goals-btn', function(e) {
+          e.preventDefault();
+          var btn = $(this);
+          var targetId = btn.attr('data-target');
+          var input = $('#' + targetId);
+          var isUp = btn.hasClass('goals-up');
+          
+          var current = parseFloat(input.val()) || 2.5;
+          var step = 0.1;
+          var newVal = isUp ? (current + step) : Math.max(0.5, current - step);
+          newVal = Math.round(newVal * 10) / 10;
+          
+          input.val(newVal).trigger('change');
+        });
+      });
       
-      # Dynamic content based on view selection
-      uiOutput(ns("team_summary_content"))
+      Shiny.addCustomMessageHandler('updateFanteamMatch', function(msg) {
+        // Normalize percentages for bar width
+        var total = msg.home + msg.draw + msg.away;
+        var normHome = total > 0 ? (msg.home / total * 100) : 33.3;
+        var normDraw = total > 0 ? (msg.draw / total * 100) : 33.3;
+        var normAway = total > 0 ? (msg.away / total * 100) : 33.3;
+        
+        var barHome = document.getElementById(msg.bar_home_id);
+        var barDraw = document.getElementById(msg.bar_draw_id);
+        var barAway = document.getElementById(msg.bar_away_id);
+        
+        if (barHome) { barHome.style.width = normHome.toFixed(1) + '%'; }
+        if (barDraw) { barDraw.style.width = normDraw.toFixed(1) + '%'; }
+        if (barAway) { barAway.style.width = normAway.toFixed(1) + '%'; }
+        
+        // Update my view values - Result, Shots, and CS%
+        var myResult = document.getElementById(msg.my_result_id);
+        var myHomeShots = document.getElementById(msg.my_home_shots_id);
+        var myAwayShots = document.getElementById(msg.my_away_shots_id);
+        var myHomeCS = document.getElementById(msg.my_home_cs_id);
+        var myAwayCS = document.getElementById(msg.my_away_cs_id);
+        var homeShotsArrow = document.getElementById(msg.home_shots_arrow_id);
+        var awayShotsArrow = document.getElementById(msg.away_shots_arrow_id);
+        var homeCSArrow = document.getElementById(msg.home_cs_arrow_id);
+        var awayCSArrow = document.getElementById(msg.away_cs_arrow_id);
+        
+        if (myResult) myResult.innerText = msg.my_result;
+        if (myHomeShots) myHomeShots.innerText = msg.my_home_shots;
+        if (myAwayShots) myAwayShots.innerText = msg.my_away_shots;
+        if (myHomeCS) myHomeCS.innerText = msg.my_home_cs;
+        if (myAwayCS) myAwayCS.innerText = msg.my_away_cs;
+        
+        if (homeShotsArrow) {
+          homeShotsArrow.className = 'fanteam-arrow' + (msg.home_shots_arrow === 'up' ? ' up' : (msg.home_shots_arrow === 'down' ? ' down' : ''));
+          homeShotsArrow.innerHTML = msg.home_shots_arrow === 'up' ? '▲' : (msg.home_shots_arrow === 'down' ? '▼' : '');
+        }
+        if (awayShotsArrow) {
+          awayShotsArrow.className = 'fanteam-arrow' + (msg.away_shots_arrow === 'up' ? ' up' : (msg.away_shots_arrow === 'down' ? ' down' : ''));
+          awayShotsArrow.innerHTML = msg.away_shots_arrow === 'up' ? '▲' : (msg.away_shots_arrow === 'down' ? '▼' : '');
+        }
+        if (homeCSArrow) {
+          homeCSArrow.className = 'fanteam-arrow' + (msg.home_cs_arrow === 'up' ? ' up' : (msg.home_cs_arrow === 'down' ? ' down' : ''));
+          homeCSArrow.innerHTML = msg.home_cs_arrow === 'up' ? '▲' : (msg.home_cs_arrow === 'down' ? '▼' : '');
+        }
+        if (awayCSArrow) {
+          awayCSArrow.className = 'fanteam-arrow' + (msg.away_cs_arrow === 'up' ? ' up' : (msg.away_cs_arrow === 'down' ? ' down' : ''));
+          awayCSArrow.innerHTML = msg.away_cs_arrow === 'up' ? '▲' : (msg.away_cs_arrow === 'down' ? '▼' : '');
+        }
+      });
+    "))),
+    
+    # Page header
+    div(class = "page-header",
+        tags$h2("FanTeam Projections"),
+        tags$p(class = "text-muted", "Adjust match probabilities to generate custom projections")
+    ),
+    
+    # FILTERS CARD
+    ui_card(title = "Contest Selection", color = "sage",
+            fluidRow(
+              column(3, shinyWidgets::pickerInput(ns("gameweek"), "Gameweek", choices = c("Loading..." = ""), selected = NULL)),
+              column(4, shinyWidgets::pickerInput(ns("slate"), "Slate", choices = c("Classic (Full)" = "classic"), selected = "classic")),
+              column(5, div(style = "padding-top: 25px; text-align: right;",
+                            tags$button(id = ns("refresh_data"), class = "btn btn-refresh-subtle", type = "button", "Refresh")
+              ))
+            )
     ),
     
     tags$br(),
     
-    # Position filter for player table
-    ui_card(
-      title = "Player Salaries",
-      color = SOCCER_CARD_COLOR,
-      fluidRow(
-        column(3,
-               selectInput(ns("position"), "Position",
-                           choices = c("All Positions" = "all", "GK", "DEF", "MID", "FWD"),
-                           selected = "all")
-        ),
-        column(3,
-               shinyWidgets::pickerInput(ns("team"), "Team",
-                                         choices = c("All Teams" = "all"),
-                                         selected = "all",
-                                         options = shinyWidgets::pickerOptions(liveSearch = TRUE, size = 10))
-        ),
-        column(3,
-               selectInput(ns("sort_by"), "Sort By",
-                           choices = c("Salary (High to Low)" = "salary_desc",
-                                       "Salary (Low to High)" = "salary_asc",
-                                       "Total Points" = "points_desc",
-                                       "Avg Points" = "avg_desc",
-                                       "Player Name" = "player"),
-                           selected = "salary_desc")
-        ),
-        column(3,
-               numericInput(ns("salary_cap"), "Salary Cap",
-                            value = 118, min = 50, max = 200, step = 1)
-        )
-      ),
-      uiOutput(ns("salary_table"))
-    )
+    # MATCH ODDS CARD
+    ui_card(title = "Your View", color = "sage",
+            tags$p(class = "text-muted", style = "font-size: 0.85rem; margin-bottom: 1rem;",
+                   "Adjust win/draw/loss probabilities and total goals."
+            ),
+            div(id = ns("match_grid_wrapper"), 
+                style = "display: grid; grid-template-columns: repeat(2, 1fr); gap: 1.25rem;",
+                uiOutput(ns("matches_ui"))
+            ),
+            div(style = "margin-top: 1.5rem; text-align: center;",
+                actionButton(ns("calculate"), "Calculate Projections", class = "btn-primary")
+            )
+    ),
+    
+    tags$br(),
+    
+    # PROJECTIONS CARD  
+    ui_card(title = "Projected Points", color = "sage",
+            # Chart controls row 1
+            div(style = "display: flex; align-items: center; gap: 1.5rem; margin-bottom: 0.75rem; flex-wrap: wrap;",
+                # View toggle
+                div(style = "display: flex; align-items: center; gap: 0.5rem;",
+                    span(style = "font-weight: 600; color: #3B3226; margin-right: 0.25rem;", "View:"),
+                    actionButton(ns("view_value"), "Value", class = "btn-position-filter btn-view-toggle active"),
+                    actionButton(ns("view_delta"), "Adjustments", class = "btn-position-filter btn-view-toggle")
+                ),
+                # Position filter
+                div(style = "display: flex; align-items: center; gap: 0.5rem;",
+                    span(style = "font-weight: 600; color: #3B3226; margin-right: 0.25rem;", "Position:"),
+                    actionButton(ns("pos_gk"), "GK", class = "btn-position-filter btn-pos-toggle"),
+                    actionButton(ns("pos_def"), "DEF", class = "btn-position-filter btn-pos-toggle"),
+                    actionButton(ns("pos_mid"), "MID", class = "btn-position-filter btn-pos-toggle"),
+                    actionButton(ns("pos_fwd"), "FWD", class = "btn-position-filter btn-pos-toggle active")
+                ),
+                # Team highlight selector
+                div(style = "display: flex; align-items: center; gap: 0.5rem;",
+                    span(style = "font-weight: 600; color: #3B3226; margin-right: 0.25rem;", "Highlight:"),
+                    shinyWidgets::pickerInput(
+                      ns("highlight_team"), 
+                      label = NULL,
+                      choices = c("None" = ""),
+                      selected = "",
+                      options = list(
+                        style = "btn-outline-secondary",
+                        size = 10,
+                        `live-search` = TRUE
+                      ),
+                      width = "180px"
+                    )
+                )
+            ),
+            # Chart controls row 2 - FOS weight presets
+            div(style = "display: flex; align-items: center; gap: 1rem; margin-bottom: 1rem; flex-wrap: wrap;",
+                span(style = "font-weight: 600; color: #3B3226; font-size: 0.9rem;", "FOS Weights:"),
+                # Preset buttons
+                div(style = "display: flex; align-items: center; gap: 0.5rem;",
+                    actionButton(ns("fos_cs_heavy"), "CS Heavy", class = "btn-position-filter btn-fos-toggle", 
+                                 title = "80% Clean Sheet / 20% Goals"),
+                    actionButton(ns("fos_balanced"), "Balanced", class = "btn-position-filter btn-fos-toggle",
+                                 title = "50% Clean Sheet / 50% Goals"),
+                    actionButton(ns("fos_attack_lean"), "Attack Lean", class = "btn-position-filter btn-fos-toggle",
+                                 title = "25% Clean Sheet / 75% Goals"),
+                    actionButton(ns("fos_attack_heavy"), "Attack Heavy", class = "btn-position-filter btn-fos-toggle active",
+                                 title = "10% Clean Sheet / 90% Goals")
+                ),
+                # Current weights display
+                div(style = "display: flex; align-items: center; gap: 0.25rem; padding: 6px 12px; background: #F5F3F0; border-radius: 6px; font-size: 0.85rem;",
+                    span(style = "color: #5C4E3D;", "CS:"),
+                    span(style = "font-weight: 600; color: #3B3226;", textOutput(ns("fos_cs_weight_display"), inline = TRUE)),
+                    span(style = "color: #5C4E3D; margin-left: 8px;", "Goals:"),
+                    span(style = "font-weight: 600; color: #3B3226;", textOutput(ns("fos_gf_weight_display"), inline = TRUE))
+                )
+            ),
+            # Chart output with external axis labels wrapper
+            uiOutput(ns("chart_wrapper"))
+    ),
+    
+    # CSS - Part 1: Grid wrapper rules (need ns() interpolation)
+    tags$style(HTML(sprintf("
+      #%s > .shiny-html-output { display: contents; }
+      #%s { display: grid !important; grid-template-columns: 1fr 1fr !important; gap: 1.25rem !important; }
+      @media (max-width: 900px) { #%s { grid-template-columns: 1fr !important; } }
+    ", ns("match_grid_wrapper"), ns("match_grid_wrapper"), ns("match_grid_wrapper")))),
+    
+    # CSS - Part 2: All other styles (no interpolation needed)
+    tags$style(HTML("
+      /* Chart filter buttons - matching NFL handbuild style */
+      .btn-position-filter {
+        padding: 6px 16px !important;
+        font-size: 0.85rem !important;
+        font-weight: 600 !important;
+        border: 2px solid #3B3226 !important;
+        border-radius: 6px !important;
+        background: #ffffff !important;
+        color: #3B3226 !important;
+        box-shadow: 3px 3px 0px #3B3226 !important;
+        transition: all 0.1s ease !important;
+        position: relative !important;
+        top: 0 !important;
+        left: 0 !important;
+        cursor: pointer !important;
+        outline: none !important;
+        text-align: center !important;
+      }
+      
+      /* Fixed widths for button groups */
+      .btn-view-toggle {
+        min-width: 100px !important;
+      }
+      .btn-pos-toggle {
+        min-width: 55px !important;
+      }
+      .btn-fos-toggle {
+        min-width: 95px !important;
+        font-size: 0.8rem !important;
+        padding: 5px 12px !important;
+      }
+      
+      .btn-position-filter:hover:not(.active) {
+        background: #f5f5f5 !important;
+      }
+      
+      .btn-position-filter:focus {
+        outline: none !important;
+      }
+      
+      /* ACTIVE state - dusty mauve like NFL */
+      .btn-position-filter.active {
+        background: #9B8A9E !important;
+        color: #ffffff !important;
+        border-color: #3B3226 !important;
+        box-shadow: none !important;
+        top: 3px !important;
+        left: 3px !important;
+      }
+      
+      .btn-position-filter.active:hover {
+        background: #8A7A8D !important;
+      }
+      
+      .fanteam-match {
+        background: #FFFFFF;
+        border: 3px solid #3B3226;
+        border-radius: 10px;
+        padding: 1rem;
+        box-shadow: 4px 4px 0 #3B3226;
+      }
+      
+      /* Header - team names larger */
+      .fanteam-match-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 0.75rem;
+      }
+      .fanteam-team {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        font-weight: 600;
+        font-size: 1.15rem;
+        color: #3B3226;
+      }
+      .fanteam-team-logo { width: 32px; height: 32px; object-fit: contain; }
+      
+      /* Main controls: [HOME DRAW AWAY inputs + bar] [GOALS stepper] */
+      .fanteam-controls {
+        display: flex;
+        gap: 0.5rem;
+        margin-bottom: 0.75rem;
+      }
+      
+      /* Left section: probability inputs and bar */
+      .fanteam-probs-section {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+      }
+      
+      /* Probability inputs row */
+      .fanteam-prob-inputs {
+        display: flex;
+        justify-content: space-between;
+        margin-bottom: 0.5rem;
+      }
+      .fanteam-input-group {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        flex: 1;
+      }
+      .fanteam-input-label {
+        font-size: 0.7rem;
+        color: #7A7A7A;
+        text-transform: uppercase;
+        font-weight: 600;
+        margin-bottom: 0.25rem;
+        height: 16px;
+      }
+      /* App convention: 3px border, 10px radius */
+      .fanteam-input-group input[type=number] {
+        width: 100%;
+        max-width: 58px;
+        text-align: center;
+        font-weight: 600;
+        font-size: 0.95rem;
+        padding: 0.35rem 0.2rem;
+        border: 3px solid #3B3226;
+        border-radius: 10px;
+        background: #FFFFFF;
+        height: 36px;
+        box-sizing: border-box;
+      }
+      .fanteam-input-group input[type=number]:focus {
+        outline: none;
+        border-color: #B48EAD;
+      }
+      .fanteam-input-group .form-group { margin-bottom: 0 !important; }
+      .fanteam-input-group .shiny-input-container { width: 100% !important; max-width: 58px; }
+      
+      /* Probability bar - taller with larger text */
+      .fanteam-prob-bar {
+        display: flex;
+        height: 44px;
+        border-radius: 10px;
+        overflow: hidden;
+        border: 3px solid #3B3226;
+      }
+      .fanteam-prob-segment {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 0.9rem;
+        font-weight: 600;
+        color: #3B3226;
+        text-shadow: 0 1px 2px rgba(0,0,0,0.3);
+        transition: width 0.2s ease;
+        min-width: 28px;
+      }
+      .fanteam-prob-segment.home { background: #D4B56A; }
+      .fanteam-prob-segment.draw { background: #D5D5D5; }
+      .fanteam-prob-segment.away { background: #8FB3C4; }
+      
+      /* Goals stepper section */
+      .fanteam-goals-section {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        min-width: 60px;
+      }
+      .fanteam-goals-section .fanteam-input-label {
+        margin-bottom: 0.25rem;
+      }
+      .fanteam-goals-stepper {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: space-between;
+        height: calc(36px + 0.5rem + 44px);
+      }
+      .fanteam-goals-btn {
+        width: 44px;
+        height: 20px;
+        border: 3px solid #3B3226;
+        border-radius: 6px;
+        background: #F5F0EB;
+        cursor: pointer;
+        font-size: 0.7rem;
+        line-height: 1;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: #3B3226;
+        font-weight: bold;
+      }
+      .fanteam-goals-btn:hover { background: #E5E9F0; }
+      .fanteam-goals-btn:active { background: #D8DEE9; }
+      
+      /* Style the numericInput inside goals stepper to look like plain value */
+      .fanteam-goals-stepper .shiny-input-container {
+        width: auto !important;
+        margin: 0 !important;
+      }
+      .fanteam-goals-stepper .form-group {
+        margin-bottom: 0 !important;
+      }
+      .fanteam-goals-stepper input[type=number] {
+        width: 50px !important;
+        text-align: center !important;
+        font-size: 1.3rem !important;
+        font-weight: 700 !important;
+        color: #3B3226 !important;
+        border: none !important;
+        background: transparent !important;
+        padding: 0 !important;
+        -moz-appearance: textfield !important;
+      }
+      .fanteam-goals-stepper input[type=number]::-webkit-inner-spin-button,
+      .fanteam-goals-stepper input[type=number]::-webkit-outer-spin-button {
+        -webkit-appearance: none;
+        margin: 0;
+      }
+      .fanteam-goals-stepper input[type=number]:focus {
+        outline: none !important;
+        box-shadow: none !important;
+      }
+      
+      /* Results */
+      .fanteam-results {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 1rem;
+        padding-top: 0.5rem;
+        border-top: 1px solid #E5E9F0;
+      }
+      .fanteam-result-col { display: flex; flex-direction: column; gap: 4px; }
+      .fanteam-result-header { 
+        font-size: 0.7rem; 
+        color: #7A7A7A; 
+        text-transform: uppercase; 
+        font-weight: 600; 
+        margin-bottom: 0.25rem; 
+      }
+      .fanteam-result-row { 
+        display: flex; 
+        justify-content: space-between; 
+        align-items: center;
+        font-size: 0.8rem;
+      }
+      .fanteam-result-label { color: #5C4E3D; }
+      .fanteam-result-value { 
+        font-weight: 600; 
+        color: #3B3226; 
+        text-align: right;
+        min-width: 70px;
+      }
+      .fanteam-arrow {
+        display: inline-block;
+        width: 16px;
+        text-align: center;
+        font-size: 0.75rem;
+        margin-right: 4px;
+      }
+      .fanteam-arrow.up { color: #C9A227; font-weight: bold; }
+      .fanteam-arrow.down { color: #4A90A4; font-weight: bold; }
+      
+      .fanteam-pos-summary { display: flex; gap: 1rem; flex-wrap: wrap; margin-bottom: 0.5rem; }
+      .fanteam-pos-box { background: #F5F0EB; padding: 0.5rem 1rem; border-radius: 6px; text-align: center; border: 1px solid #E5E9F0; }
+      .fanteam-pos-box-label { font-weight: 600; color: #3B3226; }
+      .fanteam-pos-box-value { font-size: 0.85rem; color: #7A7A7A; }
+    "))
   )
 }
 
-# =============================================================================
-# SERVER
-# =============================================================================
-soccer_fanteam_contests_server <- function(id) {
+soccer_fanteam_contests_server <- function(id, soccer_data = NULL) {
   moduleServer(id, function(input, output, session) {
     ns <- session$ns
     
+    log_debug("========================================", level = "INFO")
+    log_debug("soccer_fanteam_contests_server() initialized", level = "INFO")
+    log_debug("========================================", level = "INFO")
+    
     rv <- reactiveValues(
-      salary_data = NULL,
-      team_xg_season = NULL,
-      team_xg_last6 = NULL,
-      loading = FALSE
+      salaries = NULL, odds = NULL, matches = NULL,
+      projections = NULL, initialized = FALSE,
+      chart_view = "value",      # "value" or "delta"
+      chart_position = "FWD",    # "GK", "DEF", "MID", "FWD"
+      fos_preset = "attack_heavy" # "cs_heavy", "balanced", "attack_lean", "attack_heavy"
     )
     
-    # Load data on gameweek change
+    # =========================================================================
+    # CHART FILTER BUTTON OBSERVERS
+    # =========================================================================
+    
+    # Helper to update view button active states
+    update_view_buttons <- function(active_view) {
+      views <- c("value", "delta")
+      for (v in views) {
+        btn_id <- paste0("view_", v)
+        if (v == active_view) {
+          shinyjs::addClass(id = btn_id, class = "active")
+        } else {
+          shinyjs::removeClass(id = btn_id, class = "active")
+        }
+      }
+    }
+    
+    # Helper to update position button active states
+    update_pos_buttons <- function(active_pos) {
+      positions <- c("gk", "def", "mid", "fwd")
+      for (p in positions) {
+        btn_id <- paste0("pos_", p)
+        if (tolower(p) == tolower(active_pos)) {
+          shinyjs::addClass(id = btn_id, class = "active")
+        } else {
+          shinyjs::removeClass(id = btn_id, class = "active")
+        }
+      }
+    }
+    
+    # View button observers
+    observeEvent(input$view_value, {
+      rv$chart_view <- "value"
+      update_view_buttons("value")
+    })
+    observeEvent(input$view_delta, {
+      rv$chart_view <- "delta"
+      update_view_buttons("delta")
+    })
+    
+    # FOS preset definitions
+    fos_presets <- list(
+      cs_heavy = c(cs = 0.80, gf = 0.20),
+      balanced = c(cs = 0.50, gf = 0.50),
+      attack_lean = c(cs = 0.25, gf = 0.75),
+      attack_heavy = c(cs = 0.10, gf = 0.90)
+    )
+    
+    # Helper to update FOS button active states
+    update_fos_buttons <- function(active_preset) {
+      presets <- c("cs_heavy", "balanced", "attack_lean", "attack_heavy")
+      for (preset in presets) {
+        btn_id <- paste0("fos_", preset)
+        if (preset == active_preset) {
+          shinyjs::addClass(id = btn_id, class = "active")
+        } else {
+          shinyjs::removeClass(id = btn_id, class = "active")
+        }
+      }
+    }
+    
+    # Position button observers - auto-select appropriate FOS preset
+    observeEvent(input$pos_gk, {
+      rv$chart_position <- "GK"
+      update_pos_buttons("gk")
+      rv$fos_preset <- "cs_heavy"
+      update_fos_buttons("cs_heavy")
+    })
+    observeEvent(input$pos_def, {
+      rv$chart_position <- "DEF"
+      update_pos_buttons("def")
+      rv$fos_preset <- "balanced"
+      update_fos_buttons("balanced")
+    })
+    observeEvent(input$pos_mid, {
+      rv$chart_position <- "MID"
+      update_pos_buttons("mid")
+      rv$fos_preset <- "attack_lean"
+      update_fos_buttons("attack_lean")
+    })
+    observeEvent(input$pos_fwd, {
+      rv$chart_position <- "FWD"
+      update_pos_buttons("fwd")
+      rv$fos_preset <- "attack_heavy"
+      update_fos_buttons("attack_heavy")
+    })
+    
+    # FOS preset button observers
+    observeEvent(input$fos_cs_heavy, {
+      rv$fos_preset <- "cs_heavy"
+      update_fos_buttons("cs_heavy")
+    })
+    observeEvent(input$fos_balanced, {
+      rv$fos_preset <- "balanced"
+      update_fos_buttons("balanced")
+    })
+    observeEvent(input$fos_attack_lean, {
+      rv$fos_preset <- "attack_lean"
+      update_fos_buttons("attack_lean")
+    })
+    observeEvent(input$fos_attack_heavy, {
+      rv$fos_preset <- "attack_heavy"
+      update_fos_buttons("attack_heavy")
+    })
+    
+    # FOS weights display outputs
+    output$fos_cs_weight_display <- renderText({
+      preset <- rv$fos_preset %||% "attack_heavy"
+      weights <- fos_presets[[preset]]
+      paste0(round(weights["cs"] * 100), "%")
+    })
+    
+    output$fos_gf_weight_display <- renderText({
+      preset <- rv$fos_preset %||% "attack_heavy"
+      weights <- fos_presets[[preset]]
+      paste0(round(weights["gf"] * 100), "%")
+    })
+    
+    # Reactive FOS weights based on preset
+    fos_weights_reactive <- reactive({
+      preset <- rv$fos_preset %||% "attack_heavy"
+      fos_presets[[preset]]
+    })
+    
+    # Initialize gameweeks
     observe({
-      gameweek <- input$gameweek
-      if (is.null(gameweek) || gameweek == "") return()
+      if (rv$initialized) return()
+      log_debug("Initializing gameweek choices...", level = "INFO")
+      gameweeks <- tryCatch(get_fanteam_soccer_gameweeks(), error = function(e) c())
+      if (length(gameweeks) > 0) {
+        shinyWidgets::updatePickerInput(session, "gameweek",
+                                        choices = setNames(gameweeks, paste("Gameweek", gameweeks)),
+                                        selected = gameweeks[1]
+        )
+      }
+      rv$initialized <- TRUE
+    })
+    
+    # Update slates
+    observeEvent(input$gameweek, {
+      req(input$gameweek)
+      gw <- as.integer(input$gameweek)
+      slate_choices <- c("Classic (Full)" = "classic")
+      if (dir.exists(FANTEAM_SOCCER_DIR)) {
+        pattern <- sprintf("week_%d_.*_vs_.*\\.csv", gw)
+        for (f in list.files(FANTEAM_SOCCER_DIR, pattern = pattern)) {
+          match_info <- gsub(sprintf("week_%d_(.*)_vs_(.*)\\.csv", gw), "\\1 vs \\2", f)
+          slate_choices <- c(slate_choices, setNames(f, gsub("_", " ", match_info)))
+        }
+      }
+      shinyWidgets::updatePickerInput(session, "slate", choices = slate_choices, selected = "classic")
+    })
+    
+    # Load data - ALL logic inlined to avoid reactive scope issues
+    observeEvent(list(input$gameweek, input$slate), {
+      req(input$gameweek)
+      gw <- as.integer(input$gameweek)
+      current_slate <- input$slate
+      log_debug("Loading data for GW:", gw, "Slate:", current_slate, level = "INFO")
       
-      rv$loading <- TRUE
+      # Load salaries
+      salaries_data <- tryCatch({
+        if (is.null(current_slate) || current_slate == "classic") {
+          load_fanteam_soccer_with_logos(gw)
+        } else {
+          fp <- file.path(FANTEAM_SOCCER_DIR, current_slate)
+          if (file.exists(fp)) {
+            read_csv(fp, show_col_types = FALSE) %>% clean_names() %>%
+              mutate(
+                player = paste(f_name, name),
+                team = ifelse(club %in% names(FANTEAM_CLUB_MAPPING), FANTEAM_CLUB_MAPPING[club], club),
+                position = case_when(tolower(position) == "goalkeeper" ~ "GK", tolower(position) == "defender" ~ "DEF",
+                                     tolower(position) == "midfielder" ~ "MID", tolower(position) == "forward" ~ "FWD", TRUE ~ "MID"),
+                salary = as.numeric(price), team_normalized = normalize_team_names(team),
+                logo_path = sapply(team_normalized, function(t) get_soccer_team_logo(t) %||% "")
+              )
+          } else NULL
+        }
+      }, error = function(e) { log_debug("Error loading salaries:", e$message, level = "ERROR"); NULL })
       
-      # Load salary data
-      data <- load_fanteam_soccer_with_logos(as.integer(gameweek))
+      rv$salaries <- salaries_data
       
-      if (!is.null(data) && nrow(data) > 0) {
-        # Player matching
-        tryCatch({
-          shot_data <- load_shot_data()
-          player_data <- load_player_match_stats()
+      if (!is.null(salaries_data)) {
+        log_debug("Loaded", nrow(salaries_data), "players", level = "INFO")
+      }
+      
+      # Load odds using existing function
+      odds_data <- tryCatch({
+        od <- load_fanteam_odds(gw)
+        if (!is.null(od)) {
+          log_debug("Loaded odds with columns:", paste(names(od), collapse = ", "), level = "INFO")
+          log_debug("Odds has", nrow(od), "rows", level = "INFO")
+        }
+        od
+      }, error = function(e) { 
+        log_debug("Error loading odds:", e$message, level = "ERROR")
+        NULL 
+      })
+      
+      rv$odds <- odds_data
+      
+      # Build matches - ALL INLINED
+      teams <- if (!is.null(salaries_data) && nrow(salaries_data) > 0) {
+        unique(salaries_data$team_normalized[!is.na(salaries_data$team_normalized)])
+      } else NULL
+      
+      if (is.null(teams) || length(teams) == 0) { 
+        rv$matches <- NULL
+        return()
+      }
+      
+      # Filter for slate if needed
+      if (!is.null(current_slate) && current_slate != "classic") {
+        mi <- gsub("week_\\d+_(.*)_vs_(.*)\\.csv", "\\1|\\2", current_slate)
+        st <- normalize_team_names(gsub("_", " ", strsplit(mi, "\\|")[[1]]))
+        teams <- intersect(teams, st)
+      }
+      
+      log_debug("Building matches for", length(teams), "teams", level = "INFO")
+      
+      # Build matches from odds data (team-centric format)
+      if (!is.null(odds_data) && nrow(odds_data) > 0 && "odds_team_normalized" %in% names(odds_data)) {
+        log_debug("Using odds data to build matches", level = "INFO")
+        
+        # Filter to teams in our slate and home teams only (to avoid duplicates)
+        home_odds <- odds_data %>%
+          filter(
+            odds_team_normalized %in% teams,
+            home_away == "Home" | home_away == "H"
+          )
+        
+        log_debug("Found", nrow(home_odds), "home team rows in odds", level = "INFO")
+        log_debug("Available columns:", paste(names(home_odds), collapse = ", "), level = "INFO")
+        log_debug("Has win_pct:", "win_pct" %in% names(home_odds), 
+                  "Has draw_pct:", "draw_pct" %in% names(home_odds),
+                  "Has implied_team_goals:", "implied_team_goals" %in% names(home_odds), level = "INFO")
+        
+        if (nrow(home_odds) > 0) {
+          # Add default columns if missing (avoids errors in transmute)
+          if (!"win_pct" %in% names(home_odds)) home_odds$win_pct <- 40
+          if (!"draw_pct" %in% names(home_odds)) home_odds$draw_pct <- 30
+          if (!"implied_team_goals" %in% names(home_odds)) home_odds$implied_team_goals <- 1.3
+          if (!"implied_opp_goals" %in% names(home_odds)) home_odds$implied_opp_goals <- 1.2
           
-          if ((!is.null(shot_data) && nrow(shot_data) > 0) || 
-              (!is.null(player_data) && nrow(player_data) > 0)) {
-            fbref_players <- get_fbref_player_list(shot_data, player_data)
-            if (nrow(fbref_players) > 0) {
-              data <- match_fanteam_to_fbref(data, fbref_players, 
-                                             gameweek = as.integer(gameweek),
-                                             write_unmatched = TRUE)
-            }
-          }
-        }, error = function(e) {
-          log_debug("Player matching skipped:", e$message, level = "WARN")
-        })
-        
-        # Stats merge
-        tryCatch({
-          stats_data <- load_fanteam_stats_overview()
-          if (!is.null(stats_data) && nrow(stats_data) > 0) {
-            data <- merge_fanteam_with_stats(data, stats_data)
-          }
-        }, error = function(e) {
-          log_debug("Stats merge error:", e$message, level = "ERROR")
-        })
-        
-        # Odds merge
-        tryCatch({
-          log_debug("Loading odds for gameweek:", gameweek, level = "INFO")
-          odds_data <- load_fanteam_odds(as.integer(gameweek))
-          if (!is.null(odds_data)) {
-            log_debug(sprintf("Odds loaded: %d rows", nrow(odds_data)), level = "INFO")
-          } else {
-            log_debug("Odds: NULL returned from load_fanteam_odds", level = "WARN")
-          }
-          data <- merge_fanteam_with_odds(data, odds_data)
-        }, error = function(e) {
-          log_debug("Odds merge error:", e$message, level = "WARN")
-          data$opponent <- NA_character_
-          data$home_away <- NA_character_
-          data$implied_team_goals <- NA_real_
-          data$implied_opp_goals <- NA_real_
-          data$clean_sheet_pct <- NA_real_
-        })
-        
-        rv$salary_data <- data
-        
-        # Calculate team xG stats from FBref - BOTH season and last6
-        tryCatch({
-          shot_data <- load_shot_data()
-          team_goals_data <- load_team_goals()
+          matches_data <- home_odds %>%
+            transmute(
+              match_id = row_number(),
+              home_team = odds_team_normalized,
+              away_team = odds_opponent_normalized,
+              market_home_win = as.numeric(win_pct),
+              market_draw = as.numeric(draw_pct),
+              market_away_win = 100 - market_home_win - market_draw,
+              market_home_goals = as.numeric(implied_team_goals),
+              market_away_goals = as.numeric(implied_opp_goals),
+              market_total = market_home_goals + market_away_goals
+            )
           
-          if (!is.null(shot_data) && nrow(shot_data) > 0) {
-            # Season stats
-            rv$team_xg_season <- calculate_all_team_stats(
-              shot_data, 
-              "Premier League", 
-              timeframe = "season",
-              team_goals_data = team_goals_data
-            )
-            log_debug(sprintf("Loaded season xG stats for %d teams", 
-                              if (!is.null(rv$team_xg_season)) nrow(rv$team_xg_season) else 0), level = "INFO")
-            
-            # Last 6 games stats
-            rv$team_xg_last6 <- calculate_all_team_stats(
-              shot_data, 
-              "Premier League", 
-              timeframe = "last6",
-              team_goals_data = team_goals_data
-            )
-            log_debug(sprintf("Loaded last6 xG stats for %d teams", 
-                              if (!is.null(rv$team_xg_last6)) nrow(rv$team_xg_last6) else 0), level = "INFO")
+          rv$matches <- matches_data
+          
+          log_debug("Built", nrow(matches_data), "matches from odds", level = "INFO")
+          if (nrow(matches_data) > 0) {
+            log_debug("First match:", matches_data$home_team[1], "vs", matches_data$away_team[1], 
+                      "H:", round(matches_data$market_home_win[1]), "D:", round(matches_data$market_draw[1]), 
+                      "A:", round(matches_data$market_away_win[1]), 
+                      "Goals:", matches_data$market_home_goals[1], "-", matches_data$market_away_goals[1], level = "INFO")
           }
-        }, error = function(e) {
-          log_debug("Team xG calculation error:", e$message, level = "WARN")
-        })
-        
-        # Update team dropdown
-        teams <- sort(unique(data$team_normalized[!is.na(data$team_normalized)]))
-        if (length(teams) > 0) {
-          team_choices <- c("all", teams)
-          names(team_choices) <- c("All Teams", teams)
-          shinyWidgets::updatePickerInput(session, "team", choices = team_choices, selected = "all")
+          return()
         }
       }
       
-      rv$loading <- FALSE
+      # Fallback: create matches from team pairs
+      log_debug("No odds data - creating default matches from team pairs", level = "WARN")
+      n <- length(teams)
+      if (n < 2) { rv$matches <- NULL; return() }
+      
+      rv$matches <- data.frame(
+        match_id = seq_len(floor(n/2)), 
+        home_team = teams[seq(1, n-1, 2)], 
+        away_team = teams[seq(2, n, 2)],
+        market_home_win = 40, market_draw = 30, market_away_win = 30, 
+        market_total = 2.5, market_home_goals = 1.3, market_away_goals = 1.2,
+        stringsAsFactors = FALSE
+      )
+    })
+    
+    # ==========================================================================
+    # CALCULATIONS
+    # Goals distributed based on win probabilities:
+    #   home_share = home% + 0.5*draw%
+    #   home_goals = total * home_share / (home_share + away_share)
+    # Shots estimated from win% and total goals
+    # ==========================================================================
+    
+    calc_goals_from_probs <- function(home_pct, draw_pct, away_pct, total_goals) {
+      home_share <- home_pct + 0.5 * draw_pct
+      away_share <- away_pct + 0.5 * draw_pct
+      total_share <- home_share + away_share
+      
+      if (total_share > 0) {
+        home_goals <- total_goals * home_share / total_share
+        away_goals <- total_goals * away_share / total_share
+      } else {
+        home_goals <- total_goals / 2
+        away_goals <- total_goals / 2
+      }
+      
+      list(home = home_goals, away = away_goals)
+    }
+    
+    calc_shots <- function(win_pct, total_goals, is_home) {
+      c <- if (is_home) FANTEAM_COEFFICIENTS$home_shots else FANTEAM_COEFFICIENTS$away_shots
+      c$intercept + (win_pct * c$win_pct) + (total_goals * c$total_goals)
+    }
+    
+    calc_sot <- function(win_pct, total_goals, is_home) {
+      c <- if (is_home) FANTEAM_COEFFICIENTS$home_sot else FANTEAM_COEFFICIENTS$away_sot
+      c$intercept + (win_pct * c$win_pct) + (total_goals * c$total_goals)
+    }
+    
+    # Render matches
+    output$matches_ui <- renderUI({
+      req(rv$matches)
+      matches <- rv$matches
+      if (nrow(matches) == 0) return(tags$p(class = "text-muted", "No matches available."))
+      
+      log_debug("Rendering", nrow(matches), "match cards", level = "INFO")
+      
+      tagList(
+        lapply(1:nrow(matches), function(i) {
+          m <- matches[i, ]
+          home_logo <- get_soccer_team_logo(m$home_team)
+          away_logo <- get_soccer_team_logo(m$away_team)
+          
+          # Market shots and SOT using empirical models
+          mkt_hs <- calc_shots(m$market_home_win, m$market_total, TRUE)
+          mkt_as <- calc_shots(m$market_away_win, m$market_total, FALSE)
+          mkt_hsot <- calc_sot(m$market_home_win, m$market_total, TRUE)
+          mkt_asot <- calc_sot(m$market_away_win, m$market_total, FALSE)
+          
+          # Market clean sheet % (Poisson: CS% = exp(-goals_against) * 100)
+          mkt_hcs <- exp(-m$market_away_goals) * 100
+          mkt_acs <- exp(-m$market_home_goals) * 100
+          
+          # Normalize bar widths
+          bar_total <- m$market_home_win + m$market_draw + m$market_away_win
+          norm_h <- if (bar_total > 0) m$market_home_win / bar_total * 100 else 33.3
+          norm_d <- if (bar_total > 0) m$market_draw / bar_total * 100 else 33.3
+          norm_a <- if (bar_total > 0) m$market_away_win / bar_total * 100 else 33.3
+          
+          div(class = "fanteam-match",
+              # Row 1: Team header
+              div(class = "fanteam-match-header",
+                  div(class = "fanteam-team",
+                      if (!is.null(home_logo)) tags$img(src = home_logo, class = "fanteam-team-logo"),
+                      span(m$home_team)
+                  ),
+                  div(class = "fanteam-team",
+                      span(m$away_team),
+                      if (!is.null(away_logo)) tags$img(src = away_logo, class = "fanteam-team-logo")
+                  )
+              ),
+              
+              # Row 2: Controls - [Probs section] [Goals stepper]
+              div(class = "fanteam-controls",
+                  # Left: HOME/DRAW/AWAY inputs + bar
+                  div(class = "fanteam-probs-section",
+                      div(class = "fanteam-prob-inputs",
+                          div(class = "fanteam-input-group",
+                              span(class = "fanteam-input-label", "HOME"),
+                              numericInput(ns(paste0("home_", i)), NULL, round(m$market_home_win), 0, 100, 1)
+                          ),
+                          div(class = "fanteam-input-group",
+                              span(class = "fanteam-input-label", "DRAW"),
+                              numericInput(ns(paste0("draw_", i)), NULL, round(m$market_draw), 0, 100, 1)
+                          ),
+                          div(class = "fanteam-input-group",
+                              span(class = "fanteam-input-label", "AWAY"),
+                              numericInput(ns(paste0("away_", i)), NULL, round(m$market_away_win), 0, 100, 1)
+                          )
+                      ),
+                      div(class = "fanteam-prob-bar",
+                          div(class = "fanteam-prob-segment home", id = ns(paste0("bar_h_", i)),
+                              style = sprintf("width:%.1f%%;", norm_h)),
+                          div(class = "fanteam-prob-segment draw", id = ns(paste0("bar_d_", i)),
+                              style = sprintf("width:%.1f%%;", norm_d)),
+                          div(class = "fanteam-prob-segment away", id = ns(paste0("bar_a_", i)),
+                              style = sprintf("width:%.1f%%;", norm_a))
+                      )
+                  ),
+                  # Right: Goals stepper - using numericInput styled as display
+                  div(class = "fanteam-goals-section",
+                      span(class = "fanteam-input-label", "GOALS"),
+                      div(class = "fanteam-goals-stepper",
+                          tags$button(type = "button", class = "fanteam-goals-btn goals-up", 
+                                      `data-target` = ns(paste0("total_", i)), HTML("&#9650;")),
+                          numericInput(ns(paste0("total_", i)), NULL, round(m$market_total, 1), 0.5, 8, 0.1),
+                          tags$button(type = "button", class = "fanteam-goals-btn goals-down", 
+                                      `data-target` = ns(paste0("total_", i)), HTML("&#9660;"))
+                      )
+                  )
+              ),
+              
+              # Row 3: Results
+              div(class = "fanteam-results",
+                  div(class = "fanteam-result-col",
+                      div(class = "fanteam-result-header", "Market Implied"),
+                      div(class = "fanteam-result-row", 
+                          span(class = "fanteam-result-label", "Result:"),
+                          span(class = "fanteam-result-value", sprintf("%.1f - %.1f", m$market_home_goals, m$market_away_goals))
+                      ),
+                      div(class = "fanteam-result-row", 
+                          span(class = "fanteam-result-label", "Home Shots:"),
+                          span(class = "fanteam-result-value", sprintf("%.1f (%.1f)", mkt_hs, mkt_hsot))
+                      ),
+                      div(class = "fanteam-result-row", 
+                          span(class = "fanteam-result-label", "Away Shots:"),
+                          span(class = "fanteam-result-value", sprintf("%.1f (%.1f)", mkt_as, mkt_asot))
+                      ),
+                      div(class = "fanteam-result-row", 
+                          span(class = "fanteam-result-label", "Home CS%:"),
+                          span(class = "fanteam-result-value", sprintf("%.0f%%", mkt_hcs))
+                      ),
+                      div(class = "fanteam-result-row", 
+                          span(class = "fanteam-result-label", "Away CS%:"),
+                          span(class = "fanteam-result-value", sprintf("%.0f%%", mkt_acs))
+                      )
+                  ),
+                  div(class = "fanteam-result-col",
+                      div(class = "fanteam-result-header", "My View"),
+                      div(class = "fanteam-result-row", 
+                          span(class = "fanteam-result-label", "Result:"),
+                          span(class = "fanteam-result-value", id = ns(paste0("my_res_", i)),
+                               sprintf("%.1f - %.1f", m$market_home_goals, m$market_away_goals))
+                      ),
+                      div(class = "fanteam-result-row", 
+                          span(class = "fanteam-result-label", "Home Shots:"),
+                          span(style = "display: flex; align-items: center; justify-content: flex-end; flex: 1;",
+                               span(class = "fanteam-arrow", id = ns(paste0("arr_hs_", i))),
+                               span(class = "fanteam-result-value", id = ns(paste0("my_hs_", i)), 
+                                    sprintf("%.1f (%.1f)", mkt_hs, mkt_hsot))
+                          )
+                      ),
+                      div(class = "fanteam-result-row", 
+                          span(class = "fanteam-result-label", "Away Shots:"),
+                          span(style = "display: flex; align-items: center; justify-content: flex-end; flex: 1;",
+                               span(class = "fanteam-arrow", id = ns(paste0("arr_as_", i))),
+                               span(class = "fanteam-result-value", id = ns(paste0("my_as_", i)), 
+                                    sprintf("%.1f (%.1f)", mkt_as, mkt_asot))
+                          )
+                      ),
+                      div(class = "fanteam-result-row", 
+                          span(class = "fanteam-result-label", "Home CS%:"),
+                          span(style = "display: flex; align-items: center; justify-content: flex-end; flex: 1;",
+                               span(class = "fanteam-arrow", id = ns(paste0("arr_hcs_", i))),
+                               span(class = "fanteam-result-value", id = ns(paste0("my_hcs_", i)), 
+                                    sprintf("%.0f%%", mkt_hcs))
+                          )
+                      ),
+                      div(class = "fanteam-result-row", 
+                          span(class = "fanteam-result-label", "Away CS%:"),
+                          span(style = "display: flex; align-items: center; justify-content: flex-end; flex: 1;",
+                               span(class = "fanteam-arrow", id = ns(paste0("arr_acs_", i))),
+                               span(class = "fanteam-result-value", id = ns(paste0("my_acs_", i)), 
+                                    sprintf("%.0f%%", mkt_acs))
+                          )
+                      )
+                  )
+              )
+          )
+        })
+      )
+    })
+    
+    # Input observers - create a reactive for each possible match index
+    # These will only trigger once the corresponding inputs exist
+    lapply(1:20, function(i) {  # Support up to 20 matches
+      local({
+        idx <- i
+        observe({
+          # Only run if we have matches and this index exists
+          req(rv$matches)
+          if (idx > nrow(rv$matches)) return()
+          
+          m <- rv$matches[idx, ]
+          
+          # Get current input values
+          h <- input[[paste0("home_", idx)]]
+          d <- input[[paste0("draw_", idx)]]
+          a <- input[[paste0("away_", idx)]]
+          t <- input[[paste0("total_", idx)]]
+          
+          # Require all inputs to have values
+          req(h, d, a, t)
+          
+          # Calculate market reference values
+          mkt_hs <- calc_shots(m$market_home_win, m$market_total, TRUE)
+          mkt_as <- calc_shots(m$market_away_win, m$market_total, FALSE)
+          mkt_hcs <- exp(-m$market_away_goals) * 100
+          mkt_acs <- exp(-m$market_home_goals) * 100
+          
+          # Calculate goals using correct distribution
+          goals <- calc_goals_from_probs(h, d, a, t)
+          my_hg <- goals$home
+          my_ag <- goals$away
+          
+          # Calculate shots and SOT using empirical models
+          my_hs <- calc_shots(h, t, TRUE)
+          my_as <- calc_shots(a, t, FALSE)
+          my_hsot <- calc_sot(h, t, TRUE)
+          my_asot <- calc_sot(a, t, FALSE)
+          
+          # Calculate CS% (Poisson: CS% = exp(-goals_against) * 100)
+          my_hcs <- exp(-my_ag) * 100
+          my_acs <- exp(-my_hg) * 100
+          
+          # Determine arrows
+          hs_arr <- if (my_hs > mkt_hs + 0.1) "up" else if (my_hs < mkt_hs - 0.1) "down" else "none"
+          as_arr <- if (my_as > mkt_as + 0.1) "up" else if (my_as < mkt_as - 0.1) "down" else "none"
+          hcs_arr <- if (my_hcs > mkt_hcs + 1) "up" else if (my_hcs < mkt_hcs - 1) "down" else "none"
+          acs_arr <- if (my_acs > mkt_acs + 1) "up" else if (my_acs < mkt_acs - 1) "down" else "none"
+          
+          # Send update to JavaScript
+          session$sendCustomMessage("updateFanteamMatch", list(
+            bar_home_id = ns(paste0("bar_h_", idx)),
+            bar_draw_id = ns(paste0("bar_d_", idx)),
+            bar_away_id = ns(paste0("bar_a_", idx)),
+            my_result_id = ns(paste0("my_res_", idx)),
+            my_home_shots_id = ns(paste0("my_hs_", idx)),
+            my_away_shots_id = ns(paste0("my_as_", idx)),
+            my_home_cs_id = ns(paste0("my_hcs_", idx)),
+            my_away_cs_id = ns(paste0("my_acs_", idx)),
+            home_shots_arrow_id = ns(paste0("arr_hs_", idx)),
+            away_shots_arrow_id = ns(paste0("arr_as_", idx)),
+            home_cs_arrow_id = ns(paste0("arr_hcs_", idx)),
+            away_cs_arrow_id = ns(paste0("arr_acs_", idx)),
+            home = round(h), draw = round(d), away = round(a),
+            my_result = sprintf("%.1f - %.1f", my_hg, my_ag),
+            my_home_shots = sprintf("%.1f (%.1f)", my_hs, my_hsot),
+            my_away_shots = sprintf("%.1f (%.1f)", my_as, my_asot),
+            my_home_cs = sprintf("%.0f%%", my_hcs),
+            my_away_cs = sprintf("%.0f%%", my_acs),
+            home_shots_arrow = hs_arr, away_shots_arrow = as_arr,
+            home_cs_arrow = hcs_arr, away_cs_arrow = acs_arr
+          ))
+        })
+      })
+    })
+    
+    # Calculate projections
+    observeEvent(input$calculate, {
+      req(rv$matches, rv$salaries)
+      matches <- rv$matches
+      
+      # Build lookup for ADJUSTED projections (user inputs)
+      team_lookup_adj <- list()
+      # Build lookup for BASELINE projections (market odds)
+      team_lookup_mkt <- list()
+      
+      for (i in 1:nrow(matches)) {
+        m <- matches[i, ]
+        
+        # User adjusted values
+        h <- input[[paste0("home_", i)]] %||% m$market_home_win
+        d <- input[[paste0("draw_", i)]] %||% m$market_draw
+        a <- input[[paste0("away_", i)]] %||% m$market_away_win
+        t <- input[[paste0("total_", i)]] %||% m$market_total
+        
+        # Market baseline values
+        mkt_h <- m$market_home_win
+        mkt_d <- m$market_draw
+        mkt_a <- m$market_away_win
+        mkt_t <- m$market_total
+        
+        # Adjusted goals
+        goals_adj <- calc_goals_from_probs(h, d, a, t)
+        team_lookup_adj[[m$home_team]] <- list(
+          gf = goals_adj$home, ga = goals_adj$away,
+          cs = exp(-goals_adj$away) * 100, shots = calc_shots(h, t, TRUE)
+        )
+        team_lookup_adj[[m$away_team]] <- list(
+          gf = goals_adj$away, ga = goals_adj$home,
+          cs = exp(-goals_adj$home) * 100, shots = calc_shots(a, t, FALSE)
+        )
+        
+        # Market baseline goals
+        goals_mkt <- calc_goals_from_probs(mkt_h, mkt_d, mkt_a, mkt_t)
+        team_lookup_mkt[[m$home_team]] <- list(
+          gf = goals_mkt$home, ga = goals_mkt$away,
+          cs = exp(-goals_mkt$away) * 100, shots = calc_shots(mkt_h, mkt_t, TRUE)
+        )
+        team_lookup_mkt[[m$away_team]] <- list(
+          gf = goals_mkt$away, ga = goals_mkt$home,
+          cs = exp(-goals_mkt$home) * 100, shots = calc_shots(mkt_a, mkt_t, FALSE)
+        )
+      }
+      
+      rv$projections <- rv$salaries %>%
+        mutate(
+          # Adjusted projections
+          proj_gf = sapply(team_normalized, function(t) if (t %in% names(team_lookup_adj)) team_lookup_adj[[t]]$gf else NA_real_),
+          proj_cs = sapply(team_normalized, function(t) if (t %in% names(team_lookup_adj)) team_lookup_adj[[t]]$cs else NA_real_),
+          proj_pts = case_when(
+            position == "GK" ~ 2 + (proj_cs/100 * 4) - 0.5 * sapply(team_normalized, function(t) if (t %in% names(team_lookup_adj)) team_lookup_adj[[t]]$ga else 1),
+            position == "DEF" ~ 2 + (proj_cs/100 * 4) + 0.3 * proj_gf,
+            position == "MID" ~ 2 + 0.8 * proj_gf + 0.1 * sapply(team_normalized, function(t) if (t %in% names(team_lookup_adj)) team_lookup_adj[[t]]$shots else 10),
+            position == "FWD" ~ 2 + 1.2 * proj_gf + 0.15 * sapply(team_normalized, function(t) if (t %in% names(team_lookup_adj)) team_lookup_adj[[t]]$shots else 10),
+            TRUE ~ 2
+          ),
+          value = proj_pts / salary,
+          
+          # Baseline projections (from market odds)
+          base_gf = sapply(team_normalized, function(t) if (t %in% names(team_lookup_mkt)) team_lookup_mkt[[t]]$gf else NA_real_),
+          base_cs = sapply(team_normalized, function(t) if (t %in% names(team_lookup_mkt)) team_lookup_mkt[[t]]$cs else NA_real_),
+          base_pts = case_when(
+            position == "GK" ~ 2 + (base_cs/100 * 4) - 0.5 * sapply(team_normalized, function(t) if (t %in% names(team_lookup_mkt)) team_lookup_mkt[[t]]$ga else 1),
+            position == "DEF" ~ 2 + (base_cs/100 * 4) + 0.3 * base_gf,
+            position == "MID" ~ 2 + 0.8 * base_gf + 0.1 * sapply(team_normalized, function(t) if (t %in% names(team_lookup_mkt)) team_lookup_mkt[[t]]$shots else 10),
+            position == "FWD" ~ 2 + 1.2 * base_gf + 0.15 * sapply(team_normalized, function(t) if (t %in% names(team_lookup_mkt)) team_lookup_mkt[[t]]$shots else 10),
+            TRUE ~ 2
+          ),
+          base_value = base_pts / salary,
+          
+          # Deltas
+          delta_pts = proj_pts - base_pts,
+          delta_value = value - base_value
+        ) %>% filter(!is.na(proj_pts)) %>% arrange(desc(proj_pts))
+      
+      # Update team highlight dropdown with logos
+      teams <- sort(unique(rv$projections$team_normalized))
+      if (length(teams) > 0) {
+        team_content <- c(
+          "None",  # First option - no highlight
+          sapply(teams, function(team) {
+            logo_path <- get_soccer_team_logo(team)
+            if (!is.null(logo_path) && logo_path != "") {
+              sprintf('<img src="%s" style="width:20px;height:20px;margin-right:8px;vertical-align:middle;object-fit:contain;">%s', 
+                      logo_path, team)
+            } else {
+              team
+            }
+          }, USE.NAMES = FALSE)
+        )
+        
+        shinyWidgets::updatePickerInput(
+          session, "highlight_team",
+          choices = c("None" = "", setNames(teams, teams)),
+          selected = "",
+          choicesOpt = list(content = team_content)
+        )
+      }
     })
     
     # =========================================================================
-    # TEAM SUMMARY CONTENT (switches between table and plots)
+    # PROJECTION CHART (FOS vs Salary scatter, or Delta bar)
     # =========================================================================
     
-    output$team_summary_content <- renderUI({
-      req(rv$salary_data)
+    # Position counts - max players per position per team
+    pos_counts <- c("GK" = 2, "DEF" = 5, "MID" = 5, "FWD" = 3)
+    
+    # Chart wrapper with external axis labels
+    output$chart_wrapper <- renderUI({
+      chart_view <- rv$chart_view
       
-      view_mode <- input$summary_view
-      if (is.null(view_mode) || view_mode == "") view_mode <- "table"
-      
-      if (view_mode == "table") {
-        # Table view with legend
-        div(style = "overflow-x: auto; margin-top: 1rem;",
-            uiOutput(ns("team_summary_table")),
-            div(style = "margin-top: 0.75rem; padding: 0.5rem 0.75rem; background: var(--bg-tertiary); border-radius: 6px; font-size: 0.75rem; color: var(--text-muted);",
-                tags$span(style = "font-weight: 600; margin-right: 0.5rem;", "Legend:"),
-                "Goals For/Ag. = Implied from odds | ",
-                "xGF/xGA Adj = Team's xG vs opponent avg (+ is better) | ",
-                "Opp xGF/xGA Adj = This week's opponent's adjusted xG"
-            )
-        )
-      } else {
-        # Plot view
-        plot_type <- input$summary_plot_type
-        if (is.null(plot_type)) plot_type <- "salary_vs_cs"
-        
-        pos_filter <- input$summary_position
-        if (is.null(pos_filter) || pos_filter == "") pos_filter <- "FWD"
-        pos_label <- switch(pos_filter,
-                            "FWD" = "Forward",
-                            "MID" = "Midfielder",
-                            "DEF" = "Defender",
-                            "GK" = "Goalkeeper",
-                            "Position")
-        
-        # Get chart title/subtitle and axis labels based on plot type
-        chart_info <- switch(
-          plot_type,
-          "salary_vs_fos" = list(
-            title = paste(pos_label, "Avg Salary vs Fantasy Opportunity"),
-            subtitle = paste0("Position-weighted score combining clean sheet odds & implied goals (", pos_label, " weights)"),
-            y_label = "HIGHER SALARY",
-            x_label = "BETTER OPPORTUNITY"
-          ),
-          "salary_vs_cs" = list(
-            title = paste(pos_label, "Avg Salary vs Clean Sheet Odds"),
-            subtitle = "Average salary for position group vs bookmaker clean sheet probability",
-            y_label = "HIGHER SALARY",
-            x_label = "HIGHER CS ODDS"
-          ),
-          "salary_vs_gf" = list(
-            title = paste(pos_label, "Avg Salary vs Implied Goals For"),
-            subtitle = "Average salary for position group vs bookmaker implied team goals",
-            y_label = "HIGHER SALARY",
-            x_label = "MORE GOALS"
-          ),
-          "salary_vs_ga" = list(
-            title = paste(pos_label, "Avg Salary vs Implied Goals Against"),
-            subtitle = "Average salary for position group vs bookmaker implied opponent goals",
-            y_label = "HIGHER SALARY",
-            x_label = "MORE CONCEDED"
-          ),
-          list(title = "", subtitle = "", y_label = "", x_label = "")
-        )
-        
-        # Scatter chart with external axis labels (matching Team Dashboard style)
+      if (chart_view == "value") {
+        # VALUE VIEW: Scatter with external axis labels and arrows
         div(
-          style = "width: 100%; box-sizing: border-box; margin-top: 1rem;",
-          
-          # Chart title and subtitle
-          div(
-            style = "padding: 0 0 16px 0;",
-            div(
-              style = "font-family: var(--font-display, 'Fjalla One'), sans-serif; font-size: 20px; color: var(--text-primary, #3B3226); font-weight: 400; margin-bottom: 4px;",
-              chart_info$title
-            ),
-            div(
-              style = "font-family: var(--font-main, 'Source Sans Pro'), sans-serif; font-size: 13px; color: var(--text-muted, #7A7A7A);",
-              chart_info$subtitle
-            )
-          ),
+          style = "width: 100%; box-sizing: border-box;",
           
           # Main content area with Y-axis label and plot
           div(
@@ -659,16 +1405,16 @@ soccer_fanteam_contests_server <- function(id) {
                 style = "transform: rotate(-90deg); transform-origin: center; white-space: nowrap;",
                 span(
                   style = "font-family: 'Fjalla One', sans-serif; font-size: 16px; color: #666; font-weight: 400;",
-                  chart_info$y_label,
+                  "AVG SALARY",
                   span(style = "font-size: 20px; margin-left: 6px; vertical-align: middle;", HTML("&#8594;"))
                 )
               )
             ),
             
-            # Plot area (constrained)
+            # Plot area
             div(
               style = "flex: 1; min-width: 0; padding-right: 50px;",
-              plotOutput(ns("team_summary_plot"), height = "450px", width = "100%")
+              ggiraph::girafeOutput(session$ns("projection_chart"), height = "580px", width = "100%")
             )
           ),
           
@@ -677,752 +1423,415 @@ soccer_fanteam_contests_server <- function(id) {
             style = "display: flex; justify-content: center; padding: 8px 50px 0 50px;",
             span(
               style = "font-family: 'Fjalla One', sans-serif; font-size: 16px; color: #666; font-weight: 400;",
-              chart_info$x_label,
+              "FANTASY OPPORTUNITY SCORE",
               span(style = "font-size: 20px; margin-left: 6px; vertical-align: middle;", HTML("&#8594;"))
             )
           )
         )
-      }
-    })
-    
-    # =========================================================================
-    # TEAM SUMMARY TABLE
-    # =========================================================================
-    
-    output$team_summary_table <- renderUI({
-      req(rv$salary_data)
-      data <- rv$salary_data
-      
-      if (is.null(data) || nrow(data) == 0) {
-        return(div(style = "padding: 2rem; text-align: center;", "No data available"))
-      }
-      
-      # Get position filter - no "all" option anymore, default to FWD
-      pos_filter <- input$summary_position
-      if (is.null(pos_filter) || pos_filter == "") pos_filter <- "FWD"
-      
-      # Position counts - max players per position to show
-      pos_counts <- c("GK" = 2, "DEF" = 5, "MID" = 5, "FWD" = 3)
-      
-      # Filter to selected position
-      filtered_data <- data %>% filter(position == pos_filter)
-      max_for_pos <- pos_counts[pos_filter]
-      
-      # Build team salary pivot with average first
-      team_salaries <- filtered_data %>%
-        filter(!is.na(team_normalized), !is.na(position), !is.na(salary)) %>%
-        group_by(team_normalized) %>%
-        arrange(desc(salary)) %>%
-        mutate(pos_rank = row_number()) %>%
-        filter(pos_rank <= max_for_pos) %>%
-        summarise(
-          avg_salary = round(mean(salary, na.rm = TRUE), 2),
-          salary_list = list(salary[order(-salary)]),
-          .groups = "drop"
-        )
-      
-      # Expand salary list to individual columns
-      for (i in 1:max_for_pos) {
-        col_name <- paste0(pos_filter, i)
-        team_salaries[[col_name]] <- sapply(team_salaries$salary_list, function(x) {
-          if (length(x) >= i) x[i] else NA_real_
-        })
-      }
-      team_salaries$salary_list <- NULL
-      
-      # Get odds data per team
-      team_odds <- data %>%
-        filter(!is.na(team_normalized)) %>%
-        group_by(team_normalized) %>%
-        summarise(
-          opponent = first(na.omit(opponent)),
-          home_away = first(na.omit(home_away)),
-          implied_team_goals = first(na.omit(implied_team_goals)),
-          implied_opp_goals = first(na.omit(implied_opp_goals)),
-          clean_sheet_pct = first(na.omit(clean_sheet_pct)),
-          .groups = "drop"
-        )
-      
-      log_debug(sprintf("Team Summary: Odds data has %d rows with %d having opponent", 
-                        nrow(team_odds), sum(!is.na(team_odds$opponent))), level = "DEBUG")
-      
-      team_salaries <- team_salaries %>%
-        left_join(team_odds, by = "team_normalized")
-      
-      # Add FBref xG data - SEASON (opponent-adjusted)
-      if (!is.null(rv$team_xg_season) && nrow(rv$team_xg_season) > 0) {
-        # Team's opponent-adjusted xG
-        team_salaries <- team_salaries %>%
-          left_join(
-            rv$team_xg_season %>% 
-              select(team, xgf_vs_opp_strength, xga_vs_opp_strength) %>%
-              rename(xgf_adj_season = xgf_vs_opp_strength, xga_adj_season = xga_vs_opp_strength),
-            by = c("team_normalized" = "team")
-          )
-        
-        # Opponent's opponent-adjusted xG stats (for this week's matchup)
-        team_salaries <- team_salaries %>%
-          left_join(
-            rv$team_xg_season %>% 
-              select(team, xgf_vs_opp_strength, xga_vs_opp_strength) %>%
-              rename(opp_xgf_adj_season = xgf_vs_opp_strength, opp_xga_adj_season = xga_vs_opp_strength),
-            by = c("opponent" = "team")
-          )
-      }
-      
-      # Add FBref xG data - LAST 6 (opponent-adjusted)
-      if (!is.null(rv$team_xg_last6) && nrow(rv$team_xg_last6) > 0) {
-        # Team's opponent-adjusted xG
-        team_salaries <- team_salaries %>%
-          left_join(
-            rv$team_xg_last6 %>% 
-              select(team, xgf_vs_opp_strength, xga_vs_opp_strength) %>%
-              rename(xgf_adj_l6 = xgf_vs_opp_strength, xga_adj_l6 = xga_vs_opp_strength),
-            by = c("team_normalized" = "team")
-          )
-        
-        # Opponent's opponent-adjusted xG stats (for this week's matchup)
-        team_salaries <- team_salaries %>%
-          left_join(
-            rv$team_xg_last6 %>% 
-              select(team, xgf_vs_opp_strength, xga_vs_opp_strength) %>%
-              rename(opp_xgf_adj_l6 = xgf_vs_opp_strength, opp_xga_adj_l6 = xga_vs_opp_strength),
-            by = c("opponent" = "team")
-          )
-      }
-      
-      # Sort by implied team goals
-      if ("implied_team_goals" %in% names(team_salaries) && any(!is.na(team_salaries$implied_team_goals))) {
-        team_salaries <- team_salaries %>% arrange(desc(implied_team_goals))
-      }
-      
-      if (nrow(team_salaries) == 0) {
-        return(div(style = "padding: 2rem; text-align: center;", "No team data"))
-      }
-      
-      # Define salary columns for later
-      individual_salary_cols <- paste0(pos_filter, 1:max_for_pos)
-      
-      # Build column definitions with larger text
-      col_defs <- list()
-      
-      # Team column with oversized logo background - edge to edge
-      col_defs$team_normalized <- reactable::colDef(
-        name = "Team",
-        minWidth = 180,
-        style = list(borderRight = "2px solid #374151"),
-        cell = function(value, index) {
-          logo_path <- get_soccer_team_logo(value)
-          opp <- team_salaries$opponent[index]
-          ha <- team_salaries$home_away[index]
-          
-          # Build matchup string with full opponent name
-          matchup <- ""
-          if (!is.na(opp) && opp != "") {
-            if (!is.na(ha) && toupper(ha) == "H") {
-              matchup <- paste("vs", opp)
-            } else {
-              matchup <- paste("@", opp)
-            }
-          }
-          
-          # Outer wrapper - positions logo to extend to cell edge
-          htmltools::tags$div(
-            style = "position: relative; min-height: 56px; overflow: hidden; margin: -8px; padding: 8px;",
-            # Oversized logo - positioned to fill to absolute cell edge
-            if (!is.null(logo_path) && logo_path != "") {
-              htmltools::tags$img(
-                src = logo_path,
-                style = "position: absolute; right: -8px; top: 50%; transform: translateY(-50%); width: 150px; height: 150px; opacity: 0.12; object-fit: contain; pointer-events: none;"
-              )
-            },
-            # Text content with tighter left padding
-            htmltools::tags$div(
-              style = "position: relative; z-index: 1; padding: 8px 8px 8px 4px;",
-              htmltools::tags$div(style = "font-weight: 700; font-size: 1rem;", value),
-              if (matchup != "") {
-                htmltools::tags$div(style = "font-size: 0.85rem; color: #6b7280; margin-top: 2px;", matchup)
-              } else {
-                htmltools::tags$div(style = "font-size: 0.85rem; color: #9ca3af; margin-top: 2px; font-style: italic;", "No fixture data")
-              }
-            )
-          )
-        }
-      )
-      
-      # Average salary column - clean styling
-      if ("avg_salary" %in% names(team_salaries)) {
-        col_defs$avg_salary <- reactable::colDef(
-          name = paste0("Avg ", pos_filter, " Sal"), minWidth = 80, align = "center",
-          headerStyle = list(fontSize = "0.8rem", fontWeight = 600),
-          style = list(fontWeight = 600, fontSize = "0.9rem"),
-          cell = function(value) if (is.na(value)) "-" else sprintf("%.1f", value)
-        )
-      }
-      
-      # IMPLIED GOALS columns - more descriptive headers
-      if ("implied_team_goals" %in% names(team_salaries)) {
-        col_defs$implied_team_goals <- reactable::colDef(
-          name = "Goals For", minWidth = 70, align = "center",
-          headerStyle = list(fontSize = "0.8rem"),
-          style = list(fontSize = "0.9rem"),
-          cell = function(value) if (is.na(value)) "-" else sprintf("%.2f", value)
-        )
-      }
-      if ("implied_opp_goals" %in% names(team_salaries)) {
-        col_defs$implied_opp_goals <- reactable::colDef(
-          name = "Goals Ag.", minWidth = 70, align = "center",
-          headerStyle = list(fontSize = "0.8rem"),
-          style = list(fontSize = "0.9rem"),
-          cell = function(value) if (is.na(value)) "-" else sprintf("%.2f", value)
-        )
-      }
-      if ("clean_sheet_pct" %in% names(team_salaries)) {
-        col_defs$clean_sheet_pct <- reactable::colDef(
-          name = "Clean Sheet", minWidth = 75, align = "center",
-          headerStyle = list(fontSize = "0.8rem"),
-          style = list(fontSize = "0.9rem"),
-          cell = function(value) if (is.na(value)) "-" else sprintf("%.0f%%", value)
-        )
-      }
-      
-      # Get timeframe selection
-      xg_timeframe <- input$xg_timeframe
-      if (is.null(xg_timeframe) || xg_timeframe == "") xg_timeframe <- "season"
-      
-      # Helper function for +/- formatting
-      format_adj <- function(value) {
-        if (is.na(value)) return("-")
-        if (value > 0) return(sprintf("+%.2f", value))
-        sprintf("%.2f", value)
-      }
-      
-      # xG columns - only show selected timeframe (opponent-adjusted)
-      if (xg_timeframe == "season") {
-        # SEASON xG columns (opponent-adjusted)
-        if ("xgf_adj_season" %in% names(team_salaries)) {
-          col_defs$xgf_adj_season <- reactable::colDef(
-            name = "xGF Adj", minWidth = 70, align = "center",
-            headerStyle = list(fontSize = "0.8rem"),
-            style = function(value) {
-              color <- if (!is.na(value) && value > 0) "#059669" else if (!is.na(value) && value < 0) "#dc2626" else NULL
-              list(fontSize = "0.9rem", color = color, fontWeight = if (!is.null(color)) 600 else 400)
-            },
-            cell = function(value) format_adj(value)
-          )
-        }
-        if ("xga_adj_season" %in% names(team_salaries)) {
-          col_defs$xga_adj_season <- reactable::colDef(
-            name = "xGA Adj", minWidth = 70, align = "center",
-            headerStyle = list(fontSize = "0.8rem"),
-            style = function(value) {
-              # For xGA, negative is good (concede less than opponents usually create)
-              color <- if (!is.na(value) && value < 0) "#059669" else if (!is.na(value) && value > 0) "#dc2626" else NULL
-              list(fontSize = "0.9rem", color = color, fontWeight = if (!is.null(color)) 600 else 400)
-            },
-            cell = function(value) format_adj(value)
-          )
-        }
-        if ("opp_xgf_adj_season" %in% names(team_salaries)) {
-          col_defs$opp_xgf_adj_season <- reactable::colDef(
-            name = "Opp xGF Adj", minWidth = 80, align = "center",
-            headerStyle = list(fontSize = "0.8rem"),
-            style = function(value) {
-              # Opponent's attacking strength - high is bad for us
-              color <- if (!is.na(value) && value > 0) "#dc2626" else if (!is.na(value) && value < 0) "#059669" else NULL
-              list(fontSize = "0.9rem", color = color, fontWeight = if (!is.null(color)) 600 else 400)
-            },
-            cell = function(value) format_adj(value)
-          )
-        }
-        if ("opp_xga_adj_season" %in% names(team_salaries)) {
-          col_defs$opp_xga_adj_season <- reactable::colDef(
-            name = "Opp xGA Adj", minWidth = 80, align = "center",
-            headerStyle = list(fontSize = "0.8rem"),
-            style = function(value) {
-              # Opponent's defensive weakness - high is good for us (they concede more than expected)
-              color <- if (!is.na(value) && value > 0) "#059669" else if (!is.na(value) && value < 0) "#dc2626" else NULL
-              list(fontSize = "0.9rem", color = color, fontWeight = if (!is.null(color)) 600 else 400)
-            },
-            cell = function(value) format_adj(value)
-          )
-        }
-        # Hide Last 6 columns
-        col_defs$xgf_adj_l6 <- reactable::colDef(show = FALSE)
-        col_defs$xga_adj_l6 <- reactable::colDef(show = FALSE)
-        col_defs$opp_xgf_adj_l6 <- reactable::colDef(show = FALSE)
-        col_defs$opp_xga_adj_l6 <- reactable::colDef(show = FALSE)
-        
-        xg_cols <- c("xgf_adj_season", "xga_adj_season", "opp_xgf_adj_season", "opp_xga_adj_season")
-        xg_group_name <- "Season xG (Adj)"
       } else {
-        # LAST 6 xG columns (opponent-adjusted)
-        if ("xgf_adj_l6" %in% names(team_salaries)) {
-          col_defs$xgf_adj_l6 <- reactable::colDef(
-            name = "xGF Adj", minWidth = 70, align = "center",
-            headerStyle = list(fontSize = "0.8rem"),
-            style = function(value) {
-              color <- if (!is.na(value) && value > 0) "#059669" else if (!is.na(value) && value < 0) "#dc2626" else NULL
-              list(fontSize = "0.9rem", color = color, fontWeight = if (!is.null(color)) 600 else 400)
-            },
-            cell = function(value) format_adj(value)
-          )
-        }
-        if ("xga_adj_l6" %in% names(team_salaries)) {
-          col_defs$xga_adj_l6 <- reactable::colDef(
-            name = "xGA Adj", minWidth = 70, align = "center",
-            headerStyle = list(fontSize = "0.8rem"),
-            style = function(value) {
-              color <- if (!is.na(value) && value < 0) "#059669" else if (!is.na(value) && value > 0) "#dc2626" else NULL
-              list(fontSize = "0.9rem", color = color, fontWeight = if (!is.null(color)) 600 else 400)
-            },
-            cell = function(value) format_adj(value)
-          )
-        }
-        if ("opp_xgf_adj_l6" %in% names(team_salaries)) {
-          col_defs$opp_xgf_adj_l6 <- reactable::colDef(
-            name = "Opp xGF Adj", minWidth = 80, align = "center",
-            headerStyle = list(fontSize = "0.8rem"),
-            style = function(value) {
-              color <- if (!is.na(value) && value > 0) "#dc2626" else if (!is.na(value) && value < 0) "#059669" else NULL
-              list(fontSize = "0.9rem", color = color, fontWeight = if (!is.null(color)) 600 else 400)
-            },
-            cell = function(value) format_adj(value)
-          )
-        }
-        if ("opp_xga_adj_l6" %in% names(team_salaries)) {
-          col_defs$opp_xga_adj_l6 <- reactable::colDef(
-            name = "Opp xGA Adj", minWidth = 80, align = "center",
-            headerStyle = list(fontSize = "0.8rem"),
-            style = function(value) {
-              color <- if (!is.na(value) && value > 0) "#059669" else if (!is.na(value) && value < 0) "#dc2626" else NULL
-              list(fontSize = "0.9rem", color = color, fontWeight = if (!is.null(color)) 600 else 400)
-            },
-            cell = function(value) format_adj(value)
-          )
-        }
-        # Hide Season columns
-        col_defs$xgf_adj_season <- reactable::colDef(show = FALSE)
-        col_defs$xga_adj_season <- reactable::colDef(show = FALSE)
-        col_defs$opp_xgf_adj_season <- reactable::colDef(show = FALSE)
-        col_defs$opp_xga_adj_season <- reactable::colDef(show = FALSE)
-        
-        xg_cols <- c("xgf_adj_l6", "xga_adj_l6", "opp_xgf_adj_l6", "opp_xga_adj_l6")
-        xg_group_name <- "Last 6 xG (Adj)"
-      }
-      
-      # Hide helper columns and any individual salary columns
-      col_defs$opponent <- reactable::colDef(show = FALSE)
-      col_defs$home_away <- reactable::colDef(show = FALSE)
-      
-      # Hide all individual salary columns (we only show avg)
-      for (i in 1:max_for_pos) {
-        col_name <- paste0(pos_filter, i)
-        if (col_name %in% names(team_salaries)) {
-          col_defs[[col_name]] <- reactable::colDef(show = FALSE)
-        }
-      }
-      
-      # Custom theme - header border matches team column right border
-      custom_theme <- reactable::reactableTheme(
-        borderColor = "#e5e7eb",
-        headerStyle = list(
-          borderBottom = "2px solid #374151",
-          fontWeight = 600,
-          fontSize = "0.8rem"
-        ),
-        cellStyle = list(
-          borderBottom = "1px solid #e5e7eb",
-          fontSize = "0.9rem"
+        # ADJUSTMENTS VIEW: Dumbbell with x-axis label at top
+        div(
+          style = "width: 100%; box-sizing: border-box;",
+          
+          # X-axis label at top with arrow
+          div(
+            style = "display: flex; justify-content: flex-end; padding: 0 20px 12px 0;",
+            span(
+              style = "font-family: 'Fjalla One', sans-serif; font-size: 16px; color: #666; font-weight: 400;",
+              "FANTASY OPPORTUNITY SCORE",
+              span(style = "font-size: 20px; margin-left: 6px; vertical-align: middle;", HTML("&#8594;"))
+            )
+          ),
+          
+          # Plot area
+          ggiraph::girafeOutput(session$ns("projection_chart"), height = "600px", width = "100%")
         )
-      )
-      
-      # Build column groups for visual grouping
-      col_groups_def <- list(
-        list(name = "Implied (Odds)", columns = c("implied_team_goals", "implied_opp_goals", "clean_sheet_pct")),
-        list(name = xg_group_name, columns = xg_cols)
-      )
-      
-      # Filter to only include columns that exist, then create colGroup objects
-      col_groups <- list()
-      for (grp in col_groups_def) {
-        existing_cols <- intersect(as.character(grp$columns), names(team_salaries))
-        if (length(existing_cols) > 0) {
-          col_groups <- c(col_groups, list(reactable::colGroup(name = grp$name, columns = existing_cols)))
-        }
       }
-      
-      # Reorder columns: Team, Avg Salary, Implied, xG
-      desired_order <- c(
-        "team_normalized",
-        "avg_salary",
-        "implied_team_goals", "implied_opp_goals", "clean_sheet_pct",
-        xg_cols,
-        "opponent", "home_away"
-      )
-      existing_order <- intersect(desired_order, names(team_salaries))
-      remaining_cols <- setdiff(names(team_salaries), existing_order)
-      team_salaries <- team_salaries[, c(existing_order, remaining_cols)]
-      
-      reactable::reactable(
-        team_salaries,
-        sortable = TRUE,
-        defaultPageSize = 22,
-        striped = TRUE,
-        highlight = TRUE,
-        compact = FALSE,
-        fullWidth = TRUE,
-        theme = custom_theme,
-        columns = col_defs,
-        columnGroups = col_groups,
-        defaultColDef = reactable::colDef(
-          vAlign = "center",
-          headerVAlign = "center",
-          minWidth = 55
-        )
-      )
     })
     
-    # =========================================================================
-    # TEAM SUMMARY SCATTER PLOT
-    # =========================================================================
-    
-    output$team_summary_plot <- renderPlot({
-      log_debug(">>> Rendering team summary scatter plot", level = "DEBUG")
+    output$projection_chart <- ggiraph::renderGirafe({
+      # Check if projections exist
+      if (is.null(rv$projections) || nrow(rv$projections) == 0) {
+        # Return a placeholder message
+        p <- ggplot() +
+          annotate("text", x = 0.5, y = 0.5, 
+                   label = "Click 'Calculate Projections' to generate chart",
+                   size = 5, color = "#7A7A7A", fontface = "italic") +
+          theme_void() +
+          theme(plot.background = element_rect(fill = "transparent", color = NA))
+        return(ggiraph::girafe(ggobj = p, width_svg = 8, height_svg = 6))
+      }
       
-      req(rv$salary_data)
-      data <- rv$salary_data
-      
-      if (is.null(data) || nrow(data) == 0) return(NULL)
-      
-      # Get position filter
-      pos_filter <- input$summary_position
-      if (is.null(pos_filter) || pos_filter == "") pos_filter <- "FWD"
-      
-      plot_type <- input$summary_plot_type
-      if (is.null(plot_type)) plot_type <- "salary_vs_fos"
-      
-      # Position counts - max players per position to show
-      pos_counts <- c("GK" = 2, "DEF" = 5, "MID" = 5, "FWD" = 3)
-      
-      # Filter to selected position
-      filtered_data <- data %>% filter(position == pos_filter)
+      pos_filter <- rv$chart_position
+      chart_view <- rv$chart_view
       max_for_pos <- pos_counts[pos_filter]
       
-      # Build team salary aggregates
-      team_salaries <- filtered_data %>%
-        filter(!is.na(team_normalized), !is.na(position), !is.na(salary)) %>%
-        group_by(team_normalized) %>%
-        arrange(desc(salary)) %>%
-        mutate(pos_rank = row_number()) %>%
-        filter(pos_rank <= max_for_pos) %>%
-        summarise(
-          avg_salary = round(mean(salary, na.rm = TRUE), 2),
-          .groups = "drop"
-        )
-      
-      # Get odds data per team
-      team_odds <- data %>%
-        filter(!is.na(team_normalized)) %>%
-        group_by(team_normalized) %>%
-        summarise(
-          implied_team_goals = first(na.omit(implied_team_goals)),
-          implied_opp_goals = first(na.omit(implied_opp_goals)),
-          clean_sheet_pct = first(na.omit(clean_sheet_pct)),
-          .groups = "drop"
-        )
-      
-      plot_data <- team_salaries %>%
-        left_join(team_odds, by = "team_normalized")
-      
-      # Position-specific weights for Fantasy Opportunity Score
-      # GKs: CS dominant, minimal goal involvement
-      # DEFs: CS important, but attacking returns matter more than originally thought
-      # MIDs: Goals/assists more valuable - theory was correct
-      # FWDs: Almost entirely attacking
-      # Updated Jan 2026 based on regression analysis (modest adjustment toward goals)
-      fos_weights <- list(
-        GK  = c(cs = 0.80, gf = 0.20),
-        DEF = c(cs = 0.50, gf = 0.50),
-        MID = c(cs = 0.25, gf = 0.75),
-        FWD = c(cs = 0.10, gf = 0.90)
-      )
-      
-      # Remove rows with missing values for the selected metric
-      if (plot_type == "salary_vs_fos") {
-        # Fantasy Opportunity Score - need both CS and implied goals
-        plot_data <- plot_data %>% 
+      if (chart_view == "value") {
+        # =====================================================================
+        # FOS vs SALARY SCATTER PLOT (Interactive)
+        # =====================================================================
+        
+        # Build team-level data with top N players per position
+        plot_data <- rv$projections %>%
+          filter(position == pos_filter, !is.na(salary), !is.na(proj_gf), !is.na(proj_cs)) %>%
+          group_by(team_normalized) %>%
+          arrange(desc(salary)) %>%
+          mutate(pos_rank = row_number()) %>%
+          filter(pos_rank <= max_for_pos) %>%
+          summarise(
+            avg_salary = mean(salary, na.rm = TRUE),
+            implied_team_goals = mean(proj_gf, na.rm = TRUE),
+            clean_sheet_pct = mean(proj_cs, na.rm = TRUE),
+            n_players = n(),
+            .groups = "drop"
+          ) %>%
           filter(!is.na(avg_salary), !is.na(clean_sheet_pct), !is.na(implied_team_goals))
         
-        if (nrow(plot_data) == 0) return(NULL)
+        if (nrow(plot_data) == 0) {
+          p <- ggplot() +
+            annotate("text", x = 0.5, y = 0.5, 
+                     label = paste("No", pos_filter, "data available"),
+                     size = 5, color = "#7A7A7A", fontface = "italic") +
+            theme_void() +
+            theme(plot.background = element_rect(fill = "transparent", color = NA))
+          return(ggiraph::girafe(ggobj = p, width_svg = 8, height_svg = 6))
+        }
         
-        # Normalize implied goals to 0-100 scale (min-max within gameweek)
+        # Normalize goals to 0-100 scale
         gf_min <- min(plot_data$implied_team_goals, na.rm = TRUE)
         gf_max <- max(plot_data$implied_team_goals, na.rm = TRUE)
         gf_range <- gf_max - gf_min
-        if (gf_range < 0.01) gf_range <- 1  # Avoid division by zero
+        if (gf_range < 0.01) gf_range <- 1
+        
+        # Get current FOS weights from slider
+        current_weights <- fos_weights_reactive()
+        
+        # Calculate FOS with user-defined weights and add logo paths
+        highlighted_team <- input$highlight_team
         
         plot_data <- plot_data %>%
           mutate(
             gf_normalized = ((implied_team_goals - gf_min) / gf_range) * 100,
-            # CS% is already 0-100
-            fantasy_opp_score = (clean_sheet_pct * fos_weights[[pos_filter]]["cs"]) + 
-              (gf_normalized * fos_weights[[pos_filter]]["gf"])
+            fantasy_opp_score = (clean_sheet_pct * current_weights["cs"]) + 
+              (gf_normalized * current_weights["gf"]),
+            team_abbr = toupper(get_team_abbreviation(team_normalized)),
+            logo_path = sapply(team_normalized, function(t) get_soccer_team_logo(t) %||% ""),
+            is_highlighted = !is.null(highlighted_team) && highlighted_team != "" & team_normalized == highlighted_team,
+            # Build HTML tooltip
+            tooltip_html = paste0(
+              "<div style='padding:8px;min-width:160px;'>",
+              ifelse(logo_path != "", 
+                     paste0("<img src='", logo_path, "' style='width:32px;height:32px;vertical-align:middle;margin-right:8px;'>"), ""),
+              "<strong style='font-size:14px;'>", toupper(team_normalized), "</strong><br>",
+              "<span style='color:#5C4E3D;'>FOS: <strong>", sprintf("%.1f", fantasy_opp_score), "</strong></span><br>",
+              "<span style='color:#5C4E3D;'>Salary: <strong>£", sprintf("%.2fM", avg_salary), "</strong></span><br>",
+              "<span style='color:#5C4E3D;'>CS%: <strong>", sprintf("%.0f%%", clean_sheet_pct), "</strong></span><br>",
+              "<span style='color:#5C4E3D;'>xG: <strong>", sprintf("%.2f", implied_team_goals), "</strong></span>",
+              "</div>"
+            )
           )
         
-        x_var <- "fantasy_opp_score"
-        x_label_format <- function(x) sprintf("%.0f", x)
+        # Calculate averages for reference lines
+        avg_salary <- mean(plot_data$avg_salary, na.rm = TRUE)
+        avg_fos <- mean(plot_data$fantasy_opp_score, na.rm = TRUE)
         
-      } else if (plot_type == "salary_vs_cs") {
-        plot_data <- plot_data %>% filter(!is.na(avg_salary), !is.na(clean_sheet_pct))
-        x_var <- "clean_sheet_pct"
-        x_label_format <- function(x) paste0(x, "%")
-      } else if (plot_type == "salary_vs_gf") {
-        plot_data <- plot_data %>% filter(!is.na(avg_salary), !is.na(implied_team_goals))
-        x_var <- "implied_team_goals"
-        x_label_format <- function(x) sprintf("%.1f", x)
+        # Axis ranges with padding
+        x_range <- max(plot_data$fantasy_opp_score, na.rm = TRUE) - min(plot_data$fantasy_opp_score, na.rm = TRUE)
+        y_range <- max(plot_data$avg_salary, na.rm = TRUE) - min(plot_data$avg_salary, na.rm = TRUE)
+        if (x_range < 0.1) x_range <- 10
+        if (y_range < 0.1) y_range <- 1
+        
+        x_min <- min(plot_data$fantasy_opp_score, na.rm = TRUE) - (x_range * 0.15)
+        x_max <- max(plot_data$fantasy_opp_score, na.rm = TRUE) + (x_range * 0.15)
+        y_min <- min(plot_data$avg_salary, na.rm = TRUE) - (y_range * 0.15)
+        y_max <- max(plot_data$avg_salary, na.rm = TRUE) + (y_range * 0.15)
+        
+        # Build interactive scatter plot (tooltips on hover)
+        # Draw non-highlighted points first, highlighted on top
+        p <- ggplot(plot_data, aes(x = fantasy_opp_score, y = avg_salary)) +
+          # Reference lines at averages
+          geom_hline(yintercept = avg_salary, linetype = "dashed", 
+                     color = "#7A7A7A", linewidth = 0.6) +
+          geom_vline(xintercept = avg_fos, linetype = "dashed", 
+                     color = "#7A7A7A", linewidth = 0.6) +
+          # Non-highlighted points (grey, no border)
+          ggiraph::geom_point_interactive(
+            data = filter(plot_data, !is_highlighted),
+            aes(tooltip = tooltip_html, data_id = team_normalized),
+            size = 14, shape = 19, color = "#8A8A8A", alpha = 0.65
+          ) +
+          # Team abbreviations for non-highlighted
+          geom_text(
+            data = filter(plot_data, !is_highlighted),
+            aes(label = team_abbr),
+            size = 3.5, fontface = "bold", color = "#3B3226", vjust = 0.4
+          ) +
+          # Highlighted point (gold fill, dark border, on top)
+          ggiraph::geom_point_interactive(
+            data = filter(plot_data, is_highlighted),
+            aes(tooltip = tooltip_html, data_id = team_normalized),
+            size = 14, shape = 21, fill = "#C9A227", color = "#3B3226", stroke = 2
+          ) +
+          # Team abbreviation for highlighted
+          geom_text(
+            data = filter(plot_data, is_highlighted),
+            aes(label = team_abbr),
+            size = 3.5, fontface = "bold", color = "#3B3226", vjust = 0.4
+          ) +
+          # Axes (no titles - external labels)
+          scale_x_continuous(limits = c(x_min, x_max), expand = c(0, 0),
+                             labels = function(x) sprintf("%.0f", x)) +
+          scale_y_continuous(limits = c(y_min, y_max), expand = c(0, 0),
+                             labels = function(y) sprintf("£%.1fM", y)) +
+          labs(x = NULL, y = NULL) +
+          theme_minimal(base_size = 14) +
+          theme(
+            text = element_text(family = "sans"),
+            plot.background = element_rect(fill = "transparent", color = NA),
+            panel.background = element_rect(fill = "transparent", color = NA),
+            panel.grid.minor = element_blank(),
+            panel.grid.major = element_line(color = "#E5E9F0", linewidth = 0.5),
+            axis.text = element_text(color = "#3B3226", size = 11),
+            plot.margin = margin(15, 20, 15, 15)
+          )
+        
+        # Return girafe object
+        ggiraph::girafe(
+          ggobj = p,
+          width_svg = 10,
+          height_svg = 7,
+          options = list(
+            ggiraph::opts_tooltip(
+              css = "background-color:#FFFFFF;border:2px solid #3B3226;border-radius:8px;box-shadow:3px 3px 0 #3B3226;padding:0;font-family:sans-serif;",
+              opacity = 1,
+              use_fill = FALSE
+            ),
+            ggiraph::opts_hover(
+              css = "fill:#C9A227;fill-opacity:0.9;cursor:pointer;"
+            ),
+            ggiraph::opts_selection(type = "none")
+          )
+        )
+        
       } else {
-        plot_data <- plot_data %>% filter(!is.na(avg_salary), !is.na(implied_opp_goals))
-        x_var <- "implied_opp_goals"
-        x_label_format <- function(x) sprintf("%.1f", x)
-      }
-      
-      if (nrow(plot_data) == 0) return(NULL)
-      
-      # Calculate averages for reference lines
-      avg_salary <- mean(plot_data$avg_salary, na.rm = TRUE)
-      avg_x <- mean(plot_data[[x_var]], na.rm = TRUE)
-      
-      # Axis ranges - 10% padding
-      x_range <- max(plot_data[[x_var]], na.rm = TRUE) - min(plot_data[[x_var]], na.rm = TRUE)
-      y_range <- max(plot_data$avg_salary, na.rm = TRUE) - min(plot_data$avg_salary, na.rm = TRUE)
-      
-      # Ensure minimum range
-      if (x_range < 0.1) x_range <- 1
-      if (y_range < 0.1) y_range <- 1
-      
-      x_min <- min(plot_data[[x_var]], na.rm = TRUE) - (x_range * 0.1)
-      x_max <- max(plot_data[[x_var]], na.rm = TRUE) + (x_range * 0.1)
-      y_min <- min(plot_data$avg_salary, na.rm = TRUE) - (y_range * 0.1)
-      y_max <- max(plot_data$avg_salary, na.rm = TRUE) + (y_range * 0.1)
-      
-      # Build the scatter plot
-      p <- ggplot(plot_data, aes(x = .data[[x_var]], y = avg_salary)) +
-        # League average reference lines
-        geom_hline(yintercept = avg_salary, linetype = "dashed", 
-                   color = APP_COLORS$muted, linewidth = 0.6) +
-        geom_vline(xintercept = avg_x, linetype = "dashed", 
-                   color = APP_COLORS$muted, linewidth = 0.6) +
-        # All points with full opacity
-        geom_point(size = 10.5, shape = 19, color = APP_COLORS$primary) +
-        # Labels for all teams
-        ggrepel::geom_text_repel(
-          aes(label = toupper(get_team_abbreviation(team_normalized))),
-          size = 5,
-          fontface = "bold",
-          color = APP_COLORS$primary,
-          box.padding = 0.8,
-          point.padding = 0.8,
-          segment.color = NA,
-          min.segment.length = Inf,
-          max.overlaps = 20
-        ) +
-        # Axis setup
-        scale_x_continuous(limits = c(x_min, x_max), expand = c(0, 0), labels = x_label_format) +
-        scale_y_continuous(limits = c(y_min, y_max), expand = c(0, 0), 
-                           labels = function(y) sprintf("%.1fM", y)) +
-        labs(x = NULL, y = NULL) +
-        theme_app_scatter()
-      
-      p
-    })
-    
-    # =========================================================================
-    # FILTERED PLAYER DATA
-    # =========================================================================
-    
-    filtered_data <- reactive({
-      req(rv$salary_data)
-      data <- rv$salary_data
-      
-      # Status filter
-      if (!is.null(input$status) && length(input$status) > 0 && "status" %in% names(data)) {
-        data <- data %>% filter(is.na(status) | status == "" | tolower(status) %in% input$status)
-      }
-      
-      # Position filter
-      if (!is.null(input$position) && input$position != "all") {
-        data <- data %>% filter(position == input$position)
-      }
-      
-      # Team filter
-      if (!is.null(input$team) && input$team != "all") {
-        data <- data %>% filter(team_normalized == input$team)
-      }
-      
-      # Sort
-      sort_by <- input$sort_by
-      if (!is.null(sort_by)) {
-        data <- switch(sort_by,
-                       "salary_desc" = data %>% arrange(desc(salary)),
-                       "salary_asc" = data %>% arrange(salary),
-                       "points_desc" = data %>% arrange(desc(total_points)),
-                       "avg_desc" = data %>% arrange(desc(average_points)),
-                       "player" = data %>% arrange(player),
-                       data)
-      }
-      
-      return(data)
-    })
-    
-    # =========================================================================
-    # PLAYER SALARY TABLE
-    # =========================================================================
-    
-    output$salary_table <- renderUI({
-      data <- filtered_data()
-      
-      if (is.null(data) || nrow(data) == 0) {
-        return(div(style = "padding: 2rem; text-align: center;", "No players found"))
-      }
-      
-      has_stats <- "total_points" %in% names(data) && !all(is.na(data$total_points))
-      display_data <- data
-      
-      col_defs <- list()
-      
-      # Player column
-      col_defs$player <- reactable::colDef(
-        name = "Player",
-        width = 280,
-        cell = function(value, index) {
-          pos <- display_data$position[index]
-          status <- display_data$status[index]
-          team <- display_data$team_normalized[index]
-          opp <- if ("opponent" %in% names(display_data)) display_data$opponent[index] else NA
-          ha <- if ("home_away" %in% names(display_data)) display_data$home_away[index] else NA
-          
-          # Status badge
-          status_badge <- NULL
-          if (!is.null(status) && !is.na(status) && status != "") {
-            status_lower <- tolower(status)
-            badge_style <- switch(status_lower,
-                                  "expected" = "background-color: #A3BE8C; color: white;",
-                                  "possible" = "background-color: #EBCB8B; color: #2E3440;",
-                                  "unexpected" = "background-color: #B48EAD; color: white;",
-                                  "injured" = "background-color: #BF616A; color: white;",
-                                  "suspended" = "background-color: #D08770; color: white;",
-                                  "background-color: #4C566A; color: white;")
-            status_badge <- htmltools::tags$span(
-              style = sprintf("padding: 2px 6px; border-radius: 4px; font-size: 0.65rem; font-weight: 600; margin-left: 8px; %s", badge_style),
-              toupper(substr(status_lower, 1, 3))
-            )
-          }
-          
-          # Logo
-          logo_html <- NULL
-          logo_path <- get_soccer_team_logo(team)
-          if (!is.null(logo_path) && logo_path != "") {
-            logo_html <- htmltools::tags$img(src = logo_path, style = "width: 16px; height: 16px; object-fit: contain; vertical-align: middle;")
-          }
-          
-          # Matchup
-          matchup_html <- NULL
-          if (!is.na(opp) && opp != "") {
-            team_abbr <- get_team_abbreviation(team)
-            opp_abbr <- get_team_abbreviation(opp)
-            if (!is.na(ha) && toupper(ha) == "H") {
-              matchup_html <- htmltools::tagList(
-                htmltools::tags$span(style = "font-weight: 700;", team_abbr),
-                " v ", htmltools::tags$span(opp_abbr)
-              )
-            } else {
-              matchup_html <- htmltools::tagList(
-                htmltools::tags$span(opp_abbr), " v ",
-                htmltools::tags$span(style = "font-weight: 700;", team_abbr)
-              )
-            }
-          }
-          
-          pos_text <- if (!is.na(pos) && pos != "") pos else ""
-          
-          htmltools::tags$div(
-            htmltools::tags$div(style = "font-weight: 600;", value, status_badge),
-            htmltools::tags$div(
-              style = "margin-top: 3px; font-size: 0.75rem; color: #9ca3af; display: flex; align-items: center; gap: 6px;",
-              logo_html,
-              if (!is.null(logo_html) && pos_text != "") htmltools::tags$span("Ã‚Â·"),
-              if (pos_text != "") htmltools::tags$span(pos_text),
-              if (pos_text != "" && !is.null(matchup_html)) htmltools::tags$span("Ã‚Â·"),
-              matchup_html
-            )
+        # =====================================================================
+        # DUMBBELL PLOT - FOS change from market baseline (with logo y-axis)
+        # =====================================================================
+        
+        # Build team-level deltas
+        plot_data <- rv$projections %>%
+          filter(position == pos_filter, !is.na(salary), !is.na(proj_gf), !is.na(proj_cs),
+                 !is.na(base_gf), !is.na(base_cs)) %>%
+          group_by(team_normalized) %>%
+          arrange(desc(salary)) %>%
+          mutate(pos_rank = row_number()) %>%
+          filter(pos_rank <= max_for_pos) %>%
+          summarise(
+            avg_salary = mean(salary, na.rm = TRUE),
+            adj_gf = mean(proj_gf, na.rm = TRUE),
+            adj_cs = mean(proj_cs, na.rm = TRUE),
+            base_gf_avg = mean(base_gf, na.rm = TRUE),
+            base_cs_avg = mean(base_cs, na.rm = TRUE),
+            .groups = "drop"
           )
+        
+        if (nrow(plot_data) == 0) {
+          p <- ggplot() +
+            annotate("text", x = 0.5, y = 0.5, 
+                     label = paste("No", pos_filter, "data available"),
+                     size = 5, color = "#7A7A7A", fontface = "italic") +
+            theme_void() +
+            theme(plot.background = element_rect(fill = "transparent", color = NA))
+          return(ggiraph::girafe(ggobj = p, width_svg = 8, height_svg = 6))
         }
-      )
-      
-      # Hide columns shown in player cell
-      col_defs$team_normalized <- reactable::colDef(show = FALSE)
-      col_defs$position <- reactable::colDef(show = FALSE)
-      col_defs$status <- reactable::colDef(show = FALSE)
-      col_defs$logo_path <- reactable::colDef(show = FALSE)
-      col_defs$opponent <- reactable::colDef(show = FALSE)
-      col_defs$home_away <- reactable::colDef(show = FALSE)
-      
-      # Salary
-      col_defs$salary <- reactable::colDef(
-        name = "Salary",
-        width = 80,
-        align = "center",
-        cell = function(value) if (is.na(value)) "-" else sprintf("%.1fM", value)
-      )
-      
-      # Odds columns
-      col_defs$implied_team_goals <- reactable::colDef(name = "TmG", width = 55, align = "center",
-                                                       cell = function(value) if (is.na(value)) "-" else sprintf("%.2f", value))
-      col_defs$implied_opp_goals <- reactable::colDef(name = "OpG", width = 55, align = "center",
-                                                      cell = function(value) if (is.na(value)) "-" else sprintf("%.2f", value))
-      col_defs$clean_sheet_pct <- reactable::colDef(name = "CS%", width = 50, align = "center",
-                                                    cell = function(value) if (is.na(value)) "-" else sprintf("%.0f%%", value))
-      
-      # Stats columns
-      if (has_stats) {
-        if ("total_points" %in% names(data)) {
-          col_defs$total_points <- reactable::colDef(name = "Pts", width = 55, align = "center",
-                                                     cell = function(value) if (is.na(value)) "-" else as.character(round(value)))
-        }
-        if ("average_points" %in% names(data)) {
-          col_defs$average_points <- reactable::colDef(name = "Avg", width = 55, align = "center",
-                                                       cell = function(value) if (is.na(value)) "-" else sprintf("%.1f", value))
-        }
+        
+        # Normalize goals and calculate FOS for both adjusted and baseline
+        gf_all <- c(plot_data$adj_gf, plot_data$base_gf_avg)
+        gf_min <- min(gf_all, na.rm = TRUE)
+        gf_max <- max(gf_all, na.rm = TRUE)
+        gf_range <- gf_max - gf_min
+        if (gf_range < 0.01) gf_range <- 1
+        
+        # Get current FOS weights from slider
+        current_weights <- fos_weights_reactive()
+        
+        highlighted_team <- input$highlight_team
+        
+        plot_data <- plot_data %>%
+          mutate(
+            adj_gf_norm = ((adj_gf - gf_min) / gf_range) * 100,
+            base_gf_norm = ((base_gf_avg - gf_min) / gf_range) * 100,
+            adj_fos = (adj_cs * current_weights["cs"]) + 
+              (adj_gf_norm * current_weights["gf"]),
+            base_fos = (base_cs_avg * current_weights["cs"]) + 
+              (base_gf_norm * current_weights["gf"]),
+            delta_fos = adj_fos - base_fos,
+            is_positive = delta_fos >= 0,
+            team_name_caps = toupper(team_normalized),
+            logo_path = sapply(team_normalized, function(t) get_soccer_team_logo(t) %||% ""),
+            is_highlighted = !is.null(highlighted_team) && highlighted_team != "" & team_normalized == highlighted_team,
+            # Y-axis label with logo for ggtext
+            y_label = ifelse(
+              logo_path != "",
+              paste0("<img src='", logo_path, "' width='16'/>&nbsp;&nbsp;**", team_name_caps, "**"),
+              paste0("**", team_name_caps, "**")
+            )
+          ) %>%
+          arrange(desc(adj_fos))
+        
+        # Create ordered factor for y-axis with logo labels
+        plot_data <- plot_data %>%
+          mutate(y_label = factor(y_label, levels = rev(y_label)))
+        
+        # Calculate x-axis range
+        x_min <- min(c(plot_data$base_fos, plot_data$adj_fos), na.rm = TRUE)
+        x_max <- max(c(plot_data$base_fos, plot_data$adj_fos), na.rm = TRUE)
+        x_range <- x_max - x_min
+        if (x_range < 1) x_range <- 10
+        x_min <- x_min - (x_range * 0.12)
+        x_max <- x_max + (x_range * 0.12)
+        
+        # Build dumbbell plot with conditional coloring
+        p <- ggplot(plot_data) +
+          # Segments - gold for positive, frost for negative (with transparency)
+          geom_segment(
+            data = filter(plot_data, is_positive & !is_highlighted),
+            aes(x = base_fos, xend = adj_fos, y = y_label, yend = y_label),
+            color = "#C9A227", alpha = 0.5, linewidth = 2.5
+          ) +
+          geom_segment(
+            data = filter(plot_data, !is_positive & !is_highlighted),
+            aes(x = base_fos, xend = adj_fos, y = y_label, yend = y_label),
+            color = "#4A90A4", alpha = 0.5, linewidth = 2.5
+          ) +
+          # Highlighted segment (darker, thicker)
+          geom_segment(
+            data = filter(plot_data, is_positive & is_highlighted),
+            aes(x = base_fos, xend = adj_fos, y = y_label, yend = y_label),
+            color = "#C9A227", linewidth = 3.5
+          ) +
+          geom_segment(
+            data = filter(plot_data, !is_positive & is_highlighted),
+            aes(x = base_fos, xend = adj_fos, y = y_label, yend = y_label),
+            color = "#4A90A4", linewidth = 3.5
+          ) +
+          # All baseline dots - grey
+          ggiraph::geom_point_interactive(
+            data = filter(plot_data, !is_highlighted),
+            aes(x = base_fos, y = y_label,
+                tooltip = paste0(
+                  "<div style='padding:6px;font-family:sans-serif;'>",
+                  "<strong>Market FOS:</strong> ", sprintf("%.1f", base_fos),
+                  "</div>"
+                ),
+                data_id = paste0(team_normalized, "_base")),
+            color = "#8A8A8A", size = 6
+          ) +
+          # Highlighted baseline dot - grey with border
+          ggiraph::geom_point_interactive(
+            data = filter(plot_data, is_highlighted),
+            aes(x = base_fos, y = y_label,
+                tooltip = paste0(
+                  "<div style='padding:6px;font-family:sans-serif;'>",
+                  "<strong>Market FOS:</strong> ", sprintf("%.1f", base_fos),
+                  "</div>"
+                ),
+                data_id = paste0(team_normalized, "_base")),
+            shape = 21, fill = "#8A8A8A", color = "#3B3226", stroke = 2, size = 7
+          ) +
+          # Adjusted dots - gold if positive, frost if negative, with dark border
+          ggiraph::geom_point_interactive(
+            data = filter(plot_data, is_positive & !is_highlighted),
+            aes(x = adj_fos, y = y_label,
+                tooltip = paste0(
+                  "<div style='padding:6px;font-family:sans-serif;'>",
+                  "<strong>Your FOS:</strong> ", sprintf("%.1f", adj_fos), "<br>",
+                  "<strong>Change:</strong> ", sprintf("%+.1f", delta_fos),
+                  "</div>"
+                ),
+                data_id = paste0(team_normalized, "_adj")),
+            shape = 21, fill = "#C9A227", color = "#3B3226", stroke = 1.5, size = 6
+          ) +
+          ggiraph::geom_point_interactive(
+            data = filter(plot_data, !is_positive & !is_highlighted),
+            aes(x = adj_fos, y = y_label,
+                tooltip = paste0(
+                  "<div style='padding:6px;font-family:sans-serif;'>",
+                  "<strong>Your FOS:</strong> ", sprintf("%.1f", adj_fos), "<br>",
+                  "<strong>Change:</strong> ", sprintf("%+.1f", delta_fos),
+                  "</div>"
+                ),
+                data_id = paste0(team_normalized, "_adj")),
+            shape = 21, fill = "#4A90A4", color = "#3B3226", stroke = 1.5, size = 6
+          ) +
+          # Highlighted adjusted dots - larger with thicker border
+          ggiraph::geom_point_interactive(
+            data = filter(plot_data, is_positive & is_highlighted),
+            aes(x = adj_fos, y = y_label,
+                tooltip = paste0(
+                  "<div style='padding:6px;font-family:sans-serif;'>",
+                  "<strong>Your FOS:</strong> ", sprintf("%.1f", adj_fos), "<br>",
+                  "<strong>Change:</strong> ", sprintf("%+.1f", delta_fos),
+                  "</div>"
+                ),
+                data_id = paste0(team_normalized, "_adj")),
+            shape = 21, fill = "#C9A227", color = "#3B3226", stroke = 2.5, size = 8
+          ) +
+          ggiraph::geom_point_interactive(
+            data = filter(plot_data, !is_positive & is_highlighted),
+            aes(x = adj_fos, y = y_label,
+                tooltip = paste0(
+                  "<div style='padding:6px;font-family:sans-serif;'>",
+                  "<strong>Your FOS:</strong> ", sprintf("%.1f", adj_fos), "<br>",
+                  "<strong>Change:</strong> ", sprintf("%+.1f", delta_fos),
+                  "</div>"
+                ),
+                data_id = paste0(team_normalized, "_adj")),
+            shape = 21, fill = "#4A90A4", color = "#3B3226", stroke = 2.5, size = 8
+          ) +
+          # X-axis at top (no title - external label)
+          scale_x_continuous(
+            limits = c(x_min, x_max),
+            expand = c(0, 0),
+            labels = function(x) sprintf("%.0f", x),
+            position = "top"
+          ) +
+          labs(x = NULL, y = NULL) +
+          theme_minimal(base_size = 14) +
+          theme(
+            text = element_text(family = "sans"),
+            plot.background = element_rect(fill = "transparent", color = NA),
+            panel.background = element_rect(fill = "transparent", color = NA),
+            panel.grid.minor = element_blank(),
+            panel.grid.major.y = element_blank(),
+            panel.grid.major.x = element_line(color = "#E5E9F0", linewidth = 0.5),
+            axis.text.x.top = element_text(color = "#3B3226", size = 11),
+            axis.text.y = ggtext::element_markdown(color = "#3B3226", size = 10),
+            plot.margin = margin(15, 20, 15, 80)  # Extra left margin for logos
+          )
+        
+        # Return girafe object
+        ggiraph::girafe(
+          ggobj = p,
+          width_svg = 10,
+          height_svg = 7,
+          options = list(
+            ggiraph::opts_tooltip(
+              css = "background-color:#FFFFFF;border:2px solid #3B3226;border-radius:6px;box-shadow:2px 2px 0 #3B3226;font-family:sans-serif;",
+              opacity = 1
+            ),
+            ggiraph::opts_hover(
+              css = "fill-opacity:0.8;cursor:pointer;"
+            ),
+            ggiraph::opts_selection(type = "none")
+          )
+        )
       }
-      
-      # Hide other columns
-      hidden_cols <- c("team", "player_id", "club_abbrev", "gameweek", "fanteam_name_normalized",
-                       "fanteam_club", "fbref_name", "fbref_team", "win_pct", "implied_total",
-                       "goals", "sot", "assists", "mins_60", "mins_90", "clean_sheets", 
-                       "saves", "goals_conceded", "yellows", "reds", "match_status")
-      for (col in hidden_cols) {
-        if (col %in% names(display_data)) {
-          col_defs[[col]] <- reactable::colDef(show = FALSE)
-        }
-      }
-      
-      reactable::reactable(
-        display_data,
-        searchable = TRUE,
-        sortable = TRUE,
-        defaultPageSize = 25,
-        showPageSizeOptions = TRUE,
-        pageSizeOptions = c(25, 50, 100),
-        striped = TRUE,
-        highlight = TRUE,
-        compact = TRUE,
-        fullWidth = TRUE,
-        theme = app_reactable_theme(),
-        columns = col_defs,
-        defaultColDef = reactable::colDef(vAlign = "center", headerVAlign = "center")
-      )
     })
     
+    observeEvent(input$refresh_data, {
+      rv$salaries <- NULL; rv$odds <- NULL; rv$matches <- NULL; rv$projections <- NULL
+      shinyWidgets::updatePickerInput(session, "gameweek", selected = input$gameweek)
+    })
   })
 }

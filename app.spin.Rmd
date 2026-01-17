@@ -1,0 +1,108 @@
+
+```{r}
+# =============================================================================
+# Sports Analytics Dashboard
+# 
+# Main application entry point
+# =============================================================================
+
+source("global.R")
+
+```
+```{r}
+# UI
+```
+```{r}
+
+ui <- fluidPage(
+  
+  # Head
+  tags$head(
+    # Google Fonts - Plus Jakarta Sans
+    tags$link(
+      href = "https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap",
+      rel = "stylesheet"
+    ),
+    # Custom CSS
+    tags$link(rel = "stylesheet", type = "text/css", href = "css/styles.css"),
+    # Page title
+    tags$title("Sports Analytics")
+  ),
+  
+  # Custom JS
+  tags$script(src = "js/app.js"),
+  
+  # -------------------------------------------------------------------------
+  # COMBINED NAVIGATION TRAY (Tier 1: Sports + Tier 2: Sections)
+  # -------------------------------------------------------------------------
+  
+  combined_nav_ui("main_nav"),
+  
+  # -------------------------------------------------------------------------
+  # MAIN CONTENT
+  # -------------------------------------------------------------------------
+  
+  div(
+    class = "container-fluid",
+    
+    # -----------------------------------------------------------------------
+    # PAGE CONTENT
+    # -----------------------------------------------------------------------
+    
+    page_container_ui("page_content"),
+    
+    # -----------------------------------------------------------------------
+    # FOOTER
+    # -----------------------------------------------------------------------
+    
+    div(
+      class = "footer",
+      tags$p("Sports Analytics Dashboard")
+    )
+  )
+)
+
+```
+```{r}
+# SERVER
+```
+```{r}
+
+server <- function(input, output, session) {
+  
+  cat("\n")
+  cat("========================================\n")
+  cat("SERVER FUNCTION STARTED\n")
+  cat("Session ID:", session$token, "\n")
+  cat("========================================\n\n")
+  
+  # Initialize combined navigation - returns list with selected_sport and selected_section
+  cat("[SERVER] Initializing combined navigation...\n")
+  nav <- combined_nav_server("main_nav")
+  cat("[SERVER] Combined navigation initialized\n")
+  
+  # Initialize page container - loads appropriate module
+  cat("[SERVER] Initializing page container...\n")
+  page_container_server("page_content", nav$selected_sport, nav$selected_section)
+  cat("[SERVER] Page container initialized\n")
+  
+  cat("[SERVER] All modules initialized successfully\n\n")
+}
+
+```
+```{r}
+# RUN APP
+```
+```{r}
+
+shinyApp(ui = ui, server = server)
+```
+
+
+
+---
+title: app.R
+author: michaelheery
+date: '2026-01-16'
+
+---
