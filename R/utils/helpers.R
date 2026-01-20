@@ -65,20 +65,12 @@ create_headshot_html <- function(headshot_url, team_color, size = "normal", posi
   # Default values if missing
   team_color <- team_color %||% "#E0E0E0"
   
-  # Determine size dimensions
-  if (size == "tiny") {
-    container_size <- "32px"
-    img_size <- "28px"
-    border_width <- "1px"
-  } else if (size == "small") {
-    container_size <- "42px"
-    img_size <- "38px"
-    border_width <- "2px"
-  } else {
-    container_size <- "56px"
-    img_size <- "52px"
-    border_width <- "2px"
-  }
+  # Map size param to CSS class modifier
+  size_class <- switch(size,
+                       "tiny" = "player-headshot--xs",
+                       "small" = "player-headshot--sm",
+                       "player-headshot--md"  # default/normal
+  )
   
   # Default fallback image
   fallback_url <- "https://a.espncdn.com/combiner/i?img=/i/headshots/nophoto.png"
@@ -93,15 +85,12 @@ create_headshot_html <- function(headshot_url, team_color, size = "normal", posi
     }
   }
   
+  # Use CSS classes for sizing, only inline style for dynamic team color
   div(
-    class = "player-headshot-container",
-    style = sprintf(
-      "width: %s; height: %s; background-color: %s; border-radius: 50%%; border: %s solid var(--outline); display: flex; align-items: center; justify-content: center; overflow: hidden; flex-shrink: 0;",
-      container_size, container_size, team_color, border_width
-    ),
+    class = paste("player-headshot", size_class),
+    style = sprintf("background-color: %s;", team_color),
     tags$img(
       src = headshot_url,
-      style = sprintf("width: %s; height: %s; object-fit: cover; border-radius: 50%%;", img_size, img_size),
       onerror = sprintf("this.src='%s'", fallback_url)
     )
   )
@@ -153,43 +142,15 @@ create_matchup_html <- function(team, opponent = NULL, home = TRUE, show_logos =
 #' Get full team name from abbreviation
 #' @param abbr Team abbreviation
 #' @return Full team name
+#' @note Uses NFL_TEAM_NAMES from nfl_config.R (available at runtime)
 get_team_full_name <- function(abbr) {
-  team_names <- c(
-    "ARI" = "Arizona Cardinals",
-    "ATL" = "Atlanta Falcons",
-    "BAL" = "Baltimore Ravens",
-    "BUF" = "Buffalo Bills",
-    "CAR" = "Carolina Panthers",
-    "CHI" = "Chicago Bears",
-    "CIN" = "Cincinnati Bengals",
-    "CLE" = "Cleveland Browns",
-    "DAL" = "Dallas Cowboys",
-    "DEN" = "Denver Broncos",
-    "DET" = "Detroit Lions",
-    "GB" = "Green Bay Packers",
-    "HOU" = "Houston Texans",
-    "IND" = "Indianapolis Colts",
-    "JAX" = "Jacksonville Jaguars",
-    "KC" = "Kansas City Chiefs",
-    "LAC" = "Los Angeles Chargers",
-    "LAR" = "Los Angeles Rams",
-    "LV" = "Las Vegas Raiders",
-    "MIA" = "Miami Dolphins",
-    "MIN" = "Minnesota Vikings",
-    "NE" = "New England Patriots",
-    "NO" = "New Orleans Saints",
-    "NYG" = "New York Giants",
-    "NYJ" = "New York Jets",
-    "PHI" = "Philadelphia Eagles",
-    "PIT" = "Pittsburgh Steelers",
-    "SEA" = "Seattle Seahawks",
-    "SF" = "San Francisco 49ers",
-    "TB" = "Tampa Bay Buccaneers",
-    "TEN" = "Tennessee Titans",
-    "WAS" = "Washington Commanders"
-  )
-  
-  unname(team_names[abbr])
+  # Use centralized team data from nfl_config.R
+  # NFL_TEAM_NAMES is available after global.R sources all files
+  if (exists("NFL_TEAM_NAMES")) {
+    return(unname(NFL_TEAM_NAMES[abbr]))
+  }
+  # Fallback if called before config loaded
+  abbr
 }
 
 #' Get available seasons from data folder

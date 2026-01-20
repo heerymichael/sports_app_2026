@@ -10,88 +10,7 @@ nhl_projections_ui <- function(id) {
   log_debug("nhl_projections_ui() called", level = "INFO")
   
   tagList(
-    # CSS for table styling
-    tags$style(HTML("
-      /* CRITICAL: Force headers to not wrap */
-      .rt-thead .rt-th {
-        white-space: nowrap !important;
-        overflow: hidden !important;
-        text-overflow: ellipsis !important;
-      }
-      
-      .rt-table .rt-th {
-        white-space: nowrap !important;
-      }
-      
-      /* Vertically center ALL table cells */
-      .rt-td {
-        vertical-align: middle !important;
-        display: flex !important;
-        align-items: center !important;
-      }
-      
-      .rt-tr {
-        align-items: center !important;
-      }
-      
-      /* Player cell with position appended */
-      .nhl-player-cell {
-        display: flex;
-        align-items: center;
-        gap: 10px;
-        height: 100%;
-      }
-      
-      .nhl-player-name {
-        font-weight: 600;
-        font-size: 0.9rem;
-      }
-      
-      .nhl-player-pos {
-        font-weight: 700;
-        font-size: 0.85rem;
-        color: #7A7A7A;
-      }
-      
-      /* Team cell with logo + full name */
-      .nhl-team-cell {
-        display: flex;
-        align-items: center;
-        gap: 8px;
-        height: 100%;
-      }
-      
-      .nhl-team-logo {
-        width: 40px;
-        height: 40px;
-        object-fit: contain;
-        flex-shrink: 0;
-      }
-      
-      .nhl-team-name {
-        font-weight: 500;
-        font-size: 0.85rem;
-        white-space: nowrap;
-        overflow: hidden;
-        text-overflow: ellipsis;
-      }
-      
-      /* Stat styling - NO conditional colors */
-      .nhl-stat {
-        font-weight: 600;
-        font-size: 0.9rem;
-        color: #3B3226;
-        width: 100%;
-        text-align: center;
-      }
-      
-      .nhl-stat-value {
-        font-size: 0.85rem;
-        color: #3B3226;
-        width: 100%;
-        text-align: center;
-      }
-    ")),
+    # NOTE: Styles use generic classes from styles.css
     
     # File Upload Card
     ui_card(
@@ -638,9 +557,9 @@ nhl_projections_server <- function(id) {
               cell = function(value, index) {
                 pos <- table_data$Pos[index]
                 div(
-                  class = "nhl-player-cell",
-                  span(class = "nhl-player-name", value),
-                  span(class = "nhl-player-pos", pos)
+                  class = "player-cell player-cell--row",
+                  span(class = "player-name", value),
+                  span(class = "position-badge position-badge--sm", pos)
                 )
               }
             ),
@@ -652,15 +571,15 @@ nhl_projections_server <- function(id) {
               minWidth = 165,
               headerStyle = list(fontWeight = 700, fontSize = "0.85rem"),
               cell = function(value, index) {
-                if (is.na(value) || value == "") return("—")
+                if (is.na(value) || value == "") return("â€”")
                 team_full <- table_data$TeamFull[index]
                 if (is.na(team_full)) team_full <- value
                 logo_path <- sprintf("nhl_logos/%s_light.svg", value)
                 div(
-                  class = "nhl-team-cell",
-                  tags$img(src = logo_path, class = "nhl-team-logo", 
+                  class = "team-cell",
+                  tags$img(src = logo_path, class = "team-logo team-logo--lg", 
                            onerror = "this.style.display='none'"),
-                  span(class = "nhl-team-name", team_full)
+                  span(class = "team-name", team_full)
                 )
               }
             ),
@@ -673,7 +592,7 @@ nhl_projections_server <- function(id) {
               align = "center",
               headerStyle = list(fontWeight = 700, fontSize = "0.85rem"),
               cell = function(value) {
-                div(class = "nhl-stat", sprintf("$%.1f", value))
+                div(class = "stat-cell", sprintf("$%.1f", value))
               }
             ),
             # Median - reduced 5px (150 - 5 = 145)
@@ -683,7 +602,7 @@ nhl_projections_server <- function(id) {
               align = "center",
               headerStyle = list(fontWeight = 700, fontSize = "0.85rem"),
               cell = function(value) {
-                if (value > 0) div(class = "nhl-stat", sprintf("%.1f", value)) else "—"
+                if (value > 0) div(class = "stat-cell", sprintf("%.1f", value)) else "â€”"
               }
             ),
             # Ceiling - reduced 5px (150 - 5 = 145)
@@ -693,7 +612,7 @@ nhl_projections_server <- function(id) {
               align = "center",
               headerStyle = list(fontWeight = 700, fontSize = "0.85rem"),
               cell = function(value) {
-                if (value > 0) div(class = "nhl-stat", sprintf("%.1f", value)) else "—"
+                if (value > 0) div(class = "stat-cell", sprintf("%.1f", value)) else "â€”"
               }
             ),
             # Blended - reduced 5px (150 - 5 = 145)
@@ -703,7 +622,7 @@ nhl_projections_server <- function(id) {
               align = "center",
               headerStyle = list(fontWeight = 700, fontSize = "0.85rem"),
               cell = function(value) {
-                if (value > 0) div(class = "nhl-stat", sprintf("%.1f", value)) else "—"
+                if (value > 0) div(class = "stat-cell", sprintf("%.1f", value)) else "â€”"
               }
             ),
             # Value - reduced 5px (150 - 5 = 145)
@@ -713,7 +632,7 @@ nhl_projections_server <- function(id) {
               align = "center",
               headerStyle = list(fontWeight = 700, fontSize = "0.85rem"),
               cell = function(value) {
-                if (value > 0) div(class = "nhl-stat-value", sprintf("%.2f", value)) else "—"
+                if (value > 0) div(class = "stat-cell stat-cell--sm", sprintf("%.2f", value)) else "â€”"
               }
             )
           )

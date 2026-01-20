@@ -1446,7 +1446,7 @@ golf_season_management_server <- function(id) {
                     div(style = "font-size: 0.5rem; color: var(--text-muted);", "SAL"),
                     div(
                       style = sprintf("font-size: 0.7rem; %s", if (is_underdog) "color: #EBCB8B; font-weight: 700;" else "color: var(--text-secondary);"),
-                      if ("salary" %in% names(player) && !is.na(player$salary)) sprintf("$%.1f", player$salary) else "â€”"
+                      if ("salary" %in% names(player) && !is.na(player$salary)) sprintf("$%.1f", player$salary) else "Ã¢â‚¬â€"
                     )
                   )
                 },
@@ -1563,7 +1563,7 @@ golf_season_management_server <- function(id) {
             ))
           }
           
-          # Build OUT â†’ IN text
+          # Build OUT Ã¢â€ â€™ IN text
           out_names <- sapply(transfer_data$out, function(x) x$player_name)
           in_names <- sapply(transfer_data$in_, function(x) x$player_name)
           
@@ -1591,7 +1591,7 @@ golf_season_management_server <- function(id) {
                   style = "display: flex; align-items: center; gap: 0.25rem; margin-bottom: 0.1rem;",
                   span(style = "color: var(--accent-coral); font-weight: 600;", "OUT:"),
                   span(out_names[i]),
-                  span(style = "color: var(--text-muted);", "â†’"),
+                  span(style = "color: var(--text-muted);", "Ã¢â€ â€™"),
                   span(style = "color: var(--accent-sage); font-weight: 600;", "IN:"),
                   span(in_names[i])
                 )

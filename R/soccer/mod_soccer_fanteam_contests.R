@@ -30,7 +30,7 @@
 
 FANTEAM_COEFFICIENTS <- list(
   # HOME SHOTS: shots = intercept + (win_pct * coef) + (total_goals * coef)
-  # RÂ² = 0.2940
+  # RÃƒâ€šÃ‚Â² = 0.2940
   home_shots = list(
     intercept = 3.9941,
     win_pct = 0.150385,
@@ -38,7 +38,7 @@ FANTEAM_COEFFICIENTS <- list(
   ),
   
   # AWAY SHOTS
-  # RÂ² = 0.2570
+  # RÃƒâ€šÃ‚Â² = 0.2570
   away_shots = list(
     intercept = 4.4395,
     win_pct = 0.152701,
@@ -46,7 +46,7 @@ FANTEAM_COEFFICIENTS <- list(
   ),
   
   # HOME SOT
-  # RÂ² = 0.1883
+  # RÃƒâ€šÃ‚Â² = 0.1883
   home_sot = list(
     intercept = 0.2532,
     win_pct = 0.051147,
@@ -54,7 +54,7 @@ FANTEAM_COEFFICIENTS <- list(
   ),
   
   # AWAY SOT
-  # RÂ² = 0.1988
+  # RÃƒâ€šÃ‚Â² = 0.1988
   away_sot = list(
     intercept = 0.5083,
     win_pct = 0.060438,
@@ -62,7 +62,7 @@ FANTEAM_COEFFICIENTS <- list(
   ),
   
   # HOME GOALS: goals = intercept + (win_pct * coef) + (draw_pct * coef) + (total * coef)
-  # RÂ² = 0.1431
+  # RÃƒâ€šÃ‚Â² = 0.1431
   home_goals = list(
     intercept = -1.3634,
     win_pct = 0.024723,
@@ -71,7 +71,7 @@ FANTEAM_COEFFICIENTS <- list(
   ),
   
   # AWAY GOALS
-  # RÂ² = 0.1373
+  # RÃƒâ€šÃ‚Â² = 0.1373
   away_goals = list(
     intercept = -0.5941,
     win_pct = 0.025267,
@@ -216,9 +216,9 @@ soccer_fanteam_contests_ui <- function(id) {
         console.log('FanTeam module JS loaded');
         
         // Auto-balance probability inputs when one changes
-        $(document).on('change', '.fanteam-prob-inputs input[type=number]', function() {
+        $(document).on('change', '.prob-inputs input[type=number]', function() {
           var changed = $(this);
-          var container = changed.closest('.fanteam-prob-inputs');
+          var container = changed.closest('.prob-inputs');
           var inputs = container.find('input[type=number]');
           
           // Get all three inputs
@@ -270,7 +270,7 @@ soccer_fanteam_contests_ui <- function(id) {
         });
         
         // Goals stepper buttons
-        $(document).on('click', '.fanteam-goals-btn', function(e) {
+        $(document).on('click', '.stepper-btn', function(e) {
           e.preventDefault();
           var btn = $(this);
           var targetId = btn.attr('data-target');
@@ -319,19 +319,19 @@ soccer_fanteam_contests_ui <- function(id) {
         if (myAwayCS) myAwayCS.innerText = msg.my_away_cs;
         
         if (homeShotsArrow) {
-          homeShotsArrow.className = 'fanteam-arrow' + (msg.home_shots_arrow === 'up' ? ' up' : (msg.home_shots_arrow === 'down' ? ' down' : ''));
+          homeShotsArrow.className = 'change-arrow' + (msg.home_shots_arrow === 'up' ? ' up' : (msg.home_shots_arrow === 'down' ? ' down' : ''));
           homeShotsArrow.innerHTML = msg.home_shots_arrow === 'up' ? '\u25B2' : (msg.home_shots_arrow === 'down' ? '\u25BC' : '');
         }
         if (awayShotsArrow) {
-          awayShotsArrow.className = 'fanteam-arrow' + (msg.away_shots_arrow === 'up' ? ' up' : (msg.away_shots_arrow === 'down' ? ' down' : ''));
+          awayShotsArrow.className = 'change-arrow' + (msg.away_shots_arrow === 'up' ? ' up' : (msg.away_shots_arrow === 'down' ? ' down' : ''));
           awayShotsArrow.innerHTML = msg.away_shots_arrow === 'up' ? '\u25B2' : (msg.away_shots_arrow === 'down' ? '\u25BC' : '');
         }
         if (homeCSArrow) {
-          homeCSArrow.className = 'fanteam-arrow' + (msg.home_cs_arrow === 'up' ? ' up' : (msg.home_cs_arrow === 'down' ? ' down' : ''));
+          homeCSArrow.className = 'change-arrow' + (msg.home_cs_arrow === 'up' ? ' up' : (msg.home_cs_arrow === 'down' ? ' down' : ''));
           homeCSArrow.innerHTML = msg.home_cs_arrow === 'up' ? '\u25B2' : (msg.home_cs_arrow === 'down' ? '\u25BC' : '');
         }
         if (awayCSArrow) {
-          awayCSArrow.className = 'fanteam-arrow' + (msg.away_cs_arrow === 'up' ? ' up' : (msg.away_cs_arrow === 'down' ? ' down' : ''));
+          awayCSArrow.className = 'change-arrow' + (msg.away_cs_arrow === 'up' ? ' up' : (msg.away_cs_arrow === 'down' ? ' down' : ''));
           awayCSArrow.innerHTML = msg.away_cs_arrow === 'up' ? '\u25B2' : (msg.away_cs_arrow === 'down' ? '\u25BC' : '');
         }
       });
@@ -376,11 +376,11 @@ soccer_fanteam_contests_ui <- function(id) {
     ui_card(title = "Projected Points", color = "sage",
             # Row 0: Table/Plot toggle
             div(style = "display: flex; align-items: center; gap: 0.5rem; margin-bottom: 1rem;",
-                actionButton(ns("output_table"), "Table", class = "btn-position-filter btn-output-toggle"),
-                actionButton(ns("output_plot"), "Plot", class = "btn-position-filter btn-output-toggle active")
+                actionButton(ns("output_table"), "Table", class = "btn-position-filter btn-output-toggle active"),
+                actionButton(ns("output_plot"), "Plot", class = "btn-position-filter btn-output-toggle")
             ),
-            # Plot controls container (hidden when table is selected)
-            div(id = ns("plot_controls"),
+            # Plot controls container (hidden when table is selected - default)
+            div(id = ns("plot_controls"), style = "display: none;",
                 # Chart controls row 1
                 div(style = "display: flex; align-items: center; gap: 1.5rem; margin-bottom: 0.75rem; flex-wrap: wrap;",
                     # View toggle
@@ -436,11 +436,11 @@ soccer_fanteam_contests_ui <- function(id) {
                         span(style = "font-weight: 600; color: #3B3226;", textOutput(ns("fos_gf_weight_display"), inline = TRUE))
                     )
                 ),
-                # Chart output with external axis labels wrapper
+                # Chart output with external axis labels wrapper (hidden by default since table is default view)
                 uiOutput(ns("chart_wrapper"))
             ),
-            # Table output container (hidden by default)
-            div(id = ns("table_container"), style = "display: none;",
+            # Table output container (visible by default)
+            div(id = ns("table_container"),
                 reactableOutput(ns("projections_table"))
             )
     ),
@@ -452,305 +452,8 @@ soccer_fanteam_contests_ui <- function(id) {
       @media (max-width: 900px) { #%s { grid-template-columns: 1fr !important; } }
     ", ns("match_grid_wrapper"), ns("match_grid_wrapper"), ns("match_grid_wrapper")))),
     
-    # CSS - Part 2: All other styles (no interpolation needed)
-    tags$style(HTML("
-      /* Chart filter buttons - matching NFL handbuild style */
-      .btn-position-filter {
-        padding: 6px 16px !important;
-        font-size: 0.85rem !important;
-        font-weight: 600 !important;
-        border: 2px solid #3B3226 !important;
-        border-radius: 6px !important;
-        background: #ffffff !important;
-        color: #3B3226 !important;
-        box-shadow: 3px 3px 0px #3B3226 !important;
-        transition: all 0.1s ease !important;
-        position: relative !important;
-        top: 0 !important;
-        left: 0 !important;
-        cursor: pointer !important;
-        outline: none !important;
-        text-align: center !important;
-      }
-      
-      /* Fixed widths for button groups */
-      .btn-output-toggle {
-        min-width: 80px !important;
-      }
-      .btn-view-toggle {
-        min-width: 100px !important;
-      }
-      .btn-pos-toggle {
-        min-width: 55px !important;
-      }
-      .btn-fos-toggle {
-        min-width: 95px !important;
-        font-size: 0.8rem !important;
-        padding: 5px 12px !important;
-      }
-      
-      .btn-position-filter:hover:not(.active) {
-        background: #f5f5f5 !important;
-      }
-      
-      .btn-position-filter:focus {
-        outline: none !important;
-      }
-      
-      /* ACTIVE state - dusty mauve like NFL */
-      .btn-position-filter.active {
-        background: #9B8A9E !important;
-        color: #ffffff !important;
-        border-color: #3B3226 !important;
-        box-shadow: none !important;
-        top: 3px !important;
-        left: 3px !important;
-      }
-      
-      .btn-position-filter.active:hover {
-        background: #8A7A8D !important;
-      }
-      
-      .fanteam-match {
-        background: #FFFFFF;
-        border: 3px solid #3B3226;
-        border-radius: 10px;
-        padding: 1rem;
-        box-shadow: 4px 4px 0 #3B3226;
-      }
-      
-      /* Header - team names larger */
-      .fanteam-match-header {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        margin-bottom: 0.75rem;
-      }
-      .fanteam-team {
-        display: flex;
-        align-items: center;
-        gap: 0.5rem;
-        font-weight: 600;
-        font-size: 1.15rem;
-        color: #3B3226;
-      }
-      .fanteam-team-logo { width: 32px; height: 32px; object-fit: contain; }
-      
-      /* Main controls: [HOME DRAW AWAY inputs + bar] [GOALS stepper] */
-      .fanteam-controls {
-        display: flex;
-        gap: 0.5rem;
-        margin-bottom: 0.75rem;
-      }
-      
-      /* Left section: probability inputs and bar */
-      .fanteam-probs-section {
-        flex: 1;
-        display: flex;
-        flex-direction: column;
-      }
-      
-      /* Probability inputs row */
-      .fanteam-prob-inputs {
-        display: flex;
-        justify-content: space-between;
-        margin-bottom: 0.5rem;
-      }
-      .fanteam-input-group {
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        flex: 1;
-      }
-      .fanteam-input-label {
-        font-size: 0.7rem;
-        color: #7A7A7A;
-        text-transform: uppercase;
-        font-weight: 600;
-        margin-bottom: 0.25rem;
-        height: 16px;
-      }
-      /* App convention: 3px border, 10px radius */
-      .fanteam-input-group input[type=number] {
-        width: 100%;
-        max-width: 58px;
-        text-align: center;
-        font-weight: 600;
-        font-size: 0.95rem;
-        padding: 0.35rem 0.2rem;
-        border: 3px solid #3B3226;
-        border-radius: 10px;
-        background: #FFFFFF;
-        height: 36px;
-        box-sizing: border-box;
-      }
-      .fanteam-input-group input[type=number]:focus {
-        outline: none;
-        border-color: #B48EAD;
-      }
-      .fanteam-input-group .form-group { margin-bottom: 0 !important; }
-      .fanteam-input-group .shiny-input-container { width: 100% !important; max-width: 58px; }
-      
-      /* Probability bar - taller with larger text */
-      .fanteam-prob-bar {
-        display: flex;
-        height: 44px;
-        border-radius: 10px;
-        overflow: hidden;
-        border: 3px solid #3B3226;
-      }
-      .fanteam-prob-segment {
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        font-size: 0.9rem;
-        font-weight: 600;
-        color: #3B3226;
-        text-shadow: 0 1px 2px rgba(0,0,0,0.3);
-        transition: width 0.2s ease;
-        min-width: 28px;
-      }
-      .fanteam-prob-segment.home { background: #D4B56A; }
-      .fanteam-prob-segment.draw { background: #D5D5D5; }
-      .fanteam-prob-segment.away { background: #8FB3C4; }
-      
-      /* Goals stepper - aligned with inputs and bar */
-      .fanteam-goals-section {
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        margin-left: 1rem;
-      }
-      .fanteam-goals-section .fanteam-input-label {
-        margin-bottom: 0.25rem;
-      }
-      .fanteam-goals-stepper {
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        height: calc(36px + 0.5rem + 44px); /* Match inputs + gap + bar */
-        justify-content: space-between;
-      }
-      .fanteam-goals-btn {
-        width: 26px;
-        height: 14px;
-        border: 1px solid #a0a0a0 !important;
-        background: #f3f3f3 !important;
-        border-radius: 7px !important;
-        cursor: pointer;
-        padding: 0 !important;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        box-shadow: none !important;
-        transform: none !important;
-        text-transform: none !important;
-        letter-spacing: normal !important;
-        font-size: inherit !important;
-      }
-      .fanteam-goals-btn:hover { 
-        background: #e8e8e8 !important; 
-        box-shadow: none !important; 
-        transform: none !important;
-      }
-      .fanteam-goals-btn:active { 
-        background: #ddd !important; 
-        box-shadow: none !important; 
-        transform: none !important;
-      }
-      .fanteam-goals-btn:focus { 
-        outline: none; 
-        box-shadow: none !important; 
-      }
-      
-      /* Chevron arrows using CSS borders */
-      .spinner-arrow {
-        width: 6px;
-        height: 6px;
-        border-right: 2px solid #3a3a3a;
-        border-bottom: 2px solid #3a3a3a;
-      }
-      .spinner-arrow.up {
-        transform: rotate(-135deg);
-        margin-top: 3px;
-      }
-      .spinner-arrow.down {
-        transform: rotate(45deg);
-        margin-bottom: 3px;
-      }
-      
-      .fanteam-goals-stepper .shiny-input-container {
-        width: auto !important;
-        margin: 0 !important;
-      }
-      .fanteam-goals-stepper .form-group {
-        margin-bottom: 0 !important;
-      }
-      .fanteam-goals-stepper input[type=number] {
-        width: 50px !important;
-        text-align: center !important;
-        font-size: 1.6rem !important;
-        font-weight: 700 !important;
-        color: #3B3226 !important;
-        border: none !important;
-        background: transparent !important;
-        padding: 0 !important;
-        height: auto !important;
-        -moz-appearance: textfield !important;
-      }
-      .fanteam-goals-stepper input[type=number]::-webkit-inner-spin-button,
-      .fanteam-goals-stepper input[type=number]::-webkit-outer-spin-button {
-        -webkit-appearance: none;
-        margin: 0;
-      }
-      .fanteam-goals-stepper input[type=number]:focus {
-        outline: none !important;
-      }
-      
-      /* Results */
-      .fanteam-results {
-        display: grid;
-        grid-template-columns: 1fr 1fr;
-        gap: 1rem;
-        padding-top: 0.5rem;
-        border-top: 1px solid #E5E9F0;
-      }
-      .fanteam-result-col { display: flex; flex-direction: column; gap: 4px; }
-      .fanteam-result-header { 
-        font-size: 0.7rem; 
-        color: #7A7A7A; 
-        text-transform: uppercase; 
-        font-weight: 600; 
-        margin-bottom: 0.25rem; 
-      }
-      .fanteam-result-row { 
-        display: flex; 
-        justify-content: space-between; 
-        align-items: center;
-        font-size: 0.8rem;
-      }
-      .fanteam-result-label { color: #5C4E3D; }
-      .fanteam-result-value { 
-        font-weight: 600; 
-        color: #3B3226; 
-        text-align: right;
-        min-width: 70px;
-      }
-      .fanteam-arrow {
-        display: inline-block;
-        width: 16px;
-        text-align: center;
-        font-size: 0.75rem;
-        margin-right: 4px;
-      }
-      .fanteam-arrow.up { color: #C9A227; font-weight: bold; }
-      .fanteam-arrow.down { color: #4A90A4; font-weight: bold; }
-      
-      .fanteam-pos-summary { display: flex; gap: 1rem; flex-wrap: wrap; margin-bottom: 0.5rem; }
-      .fanteam-pos-box { background: #F5F0EB; padding: 0.5rem 1rem; border-radius: 6px; text-align: center; border: 1px solid #E5E9F0; }
-      .fanteam-pos-box-label { font-weight: 600; color: #3B3226; }
-      .fanteam-pos-box-value { font-size: 0.85rem; color: #7A7A7A; }
-    "))
+    # NOTE: Styles use generic classes from styles.css
+    
   )
 }
 
@@ -765,7 +468,7 @@ soccer_fanteam_contests_server <- function(id, soccer_data = NULL) {
     rv <- reactiveValues(
       salaries = NULL, odds = NULL, matches = NULL,
       projections = NULL, initialized = FALSE,
-      output_view = "plot",      # "table" or "plot"
+      output_view = "table",      # "table" or "plot"
       chart_view = "value",      # "value" or "delta"
       chart_position = "FWD",    # "GK", "DEF", "MID", "FWD"
       fos_preset = "attack_heavy" # "cs_heavy", "balanced", "attack_lean", "attack_heavy"
@@ -1151,55 +854,55 @@ soccer_fanteam_contests_server <- function(id, soccer_data = NULL) {
           norm_d <- if (bar_total > 0) m$market_draw / bar_total * 100 else 33.3
           norm_a <- if (bar_total > 0) m$market_away_win / bar_total * 100 else 33.3
           
-          div(class = "fanteam-match",
+          div(class = "match-card",
               # Row 1: Team header
-              div(class = "fanteam-match-header",
-                  div(class = "fanteam-team",
-                      if (!is.null(home_logo)) tags$img(src = home_logo, class = "fanteam-team-logo"),
+              div(class = "match-card__header",
+                  div(class = "team-cell",
+                      if (!is.null(home_logo)) tags$img(src = home_logo, class = "team-logo"),
                       span(m$home_team)
                   ),
-                  div(class = "fanteam-team",
+                  div(class = "team-cell",
                       span(m$away_team),
-                      if (!is.null(away_logo)) tags$img(src = away_logo, class = "fanteam-team-logo")
+                      if (!is.null(away_logo)) tags$img(src = away_logo, class = "team-logo")
                   )
               ),
               
               # Row 2: Controls - [Probs section] [Goals stepper]
-              div(class = "fanteam-controls",
+              div(class = "match-card__controls",
                   # Left: HOME/DRAW/AWAY inputs + bar
-                  div(class = "fanteam-probs-section",
-                      div(class = "fanteam-prob-inputs",
-                          div(class = "fanteam-input-group",
-                              span(class = "fanteam-input-label", "HOME"),
+                  div(class = "prob-section",
+                      div(class = "prob-inputs",
+                          div(class = "form-group-inline",
+                              span(class = "form-label-sm", "HOME"),
                               numericInput(ns(paste0("home_", i)), NULL, round(m$market_home_win), 0, 100, 1)
                           ),
-                          div(class = "fanteam-input-group",
-                              span(class = "fanteam-input-label", "DRAW"),
+                          div(class = "form-group-inline",
+                              span(class = "form-label-sm", "DRAW"),
                               numericInput(ns(paste0("draw_", i)), NULL, round(m$market_draw), 0, 100, 1)
                           ),
-                          div(class = "fanteam-input-group",
-                              span(class = "fanteam-input-label", "AWAY"),
+                          div(class = "form-group-inline",
+                              span(class = "form-label-sm", "AWAY"),
                               numericInput(ns(paste0("away_", i)), NULL, round(m$market_away_win), 0, 100, 1)
                           )
                       ),
-                      div(class = "fanteam-prob-bar",
-                          div(class = "fanteam-prob-segment home", id = ns(paste0("bar_h_", i)),
+                      div(class = "prob-bar",
+                          div(class = "prob-bar__segment home", id = ns(paste0("bar_h_", i)),
                               style = sprintf("width:%.1f%%;", norm_h)),
-                          div(class = "fanteam-prob-segment draw", id = ns(paste0("bar_d_", i)),
+                          div(class = "prob-bar__segment draw", id = ns(paste0("bar_d_", i)),
                               style = sprintf("width:%.1f%%;", norm_d)),
-                          div(class = "fanteam-prob-segment away", id = ns(paste0("bar_a_", i)),
+                          div(class = "prob-bar__segment away", id = ns(paste0("bar_a_", i)),
                               style = sprintf("width:%.1f%%;", norm_a))
                       )
                   ),
                   # Right: Goals stepper - up arrow, number, down arrow
-                  div(class = "fanteam-goals-section",
-                      span(class = "fanteam-input-label", "GOALS"),
-                      div(class = "fanteam-goals-stepper",
-                          tags$button(type = "button", class = "fanteam-goals-btn goals-up", 
+                  div(class = "stepper-section",
+                      span(class = "form-label-sm", "GOALS"),
+                      div(class = "number-stepper",
+                          tags$button(type = "button", class = "stepper-btn goals-up", 
                                       `data-target` = ns(paste0("total_", i)),
                                       span(class = "spinner-arrow up")),
                           numericInput(ns(paste0("total_", i)), NULL, round(m$market_total, 1), 0.5, 8, 0.1),
-                          tags$button(type = "button", class = "fanteam-goals-btn goals-down", 
+                          tags$button(type = "button", class = "stepper-btn goals-down", 
                                       `data-target` = ns(paste0("total_", i)),
                                       span(class = "spinner-arrow down"))
                       )
@@ -1207,66 +910,66 @@ soccer_fanteam_contests_server <- function(id, soccer_data = NULL) {
               ),
               
               # Row 3: Results
-              div(class = "fanteam-results",
-                  div(class = "fanteam-result-col",
-                      div(class = "fanteam-result-header", "Market Implied"),
-                      div(class = "fanteam-result-row", 
-                          span(class = "fanteam-result-label", "Result:"),
-                          span(class = "fanteam-result-value", sprintf("%.1f - %.1f", m$market_home_goals, m$market_away_goals))
+              div(class = "results-grid",
+                  div(class = "results-grid__col",
+                      div(class = "results-grid__header", "Market Implied"),
+                      div(class = "results-grid__row", 
+                          span(class = "results-grid__label", "Result:"),
+                          span(class = "results-grid__value", sprintf("%.1f - %.1f", m$market_home_goals, m$market_away_goals))
                       ),
-                      div(class = "fanteam-result-row", 
-                          span(class = "fanteam-result-label", "Home Shots:"),
-                          span(class = "fanteam-result-value", sprintf("%.1f (%.1f)", mkt_hs, mkt_hsot))
+                      div(class = "results-grid__row", 
+                          span(class = "results-grid__label", "Home Shots:"),
+                          span(class = "results-grid__value", sprintf("%.1f (%.1f)", mkt_hs, mkt_hsot))
                       ),
-                      div(class = "fanteam-result-row", 
-                          span(class = "fanteam-result-label", "Away Shots:"),
-                          span(class = "fanteam-result-value", sprintf("%.1f (%.1f)", mkt_as, mkt_asot))
+                      div(class = "results-grid__row", 
+                          span(class = "results-grid__label", "Away Shots:"),
+                          span(class = "results-grid__value", sprintf("%.1f (%.1f)", mkt_as, mkt_asot))
                       ),
-                      div(class = "fanteam-result-row", 
-                          span(class = "fanteam-result-label", "Home CS%:"),
-                          span(class = "fanteam-result-value", sprintf("%.0f%%", mkt_hcs))
+                      div(class = "results-grid__row", 
+                          span(class = "results-grid__label", "Home CS%:"),
+                          span(class = "results-grid__value", sprintf("%.0f%%", mkt_hcs))
                       ),
-                      div(class = "fanteam-result-row", 
-                          span(class = "fanteam-result-label", "Away CS%:"),
-                          span(class = "fanteam-result-value", sprintf("%.0f%%", mkt_acs))
+                      div(class = "results-grid__row", 
+                          span(class = "results-grid__label", "Away CS%:"),
+                          span(class = "results-grid__value", sprintf("%.0f%%", mkt_acs))
                       )
                   ),
-                  div(class = "fanteam-result-col",
-                      div(class = "fanteam-result-header", "My View"),
-                      div(class = "fanteam-result-row", 
-                          span(class = "fanteam-result-label", "Result:"),
-                          span(class = "fanteam-result-value", id = ns(paste0("my_res_", i)),
+                  div(class = "results-grid__col",
+                      div(class = "results-grid__header", "My View"),
+                      div(class = "results-grid__row", 
+                          span(class = "results-grid__label", "Result:"),
+                          span(class = "results-grid__value", id = ns(paste0("my_res_", i)),
                                sprintf("%.1f - %.1f", m$market_home_goals, m$market_away_goals))
                       ),
-                      div(class = "fanteam-result-row", 
-                          span(class = "fanteam-result-label", "Home Shots:"),
+                      div(class = "results-grid__row", 
+                          span(class = "results-grid__label", "Home Shots:"),
                           span(style = "display: flex; align-items: center; justify-content: flex-end; flex: 1;",
-                               span(class = "fanteam-arrow", id = ns(paste0("arr_hs_", i))),
-                               span(class = "fanteam-result-value", id = ns(paste0("my_hs_", i)), 
+                               span(class = "change-arrow", id = ns(paste0("arr_hs_", i))),
+                               span(class = "results-grid__value", id = ns(paste0("my_hs_", i)), 
                                     sprintf("%.1f (%.1f)", mkt_hs, mkt_hsot))
                           )
                       ),
-                      div(class = "fanteam-result-row", 
-                          span(class = "fanteam-result-label", "Away Shots:"),
+                      div(class = "results-grid__row", 
+                          span(class = "results-grid__label", "Away Shots:"),
                           span(style = "display: flex; align-items: center; justify-content: flex-end; flex: 1;",
-                               span(class = "fanteam-arrow", id = ns(paste0("arr_as_", i))),
-                               span(class = "fanteam-result-value", id = ns(paste0("my_as_", i)), 
+                               span(class = "change-arrow", id = ns(paste0("arr_as_", i))),
+                               span(class = "results-grid__value", id = ns(paste0("my_as_", i)), 
                                     sprintf("%.1f (%.1f)", mkt_as, mkt_asot))
                           )
                       ),
-                      div(class = "fanteam-result-row", 
-                          span(class = "fanteam-result-label", "Home CS%:"),
+                      div(class = "results-grid__row", 
+                          span(class = "results-grid__label", "Home CS%:"),
                           span(style = "display: flex; align-items: center; justify-content: flex-end; flex: 1;",
-                               span(class = "fanteam-arrow", id = ns(paste0("arr_hcs_", i))),
-                               span(class = "fanteam-result-value", id = ns(paste0("my_hcs_", i)), 
+                               span(class = "change-arrow", id = ns(paste0("arr_hcs_", i))),
+                               span(class = "results-grid__value", id = ns(paste0("my_hcs_", i)), 
                                     sprintf("%.0f%%", mkt_hcs))
                           )
                       ),
-                      div(class = "fanteam-result-row", 
-                          span(class = "fanteam-result-label", "Away CS%:"),
+                      div(class = "results-grid__row", 
+                          span(class = "results-grid__label", "Away CS%:"),
                           span(style = "display: flex; align-items: center; justify-content: flex-end; flex: 1;",
-                               span(class = "fanteam-arrow", id = ns(paste0("arr_acs_", i))),
-                               span(class = "fanteam-result-value", id = ns(paste0("my_acs_", i)), 
+                               span(class = "change-arrow", id = ns(paste0("arr_acs_", i))),
+                               span(class = "results-grid__value", id = ns(paste0("my_acs_", i)), 
                                     sprintf("%.0f%%", mkt_acs))
                           )
                       )
@@ -1602,7 +1305,7 @@ soccer_fanteam_contests_server <- function(id, soccer_data = NULL) {
                      paste0("<img src='", logo_path, "' style='width:32px;height:32px;vertical-align:middle;margin-right:8px;'>"), ""),
               "<strong style='font-size:14px;'>", toupper(team_normalized), "</strong><br>",
               "<span style='color:#5C4E3D;'>FOS: <strong>", sprintf("%.1f", fantasy_opp_score), "</strong></span><br>",
-              "<span style='color:#5C4E3D;'>Salary: <strong>Â£", sprintf("%.2fM", avg_salary), "</strong></span><br>",
+              "<span style='color:#5C4E3D;'>Salary: <strong>Ãƒâ€šÃ‚Â£", sprintf("%.2fM", avg_salary), "</strong></span><br>",
               "<span style='color:#5C4E3D;'>CS%: <strong>", sprintf("%.0f%%", clean_sheet_pct), "</strong></span><br>",
               "<span style='color:#5C4E3D;'>xG: <strong>", sprintf("%.2f", implied_team_goals), "</strong></span>",
               "</div>"
@@ -1660,7 +1363,7 @@ soccer_fanteam_contests_server <- function(id, soccer_data = NULL) {
           scale_x_continuous(limits = c(x_min, x_max), expand = c(0, 0),
                              labels = function(x) sprintf("%.0f", x)) +
           scale_y_continuous(limits = c(y_min, y_max), expand = c(0, 0),
-                             labels = function(y) sprintf("Â£%.1fM", y)) +
+                             labels = function(y) sprintf("Ãƒâ€šÃ‚Â£%.1fM", y)) +
           labs(x = NULL, y = NULL) +
           theme_minimal(base_size = 14) +
           theme(
@@ -2024,12 +1727,7 @@ soccer_fanteam_contests_server <- function(id, soccer_data = NULL) {
         theme = app_reactable_theme(compact = TRUE),
         defaultColDef = colDef(
           align = "center",
-          minWidth = 63,
-          headerStyle = list(fontWeight = 600, fontSize = "0.75rem")
-        ),
-        columnGroups = list(
-          colGroup(name = "Market", columns = c("mkt_team_goals", "mkt_shots", "mkt_sot", "mkt_shots_conceded", "mkt_sot_conceded", "mkt_cs", "mkt_opp_cs")),
-          colGroup(name = "My Adjusted", columns = c("adj_team_goals", "adj_shots", "adj_sot", "adj_shots_conceded", "adj_sot_conceded", "adj_cs", "adj_opp_cs"))
+          minWidth = 70
         ),
         columns = list(
           team = colDef(
@@ -2037,7 +1735,7 @@ soccer_fanteam_contests_server <- function(id, soccer_data = NULL) {
             minWidth = 204,
             align = "left",
             style = list(borderRight = "2px solid #E5E9F0"),
-            headerStyle = list(fontWeight = 600, fontSize = "0.75rem", borderRight = "2px solid #E5E9F0"),
+            headerStyle = list(borderRight = "2px solid #E5E9F0"),
             cell = function(value, index) {
               logo <- table_df$logo[index]
               is_home <- table_df$is_home[index]
@@ -2063,44 +1761,163 @@ soccer_fanteam_contests_server <- function(id, soccer_data = NULL) {
           opponent = colDef(show = FALSE),
           mkt_opp_goals = colDef(show = FALSE),
           adj_opp_goals = colDef(show = FALSE),
-          # Market columns
+          # Hide other market columns (data still available for delta calc)
+          mkt_shots = colDef(show = FALSE),
+          mkt_sot = colDef(show = FALSE),
+          mkt_shots_conceded = colDef(show = FALSE),
+          mkt_sot_conceded = colDef(show = FALSE),
+          mkt_cs = colDef(show = FALSE),
+          mkt_opp_cs = colDef(show = FALSE),
+          # Market result column (no superscript)
           mkt_team_goals = colDef(
-            name = "Result", 
-            minWidth = 95,
+            name = "Mkt Result", 
+            minWidth = 80,
+            align = "center",
             cell = function(value, index) {
               sprintf("%.1f - %.1f", value, table_df$mkt_opp_goals[index])
             }
           ),
-          mkt_shots = colDef(name = "Sh", format = colFormat(digits = 1)),
-          mkt_sot = colDef(name = "SoT", format = colFormat(digits = 1)),
-          mkt_shots_conceded = colDef(name = "ShC", format = colFormat(digits = 1)),
-          mkt_sot_conceded = colDef(name = "SoTC", format = colFormat(digits = 1)),
-          mkt_cs = colDef(name = "CS%", format = colFormat(digits = 0, suffix = "%")),
-          mkt_opp_cs = colDef(
-            name = "OppCS%", 
-            format = colFormat(digits = 0, suffix = "%"),
-            style = list(borderRight = "2px solid #E5E9F0"),
-            headerStyle = list(fontWeight = 600, fontSize = "0.75rem", borderRight = "2px solid #E5E9F0")
-          ),
-          # Adjusted columns
+          # Adjusted result column (no superscript)
           adj_team_goals = colDef(
-            name = "Result", 
-            minWidth = 95,
+            name = "My Result", 
+            minWidth = 80,
+            align = "center",
+            style = list(borderRight = "2px solid #E5E9F0"),
+            headerStyle = list(borderRight = "2px solid #E5E9F0"),
             cell = function(value, index) {
               sprintf("%.1f - %.1f", value, table_df$adj_opp_goals[index])
             }
           ),
-          adj_shots = colDef(name = "Sh", format = colFormat(digits = 1)),
-          adj_sot = colDef(name = "SoT", format = colFormat(digits = 1)),
-          adj_shots_conceded = colDef(name = "ShC", format = colFormat(digits = 1)),
-          adj_sot_conceded = colDef(name = "SoTC", format = colFormat(digits = 1)),
-          adj_cs = colDef(name = "CS%", format = colFormat(digits = 0, suffix = "%")),
-          adj_opp_cs = colDef(name = "OppCS%", format = colFormat(digits = 0, suffix = "%"))
+          # Stat columns with delta superscripts - fixed width number, superscript after
+          adj_shots = colDef(
+            name = "Sh",
+            minWidth = 75,
+            align = "center",
+            cell = function(value, index) {
+              mkt <- table_df$mkt_shots[index]
+              delta <- value - mkt
+              if (abs(delta) < 0.05) {
+                div(style = "display:inline-block;",
+                    span(style = "display:inline-block;width:32px;text-align:right;", sprintf("%.1f", value)))
+              } else {
+                color <- if (delta > 0) "#A3BE8C" else "#D08770"
+                sign <- if (delta > 0) "+" else ""
+                div(style = "display:inline-block;",
+                    span(style = "display:inline-block;width:32px;text-align:right;", sprintf("%.1f", value)),
+                    tags$sup(style = sprintf("font-size:0.7em;font-weight:700;color:%s;", color),
+                             sprintf("%s%.1f", sign, delta)))
+              }
+            }
+          ),
+          adj_sot = colDef(
+            name = "SoT",
+            minWidth = 75,
+            align = "center",
+            cell = function(value, index) {
+              mkt <- table_df$mkt_sot[index]
+              delta <- value - mkt
+              if (abs(delta) < 0.05) {
+                div(style = "display:inline-block;",
+                    span(style = "display:inline-block;width:32px;text-align:right;", sprintf("%.1f", value)))
+              } else {
+                color <- if (delta > 0) "#A3BE8C" else "#D08770"
+                sign <- if (delta > 0) "+" else ""
+                div(style = "display:inline-block;",
+                    span(style = "display:inline-block;width:32px;text-align:right;", sprintf("%.1f", value)),
+                    tags$sup(style = sprintf("font-size:0.7em;font-weight:700;color:%s;", color),
+                             sprintf("%s%.1f", sign, delta)))
+              }
+            }
+          ),
+          adj_shots_conceded = colDef(
+            name = "ShC",
+            minWidth = 75,
+            align = "center",
+            cell = function(value, index) {
+              mkt <- table_df$mkt_shots_conceded[index]
+              delta <- value - mkt
+              if (abs(delta) < 0.05) {
+                div(style = "display:inline-block;",
+                    span(style = "display:inline-block;width:32px;text-align:right;", sprintf("%.1f", value)))
+              } else {
+                # For shots conceded, MORE is bad (coral), LESS is good (sage)
+                color <- if (delta > 0) "#D08770" else "#A3BE8C"
+                sign <- if (delta > 0) "+" else ""
+                div(style = "display:inline-block;",
+                    span(style = "display:inline-block;width:32px;text-align:right;", sprintf("%.1f", value)),
+                    tags$sup(style = sprintf("font-size:0.7em;font-weight:700;color:%s;", color),
+                             sprintf("%s%.1f", sign, delta)))
+              }
+            }
+          ),
+          adj_sot_conceded = colDef(
+            name = "SoTC",
+            minWidth = 75,
+            align = "center",
+            cell = function(value, index) {
+              mkt <- table_df$mkt_sot_conceded[index]
+              delta <- value - mkt
+              if (abs(delta) < 0.05) {
+                div(style = "display:inline-block;",
+                    span(style = "display:inline-block;width:32px;text-align:right;", sprintf("%.1f", value)))
+              } else {
+                # For shots on target conceded, MORE is bad (coral), LESS is good (sage)
+                color <- if (delta > 0) "#D08770" else "#A3BE8C"
+                sign <- if (delta > 0) "+" else ""
+                div(style = "display:inline-block;",
+                    span(style = "display:inline-block;width:32px;text-align:right;", sprintf("%.1f", value)),
+                    tags$sup(style = sprintf("font-size:0.7em;font-weight:700;color:%s;", color),
+                             sprintf("%s%.1f", sign, delta)))
+              }
+            }
+          ),
+          adj_cs = colDef(
+            name = "CS%",
+            minWidth = 70,
+            align = "center",
+            cell = function(value, index) {
+              mkt <- table_df$mkt_cs[index]
+              delta <- value - mkt
+              if (abs(delta) < 0.5) {
+                div(style = "display:inline-block;",
+                    span(style = "display:inline-block;width:32px;text-align:right;", sprintf("%.0f%%", value)))
+              } else {
+                color <- if (delta > 0) "#A3BE8C" else "#D08770"
+                sign <- if (delta > 0) "+" else ""
+                div(style = "display:inline-block;",
+                    span(style = "display:inline-block;width:32px;text-align:right;", sprintf("%.0f%%", value)),
+                    tags$sup(style = sprintf("font-size:0.7em;font-weight:700;color:%s;", color),
+                             sprintf("%s%.0f", sign, delta)))
+              }
+            }
+          ),
+          adj_opp_cs = colDef(
+            name = "OppCS%",
+            minWidth = 75,
+            align = "center",
+            cell = function(value, index) {
+              mkt <- table_df$mkt_opp_cs[index]
+              delta <- value - mkt
+              if (abs(delta) < 0.5) {
+                div(style = "display:inline-block;",
+                    span(style = "display:inline-block;width:32px;text-align:right;", sprintf("%.0f%%", value)))
+              } else {
+                # For opponent CS%, MORE is bad for us (coral), LESS is good (sage)
+                color <- if (delta > 0) "#D08770" else "#A3BE8C"
+                sign <- if (delta > 0) "+" else ""
+                div(style = "display:inline-block;",
+                    span(style = "display:inline-block;width:32px;text-align:right;", sprintf("%.0f%%", value)),
+                    tags$sup(style = sprintf("font-size:0.7em;font-weight:700;color:%s;", color),
+                             sprintf("%s%.0f", sign, delta)))
+              }
+            }
+          )
         ),
         striped = TRUE,
         highlight = TRUE,
         bordered = FALSE,
         compact = TRUE,
+        pagination = FALSE,
         rownames = FALSE
       )
     })

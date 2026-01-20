@@ -180,8 +180,7 @@ cat("[STARTUP]   NHL modules loaded\n")
 
 # Golf
 cat("[STARTUP]   Loading Golf modules...\n")
-source("R/golf/golf_config.R")             # Contest config, data loading
-cat("[STARTUP]     golf_config.R loaded\n")
+# Note: golf_config.R removed - was duplicate of sports_config.R
 source("R/golf/golf_optimizer.R")          # LP optimization
 cat("[STARTUP]     golf_optimizer.R loaded\n")
 source("R/golf/mod_golf_classic.R")        # Classic (full tournament) module

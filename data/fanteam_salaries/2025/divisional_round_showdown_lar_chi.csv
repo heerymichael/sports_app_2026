@@ -1,0 +1,39 @@
+Tournament,PlayerID,Name,FName,Club,Lineup,Position,Price
+1068257,4352561,Kalinic,Nikola,CHI,unexpected,tight_end,4
+1068257,4352659,Bagent,Tyson,CHI,unexpected,quarterback,15.4
+1068257,4352660,Williams,Caleb,CHI,expected,quarterback,17.9
+1068257,4352662,Keenum,Case,CHI,injured,quarterback,15.3
+1068257,4352663,Homer,Travis,CHI,unexpected,running_back,4
+1068257,4352665,Swift,D'Andre,CHI,expected,running_back,13.2
+1068257,4352666,Monangai,Kyle,CHI,expected,running_back,9.9
+1068257,4352672,Zaccheaus,Olamide,CHI,expected,wide_receiver,5.8
+1068257,4352673,Duvernay,Devin,CHI,unexpected,wide_receiver,4.4
+1068257,4352675,Odunze,Rome,CHI,expected,wide_receiver,10.3
+1068257,4352676,Burden III,Luther,CHI,expected,wide_receiver,11.7
+1068257,4352679,Walker,Jahdae,CHI,injured,wide_receiver,5.3
+1068257,4352680,Moore,DJ,CHI,expected,wide_receiver,11.4
+1068257,4352681,DEF/ST Bears,,CHI,expected,defense_special,8.2
+1068257,4352683,Loveland,Colston,CHI,expected,tight_end,12.5
+1068257,4352685,Kmet,Cole,CHI,expected,tight_end,7.5
+1068257,4352686,Smythe,Durham,CHI,expected,tight_end,4.2
+1068257,4352687,Carlson,Stephen,CHI,unexpected,tight_end,4
+1068257,4353053,Stafford,Matthew,LAR,expected,quarterback,19.8
+1068257,4353054,Bennett IV,Stetson,LAR,injured,quarterback,17.2
+1068257,4353056,Garoppolo,Jimmy,LAR,unexpected,quarterback,17.3
+1068257,4353057,Corum,Blake,LAR,expected,running_back,10.9
+1068257,4353058,Hunter,Jarquez,LAR,injured,running_back,4
+1068257,4353060,Williams,Kyren,LAR,expected,running_back,14.8
+1068257,4353062,Rivers,Ronnie,LAR,unexpected,running_back,4.2
+1068257,4353065,Atwell,Tutu,LAR,injured,wide_receiver,5.3
+1068257,4353066,Smith,Xavier,LAR,expected,wide_receiver,6.4
+1068257,4353068,Nacua,Puka,LAR,expected,wide_receiver,21.5
+1068257,4353070,Adams,Davante,LAR,expected,wide_receiver,16.3
+1068257,4353071,Mumpfield,Konata,LAR,expected,wide_receiver,6
+1068257,4353073,Whittington,Jordan,LAR,unexpected,wide_receiver,4.8
+1068257,4353074,Parkinson,Colby,LAR,expected,tight_end,11.6
+1068257,4353075,DEF/ST Rams,,LAR,expected,defense_special,8.8
+1068257,4353076,Ferguson,Terrance,LAR,expected,tight_end,5.8
+1068257,4353077,Higbee,Tyler,LAR,expected,tight_end,9.1
+1068257,4353079,Allen,Davis,LAR,unexpected,tight_end,5.4
+1068257,4353138,Vannett,Nick,LAR,injured,tight_end,4
+1068257,4459265,Brown,Brittain,CHI,unexpected,running_back,4.5

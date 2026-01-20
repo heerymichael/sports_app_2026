@@ -7,7 +7,8 @@
 #' Create a styled card
 #' @param ... Card content
 #' @param title Optional card header title
-#' @param color Optional accent color: "teal", "coral", "sage", "gold", "frost"
+#' @param color Optional accent color. Preferred: "teal", "coral", "sage", "gold", "frost"
+#'              Also accepts: "yellow" (alias for gold), "sky" (alias for frost)
 #' @param class Additional CSS classes
 #' @return Shiny tag
 ui_card <- function(..., title = NULL, color = NULL, class = NULL) {
@@ -16,7 +17,10 @@ ui_card <- function(..., title = NULL, color = NULL, class = NULL) {
   card_class <- "card"
   
   if (!is.null(color)) {
-    valid_colors <- c("teal", "coral", "sage", "gold", "frost")
+    # Valid colors - matches APP_COLORS naming
+    # yellow/sky are aliases for backward compatibility
+    valid_colors <- c("teal", "coral", "sage", "gold", "yellow", "frost", "sky")
+    
     if (color %in% valid_colors) {
       card_class <- paste0(card_class, " card--", color)
     }

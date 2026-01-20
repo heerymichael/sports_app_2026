@@ -21,7 +21,7 @@ if (!exists("GOLF_DEFAULT_HEADSHOT")) {
 }
 
 if (!exists("GOLF_CARD_COLOR")) {
-  GOLF_CARD_COLOR <- "#D4A84B"
+  GOLF_CARD_COLOR <- "gold"
 }
 
 if (!exists("GOLF_HEADSHOTS_PATH")) {

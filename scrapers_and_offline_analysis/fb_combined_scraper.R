@@ -8,6 +8,7 @@
 #   - Parquet-first loading for existing URLs (fast startup)
 #   - Fixed write_to_google_sheet to handle empty sheets (writes headers)
 #   - Exports to Parquet at end of scrape
+#   - NON-HEADLESS browser to bypass Cloudflare
 #
 # Target Sheets:
 #   - Player_Match_Stats: Combined player-level data
@@ -339,37 +340,97 @@ save_local_backup <- function(data, data_type, league) {
 }
 
 ################################################################################
-# CHROMOTE BROWSER
+# CHROMOTE BROWSER - NON-HEADLESS FOR CLOUDFLARE BYPASS
 ################################################################################
+# Global reference to chromote objects for cleanup
+BROWSER_ENV <- new.env()
+
 init_browser <- function() {
-  message("Initializing headless browser...")
+  message("Initializing browser (non-headless for Cloudflare bypass)...")
+  
+  # Kill any existing Chrome processes
   
   tryCatch({
-    system("pkill -f 'chrome.*--headless'", ignore.stdout = TRUE, ignore.stderr = TRUE)
+    system("pkill -f 'chrome'", ignore.stdout = TRUE, ignore.stderr = TRUE)
   }, error = function(e) {})
   
+  # Close any existing chromote sessions
   tryCatch({
     chromote::default_chromote_object()$close()
   }, error = function(e) {})
   
   Sys.sleep(2)
-  b <- ChromoteSession$new()
   
-  b$Network$setUserAgentOverride(
-    userAgent = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+  # Create Chrome with anti-detection flags
+  # chromote 0.2.0: Chrome$new() is non-headless by default
+  chrome_args <- c(
+    "--disable-blink-features=AutomationControlled",
+    "--disable-infobars",
+    "--disable-extensions",
+    "--no-first-run",
+    "--disable-default-apps",
+    "--disable-popup-blocking",
+    "--window-size=1920,1080"
   )
   
-  message("[OK] Browser initialized")
-  return(b)
+  tryCatch({
+    chrome <- Chrome$new(args = chrome_args)
+    BROWSER_ENV$chrome <- chrome
+    
+    chromote_obj <- Chromote$new(browser = chrome)
+    BROWSER_ENV$chromote <- chromote_obj
+    
+    b <- ChromoteSession$new(parent = chromote_obj)
+    
+    # Set user agent
+    b$Network$setUserAgentOverride(
+      userAgent = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
+    )
+    
+    # Hide webdriver property
+    b$Page$addScriptToEvaluateOnNewDocument(
+      source = "Object.defineProperty(navigator, 'webdriver', {get: () => undefined})"
+    )
+    
+    message("[OK] Browser initialized (visible window)")
+    return(b)
+    
+  }, error = function(e) {
+    message(sprintf("[WARN] Non-headless failed: %s", e$message))
+    message("[INFO] Falling back to default chromote...")
+    
+    # Fallback to standard chromote
+    b <- ChromoteSession$new()
+    b$Network$setUserAgentOverride(
+      userAgent = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
+    )
+    
+    message("[OK] Browser initialized (headless fallback)")
+    return(b)
+  })
 }
 
 close_browser <- function(browser) {
   if (!is.null(browser)) {
     tryCatch({ browser$close() }, error = function(e) {})
   }
+  
+  # Close chromote objects
   tryCatch({
-    system("pkill -f 'chrome.*--headless'", ignore.stdout = TRUE, ignore.stderr = TRUE)
+    if (!is.null(BROWSER_ENV$chromote)) BROWSER_ENV$chromote$close()
   }, error = function(e) {})
+  
+  tryCatch({
+    if (!is.null(BROWSER_ENV$chrome)) BROWSER_ENV$chrome$close()
+  }, error = function(e) {})
+  
+  # Kill Chrome processes
+  tryCatch({
+    system("pkill -f 'chrome'", ignore.stdout = TRUE, ignore.stderr = TRUE)
+  }, error = function(e) {})
+  
+  BROWSER_ENV$chrome <- NULL
+  BROWSER_ENV$chromote <- NULL
 }
 
 is_browser_alive <- function(browser) {
@@ -379,12 +440,12 @@ is_browser_alive <- function(browser) {
   }, error = function(e) FALSE)
 }
 
-fetch_page <- function(url, browser, wait_time = 10, max_retries = 3) {
+fetch_page <- function(url, browser, wait_time = 12, max_retries = 3) {
   
   for (attempt in 1:max_retries) {
     if (!is_browser_alive(browser)) {
       message("  [WARN] Browser session lost, reinitializing...")
-      tryCatch({ browser$close() }, error = function(e) {})
+      tryCatch({ close_browser(browser) }, error = function(e) {})
       Sys.sleep(2)
       browser <<- init_browser()
       Sys.sleep(2)
@@ -393,16 +454,32 @@ fetch_page <- function(url, browser, wait_time = 10, max_retries = 3) {
     result <- tryCatch({
       browser$Page$navigate(url)
       Sys.sleep(wait_time)
+      
+      # Get page HTML
       html <- browser$Runtime$evaluate("document.documentElement.outerHTML")$result$value
       page <- read_html(html)
       
+      # Check for Cloudflare
       title <- page %>% html_node("title") %>% html_text()
-      if (!is.na(title) && grepl("Just a moment", title, ignore.case = TRUE)) {
-        message(sprintf("  [WARN] Cloudflare (attempt %d/%d)", attempt, max_retries))
-        Sys.sleep(10)
-        return(NULL)
+      if (!is.na(title) && grepl("Just a moment|Checking your browser|Attention Required", title, ignore.case = TRUE)) {
+        message(sprintf("  [WARN] Cloudflare challenge detected (attempt %d/%d)", attempt, max_retries))
+        message("         Waiting 20s for challenge to resolve...")
+        Sys.sleep(20)
+        
+        # Try to get page again after waiting
+        html <- browser$Runtime$evaluate("document.documentElement.outerHTML")$result$value
+        page <- read_html(html)
+        
+        title <- page %>% html_node("title") %>% html_text()
+        if (!is.na(title) && grepl("Just a moment|Checking your browser", title, ignore.case = TRUE)) {
+          message("         Still blocked - will retry...")
+          if (attempt < max_retries) Sys.sleep(10)
+          next
+        }
       }
+      
       return(page)
+      
     }, error = function(e) {
       message(sprintf("  [WARN] Fetch error: %s", e$message))
       return(NULL)
@@ -412,7 +489,7 @@ fetch_page <- function(url, browser, wait_time = 10, max_retries = 3) {
     if (attempt < max_retries) Sys.sleep(5)
   }
   
-  message("  [ERROR] Failed to fetch page")
+  message("  [ERROR] Failed to fetch page after all retries")
   return(NULL)
 }
 

@@ -6,27 +6,17 @@
 # =============================================================================
 
 #' Get all available sports
-#' @return Named list of sport configurations
+#' @return Named list of sport configurations (order determines nav display order)
 get_sports_config <- function() {
   list(
-    nfl = list(
-      id = "nfl",
-      name = "NFL",
-      icon = "nfl.png",
-      color = APP_COLORS$coral,
-      color_light = "#E8B8A8",
-      icon_scale = 1.2,  # 20% larger than base
-      sections = c("projections", "handbuild", "showdown", "optimiser", "ffpc_bestball"),
-      default_section = "projections"
-    ),
-    
+    # Soccer is first/default
     soccer = list(
       id = "soccer",
       name = "Soccer",
       icon = "soccer.png",
       color = APP_COLORS$sage,
       color_light = "#C5D4B8",
-      icon_scale = 1.2,  # 20% larger than base
+      icon_scale = 1.2,
       sections = c("fanteam_contests", "team_dashboard", "player_dashboard"),
       default_section = "fanteam_contests"
     ),
@@ -38,19 +28,19 @@ get_sports_config <- function() {
       color = APP_COLORS$gold,
       color_light = "#F5E0B8",
       icon_scale = 1.0,  # Base size (taller icon)
-      sections = c("classic", "showdown", "season_long"),
+      sections = c("classic", "showdown", "season_long", "season_management"),
       default_section = "classic"
     ),
     
-    f1 = list(
-      id = "f1",
-      name = "Formula 1",
-      icon = "f1.png",
-      color = "#E5383B",
-      color_light = "#F2A3A5",
+    nfl = list(
+      id = "nfl",
+      name = "NFL",
+      icon = "nfl.png",
+      color = APP_COLORS$coral,
+      color_light = "#E8B8A8",
       icon_scale = 1.2,
-      sections = c("dashboard", "projections"),
-      default_section = "dashboard"
+      sections = c("ffpc_bestball", "handbuild", "showdown", "projections"),
+      default_section = "ffpc_bestball"
     ),
     
     nhl = list(
@@ -62,6 +52,17 @@ get_sports_config <- function() {
       icon_scale = 1.2,
       sections = c("dashboard", "projections", "handbuild"),
       default_section = "projections"
+    ),
+    
+    f1 = list(
+      id = "f1",
+      name = "Formula 1",
+      icon = "f1.png",
+      color = "#E5383B",
+      color_light = "#F2A3A5",
+      icon_scale = 1.2,
+      sections = c("dashboard", "projections"),
+      default_section = "dashboard"
     )
   )
 }
@@ -87,12 +88,6 @@ get_sections_config <- function() {
       id = "showdown",
       name = "Showdown",
       icon = "zap"
-    ),
-    
-    optimiser = list(
-      id = "optimiser",
-      name = "Optimiser",
-      icon = "sliders"
     ),
     
     ffpc_bestball = list(
@@ -150,6 +145,12 @@ get_sections_config <- function() {
       id = "season_long",
       name = "Season Long",
       icon = "calendar"
+    ),
+    
+    season_management = list(
+      id = "season_management",
+      name = "Management",
+      icon = "clipboard-list"
     )
   )
 }

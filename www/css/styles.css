@@ -335,6 +335,52 @@ button:active:not(.nav-arrow) {
   background-color: var(--bg-tertiary);
 }
 
+/* Target highlight button - coral/red to draw attention */
+.btn-target-highlight,
+button.btn-target-highlight,
+.btn.btn-target-highlight {
+  background-color: var(--accent-coral) !important;
+  background-image: none !important;
+  color: var(--bg-white) !important;
+  border: 2px solid var(--outline) !important;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.15) !important;
+}
+
+.btn-target-highlight:hover,
+button.btn-target-highlight:hover,
+.btn.btn-target-highlight:hover {
+  background-color: var(--accent-coral-dark, #c97a68) !important;
+  background-image: none !important;
+  transform: scale(1.1);
+}
+
+/* Fraction display for pairing columns */
+.fraction {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 1px;
+  font-variant-numeric: tabular-nums;
+}
+
+.fraction__num {
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.fraction__slash {
+  font-size: 0.75rem;
+  font-weight: 400;
+  color: var(--text-muted);
+  margin: 0 1px;
+}
+
+.fraction__denom {
+  font-size: 0.7rem;
+  font-weight: 500;
+  color: var(--text-muted);
+}
+
 /* Subtle refresh button - for both NFL and Soccer */
 .btn-refresh-subtle,
 button.btn-refresh-subtle,
@@ -1299,6 +1345,14 @@ details > *:not(summary) {
   border-bottom: 1px solid #F0F0F0 !important;
   font-size: 13px;
   color: var(--text-primary);
+  vertical-align: middle !important;
+}
+
+/* Ensure cell content is vertically centered */
+.rt-td > div {
+  display: flex;
+  align-items: center;
+  justify-content: inherit;
 }
 
 .rt-tr-striped {
@@ -1384,6 +1438,13 @@ details > *:not(summary) {
 .reactable-compact .rt-td {
   padding: 5px 10px !important;
   font-size: 12px;
+  vertical-align: middle !important;
+}
+
+.reactable-compact .rt-td > div {
+  display: flex;
+  align-items: center;
+  justify-content: inherit;
 }
 
 .reactable-compact .rt-th {
@@ -1393,7 +1454,10 @@ details > *:not(summary) {
 
 /* Number alignment */
 .rt-align-center { text-align: center !important; }
+.rt-align-center > div { justify-content: center; }
 .rt-align-right { text-align: right !important; }
+.rt-align-right > div { justify-content: flex-end; }
+.rt-align-left > div { justify-content: flex-start; }
 
 /* -----------------------------------------------------------------------------
    NAVIGATION TRAY - Combined Sport & Section Nav
@@ -2016,3 +2080,616 @@ details > *:not(summary) {
 .pool-team-filter .selectize-dropdown {
   z-index: 1000 !important;
 }
+
+/* -----------------------------------------------------------------------------
+   FFPC MY TEAM CONTAINER - Draft tracker with positional COLUMNS
+   ----------------------------------------------------------------------------- */
+.my-team-container {
+  background: var(--bg-white);
+  border: var(--outline-medium) solid var(--outline);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-md);
+  margin-bottom: var(--space-lg);
+  overflow: visible;
+}
+
+.my-team-header {
+  font-family: var(--font-primary);
+  font-weight: 700;
+  font-size: 1rem;
+  padding: var(--space-md) var(--space-lg);
+  background-color: var(--accent-coral);
+  border-bottom: var(--outline-medium) solid var(--outline);
+  color: var(--text-primary);
+  border-radius: 13px 13px 0 0;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.my-team-body {
+  padding: var(--space-md) var(--space-lg);
+}
+
+/* Positional COLUMNS container */
+.my-team-columns {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: var(--space-md);
+}
+
+/* Individual position column */
+.my-team-column {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+  min-height: 100px;
+}
+
+/* Position label at top of column */
+.my-team-column__label {
+  text-align: center;
+  padding-bottom: var(--space-sm);
+  border-bottom: 2px dashed var(--bg-secondary);
+  margin-bottom: var(--space-xs);
+}
+
+/* Cards stack vertically */
+.my-team-column__cards {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+}
+
+/* Empty state text */
+.my-team-column__empty {
+  color: var(--text-muted);
+  font-style: italic;
+  font-size: 0.8rem;
+  text-align: center;
+  padding: 1rem 0;
+}
+
+/* -----------------------------------------------------------------------------
+   FFPC PLAYER CARD - Individual drafted player display
+   ----------------------------------------------------------------------------- */
+.ffpc-player-card {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.4rem 0.6rem;
+  background: var(--bg-tertiary);
+  border: 2px solid var(--outline);
+  border-radius: var(--radius-sm);
+  position: relative;
+  transition: transform var(--transition-fast), box-shadow var(--transition-fast);
+}
+
+.ffpc-player-card:hover {
+  transform: translate(-1px, -1px);
+  box-shadow: 3px 3px 0 var(--shadow);
+}
+
+/* Headshot on left - 40px */
+.ffpc-player-card__headshot {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  border: 2px solid var(--outline);
+  overflow: hidden;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.ffpc-player-card__headshot img {
+  width: 36px;
+  height: 36px;
+  object-fit: cover;
+  border-radius: 50%;
+}
+
+/* Name section - two lines */
+.ffpc-player-card__name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.ffpc-player-card__firstname {
+  font-size: 0.6rem;
+  font-weight: 500;
+  color: var(--text-muted);
+  line-height: 1.2;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+
+.ffpc-player-card__surname {
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  line-height: 1.2;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Indicators section - QB left, weeks stacked vertically right */
+.ffpc-player-card__indicators {
+  display: flex;
+  flex-direction: row;
+  gap: 3px;
+  align-items: center;
+}
+
+/* Week indicators container - vertical stack */
+.ffpc-player-card__weeks {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+/* QB Stack indicator */
+.ffpc-indicator--qb-stack {
+  font-size: 0.5rem;
+  font-weight: 700;
+  padding: 2px 3px;
+  border-radius: 2px;
+  background: var(--bg-secondary);
+  color: var(--text-muted);
+  line-height: 1;
+}
+
+.ffpc-indicator--qb-stack.active {
+  background: var(--accent-coral);
+  color: white;
+}
+
+/* Week correlation indicators - stacked vertically */
+.ffpc-indicator--week {
+  font-size: 0.45rem;
+  font-weight: 700;
+  width: 14px;
+  height: 11px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 2px;
+  background: var(--bg-secondary);
+  color: var(--text-muted);
+  line-height: 1;
+}
+
+.ffpc-indicator--week.active {
+  background: var(--accent-sage);
+  color: white;
+}
+
+/* Team logo on right - SAME SIZE as headshot (40px) */
+.ffpc-player-card__team-logo {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  border: 2px solid var(--outline);
+  overflow: hidden;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.ffpc-player-card__team-logo img {
+  width: 30px;
+  height: 30px;
+  object-fit: contain;
+}
+
+/* Remove button for card - shows on hover */
+.ffpc-player-card__remove {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--accent-coral);
+  color: white;
+  border: none;
+  cursor: pointer;
+  font-size: 0.6rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transition: opacity var(--transition-fast);
+}
+
+.ffpc-player-card:hover .ffpc-player-card__remove {
+  opacity: 1;
+}
+
+/* Target player card - semi-transparent */
+.ffpc-player-card--target {
+  opacity: 0.7;
+  border-style: dashed;
+}
+
+.ffpc-player-card--target:hover {
+  opacity: 0.85;
+}
+
+/* Draft-by indicator for target cards - inline, level with first name */
+.ffpc-draft-by-indicator {
+  background: var(--accent-coral);
+  color: white;
+  font-size: 0.7rem;
+  font-weight: 800;
+  padding: 2px 6px;
+  border-radius: 4px;
+  line-height: 1;
+  white-space: nowrap;
+  align-self: flex-start;
+  margin-top: 2px;
+}
+
+.ffpc-draft-by-indicator--urgent {
+  background: var(--accent-sage);
+  animation: pulse-indicator 1.5s ease-in-out infinite;
+}
+
+@keyframes pulse-indicator {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.05); }
+}
+
+/* Targets section in My Team header */
+.my-team-targets {
+  display: flex;
+  align-items: center;
+  gap: var(--space-md);
+}
+
+.my-team-targets__label {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  white-space: nowrap;
+}
+
+.my-team-targets__input {
+  min-width: 280px;
+  flex: 1;
+  max-width: 400px;
+}
+
+.my-team-targets__input .selectize-input {
+  min-height: 32px !important;
+  padding: 4px 8px !important;
+  background: white !important;
+  display: flex !important;
+  flex-wrap: wrap !important;
+  gap: 4px !important;
+}
+
+.my-team-targets__input .selectize-input .item {
+  background: var(--accent-teal-light) !important;
+  border: 1px solid var(--accent-teal) !important;
+  border-radius: 4px !important;
+  padding: 2px 6px !important;
+  font-size: 0.75rem !important;
+}
+
+.my-team-targets__input .selectize-dropdown {
+  z-index: 1000 !important;
+}
+
+/* Target selector card - separate widget for adding targets */
+.target-selector-card {
+  background: var(--bg-white);
+  border: 3px solid var(--outline);
+  border-radius: var(--radius-lg);
+  padding: var(--space-md);
+  margin-bottom: var(--space-lg);
+}
+
+.target-selector-card .form-group {
+  margin-bottom: 0 !important;
+}
+
+.target-selector-card .shiny-input-container {
+  flex: 1 !important;
+}
+
+.target-selector-card .selectize-control {
+  width: 100% !important;
+}
+
+.target-selector-card .selectize-control.single,
+.target-selector-card .selectize-control.multi {
+  width: 100% !important;
+}
+
+.target-selector-card .selectize-input {
+  min-height: 36px !important;
+  padding: 6px 10px !important;
+  background: var(--bg-secondary) !important;
+  border: 2px solid var(--outline) !important;
+  border-radius: var(--radius-sm) !important;
+  box-sizing: border-box !important;
+}
+
+.target-selector-card .selectize-input .item {
+  background: var(--accent-coral-light) !important;
+  border: 1px solid var(--accent-coral) !important;
+  border-radius: 4px !important;
+  padding: 3px 8px !important;
+  font-size: 0.8rem !important;
+  font-weight: 600 !important;
+}
+
+.target-selector-card .selectize-input .remove {
+  color: var(--accent-coral) !important;
+}
+
+.target-selector-card .selectize-dropdown {
+  z-index: 1000 !important;
+  border: 2px solid var(--outline) !important;
+}
+
+/* -----------------------------------------------------------------------------
+   FANTEAM MATCH CARDS - Soccer module odds visualization
+   ----------------------------------------------------------------------------- */
+.match-card {
+  background: var(--bg-white);
+  border: 3px solid var(--outline);
+  border-radius: var(--radius-lg);
+  padding: var(--space-md);
+  box-shadow: 4px 4px 0 var(--outline);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+}
+
+/* Match card header - team names and logos */
+.match-card__header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: var(--space-sm);
+}
+
+.team-cell {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  font-weight: 600;
+  font-size: 1.1rem;
+  color: var(--text-primary);
+}
+
+/* Team logo - constrained size (critical!) */
+.team-logo {
+  width: 32px;
+  height: 32px;
+  object-fit: contain;
+  flex-shrink: 0;
+}
+
+/* Match card controls - probability inputs and goals stepper */
+.match-card__controls {
+  display: flex;
+  gap: var(--space-md);
+  margin-bottom: var(--space-sm);
+}
+
+/* Probability section - inputs + bar */
+.prob-section {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+}
+
+.prob-inputs {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-xs);
+}
+
+.form-group-inline {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  flex: 1;
+}
+
+.form-label-sm {
+  font-size: 0.65rem;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  margin-bottom: 2px;
+  height: 14px;
+}
+
+/* Numeric inputs inside prob-inputs */
+.prob-inputs input[type="number"],
+.form-group-inline input[type="number"] {
+  width: 100%;
+  max-width: 70px;
+  text-align: center;
+  font-weight: 600;
+  font-size: 0.9rem;
+  padding: 0.35rem 0.2rem;
+  border: 3px solid var(--outline);
+  border-radius: var(--radius-lg);
+  background: var(--bg-white);
+  height: 36px;
+  box-sizing: border-box;
+}
+
+.prob-inputs input[type="number"]:focus,
+.form-group-inline input[type="number"]:focus {
+  outline: none;
+  border-color: var(--accent-sage);
+}
+
+/* Shiny form-group reset inside inline groups */
+.form-group-inline .form-group { margin-bottom: 0 !important; }
+.form-group-inline .shiny-input-container { width: 100% !important; max-width: 70px; }
+
+/* Probability bar - stacked segments */
+.prob-bar {
+  display: flex;
+  height: 44px;
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  border: 3px solid var(--outline);
+}
+
+.prob-bar__segment {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  transition: width 0.2s ease;
+  min-width: 28px;
+}
+
+.prob-bar__segment.home { background: var(--accent-yellow); }
+.prob-bar__segment.draw { background: #D5D5D5; }
+.prob-bar__segment.away { background: var(--accent-sky); }
+
+/* Goals stepper section - aligns with inputs (36px) + gap (8px) + bar (44px) = 88px */
+.stepper-section {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-width: 60px;
+}
+
+.number-stepper {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: space-between;
+  height: 88px; /* Match: input height + gap + bar height */
+}
+
+.number-stepper input[type="number"] {
+  width: 55px;
+  text-align: center;
+  font-weight: 700;
+  font-size: 1.15rem;
+  padding: 0;
+  border: none;
+  background: transparent;
+  box-sizing: border-box;
+  -moz-appearance: textfield; /* Firefox */
+}
+
+/* Hide native spinners */
+.number-stepper input[type="number"]::-webkit-outer-spin-button,
+.number-stepper input[type="number"]::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+.number-stepper input[type="number"]:focus {
+  outline: none;
+}
+
+.number-stepper .form-group { margin-bottom: 0 !important; }
+.number-stepper .shiny-input-container { width: auto !important; margin: 0 !important; }
+
+.stepper-btn {
+  width: 26px;
+  height: 14px;
+  border: 1px solid #a0a0a0 !important;
+  background: #f3f3f3 !important;
+  border-radius: 7px !important;
+  cursor: pointer;
+  padding: 0 !important;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: none !important;
+  transform: none !important;
+  text-transform: none !important;
+  letter-spacing: normal !important;
+  font-size: inherit !important;
+}
+
+.stepper-btn:hover { background: #e8e8e8 !important; }
+.stepper-btn:active { background: #ddd !important; }
+.stepper-btn:focus { outline: none; box-shadow: none !important; }
+
+.spinner-arrow {
+  width: 6px;
+  height: 6px;
+  border-right: 2px solid #3a3a3a;
+  border-bottom: 2px solid #3a3a3a;
+}
+
+.spinner-arrow.up { transform: rotate(-135deg); margin-top: 3px; }
+.spinner-arrow.down { transform: rotate(45deg); margin-bottom: 3px; }
+
+/* Results grid - Market vs My View comparison */
+.results-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-sm);
+  padding-top: var(--space-sm);
+  border-top: 2px dashed var(--bg-secondary);
+}
+
+.results-grid__col {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.results-grid__header {
+  font-weight: 700;
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 4px;
+  padding-bottom: 4px;
+  border-bottom: 1px solid var(--border);
+}
+
+.results-grid__row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.8rem;
+  padding: 2px 0;
+}
+
+.results-grid__label {
+  color: var(--text-muted);
+}
+
+.results-grid__value {
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+/* Change arrows for My View adjustments */
+.change-arrow {
+  font-size: 0.75rem;
+  margin-right: 4px;
+}
+
+.change-arrow.up { color: var(--accent-sage); font-weight: bold; }
+.change-arrow.down { color: var(--accent-coral); font-weight: bold; }

@@ -366,228 +366,8 @@ nhl_handbuild_ui <- function(id) {
     # CRITICAL: Enable shinyjs for button state management
     shinyjs::useShinyjs(),
     
-    # CSS for position filter buttons - MATCH Generate Optimal button styling
-    tags$style(HTML("
-      /* Player pool scrolls with fixed height to match lineup card */
-      .nhl-player-pool-container {
-        height: 580px !important;
-        max-height: 580px !important;
-        overflow-y: auto !important;
-      }
-      
-      /* Position filter buttons - INACTIVE state (raised with shadow) */
-      .btn-position-filter {
-        padding: 6px 16px !important;
-        font-size: 0.85rem !important;
-        font-weight: 600 !important;
-        border: 2px solid #3B3226 !important;
-        border-radius: 6px !important;
-        background: #ffffff !important;
-        color: #3B3226 !important;
-        box-shadow: 3px 3px 0px #3B3226 !important;
-        transition: all 0.1s ease !important;
-        position: relative !important;
-        top: 0 !important;
-        left: 0 !important;
-        cursor: pointer !important;
-        outline: none !important;
-      }
-      
-      .btn-position-filter:hover:not(.active) {
-        background: #f5f5f5 !important;
-      }
-      
-      .btn-position-filter:focus {
-        outline: none !important;
-      }
-      
-      /* ACTIVE state - Match btn-primary (dusty mauve) */
-      .btn-position-filter.active {
-        background: #9B8A9E !important;
-        color: #ffffff !important;
-        border-color: #3B3226 !important;
-        box-shadow: none !important;
-        top: 3px !important;
-        left: 3px !important;
-      }
-      
-      .btn-position-filter.active:hover {
-        background: #8A7A8D !important;
-      }
-      
-      .btn-position-filter.active:focus {
-        box-shadow: inset 0 2px 4px rgba(0,0,0,0.2) !important;
-      }
-      
-      /* Player pool styles */
-      .nhl-pool-header {
-        display: grid;
-        grid-template-columns: 1fr 65px 55px 55px 50px;
-        padding: 8px 12px;
-        background: var(--bg-secondary);
-        font-weight: 600;
-        font-size: 0.8rem;
-        color: var(--text-muted);
-        border-bottom: 2px solid var(--border);
-        position: sticky;
-        top: 0;
-        z-index: 10;
-      }
-      
-      .nhl-pool-header > div { text-align: center; }
-      .nhl-pool-header > div:first-child { text-align: left; }
-      
-      /* Sortable header styling */
-      .nhl-sort-header {
-        cursor: pointer;
-        user-select: none;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        gap: 4px;
-      }
-      
-      .nhl-sort-header:first-child {
-        justify-content: flex-start;
-      }
-      
-      .nhl-sort-header:hover {
-        color: var(--text-primary);
-      }
-      
-      .nhl-sort-icon {
-        font-size: 0.7rem;
-        opacity: 0.6;
-      }
-      
-      .nhl-sort-header.active .nhl-sort-icon {
-        opacity: 1;
-        color: var(--accent-coral);
-      }
-      
-      .nhl-pool-row {
-        display: grid;
-        grid-template-columns: 1fr 65px 55px 55px 50px;
-        align-items: center;
-        padding: 10px 12px;
-        border-bottom: 1px solid var(--border);
-        cursor: pointer;
-        transition: background 0.15s ease;
-        font-size: 0.9rem;
-      }
-      
-      .nhl-pool-row:hover:not(.nhl-pool-row--locked):not(.nhl-pool-row--unaffordable) {
-        background: var(--bg-tan);
-      }
-      
-      .nhl-pool-row--locked {
-        opacity: 0.4;
-        cursor: not-allowed;
-        text-decoration: line-through;
-        background: var(--bg-secondary);
-      }
-      
-      .nhl-pool-row--unaffordable {
-        opacity: 0.5;
-        cursor: not-allowed;
-      }
-      
-      .nhl-pool-row--unaffordable .nhl-salary {
-        color: var(--accent-coral) !important;
-      }
-      
-      .nhl-player-cell {
-        display: flex;
-        flex-direction: column;
-        gap: 2px;
-      }
-      
-      .nhl-player-name { font-weight: 600; font-size: 0.9rem; }
-      .nhl-player-meta { font-size: 0.75rem; color: var(--text-muted); }
-      .nhl-salary { text-align: center; font-weight: 600; }
-      .nhl-median { text-align: center; font-weight: 600; color: var(--accent-sage); }
-      .nhl-ceiling { text-align: center; font-weight: 600; color: var(--accent-coral); }
-      .nhl-value { text-align: center; color: var(--text-muted); font-size: 0.85rem; }
-      
-      /* Generated lineups grid */
-      .nhl-lineups-grid {
-        display: grid;
-        grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
-        gap: 16px;
-        align-items: start;
-      }
-      
-      .nhl-lineup-card {
-        background: var(--bg-tertiary);
-        border-radius: 8px;
-        padding: 12px;
-        border: 1px solid var(--border);
-        min-height: auto;
-      }
-      
-      .nhl-lineup-card-header {
-        display: flex;
-        justify-content: space-between;
-        align-items: flex-start;
-        margin-bottom: 10px;
-        padding-bottom: 8px;
-        border-bottom: 1px solid var(--border);
-      }
-      
-      .nhl-lineup-card-title { 
-        font-weight: 700; 
-        font-size: 1rem; 
-      }
-      
-      .nhl-lineup-card-stats { 
-        font-size: 0.75rem; 
-        color: var(--text-muted); 
-        text-align: right;
-      }
-      
-      /* Delta to optimal - PROMINENT display */
-      .nhl-lineup-delta {
-        font-size: 1.1rem;
-        font-weight: 800;
-        color: #D08770;
-        margin-bottom: 2px;
-      }
-      
-      .nhl-lineup-delta.positive {
-        color: #A3BE8C;
-      }
-      
-      .nhl-lineup-players {
-        display: flex;
-        flex-direction: column;
-        gap: 2px;
-      }
-      
-      .nhl-lineup-row {
-        display: grid;
-        grid-template-columns: 35px 1fr 55px 65px;
-        gap: 6px;
-        align-items: center;
-        padding: 4px 0;
-        font-size: 0.8rem;
-        border-bottom: 1px solid var(--bg-secondary);
-      }
-      
-      .nhl-lineup-row:last-child { border-bottom: none; }
-      
-      .nhl-pos-badge {
-        padding: 2px 6px;
-        border-radius: 4px;
-        font-size: 0.7rem;
-        font-weight: 600;
-        text-align: center;
-      }
-      
-      .nhl-player-pool-container::-webkit-scrollbar { width: 8px; }
-      .nhl-player-pool-container::-webkit-scrollbar-track { background: var(--bg-secondary); border-radius: 4px; }
-      .nhl-player-pool-container::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
-      .nhl-player-pool-container::-webkit-scrollbar-thumb:hover { background: var(--text-muted); }
-    ")),
+    # NOTE: Styles use generic classes from styles.css
+    
     
     # Settings Card with z-index for dropdown visibility
     div(
@@ -651,7 +431,7 @@ nhl_handbuild_ui <- function(id) {
           ),
           # Scrollable player pool container - height matches lineup card via flexbox
           div(
-            class = "nhl-player-pool-container",
+            class = "player-pool-container",
             style = "border: 1px solid var(--border); border-radius: 8px;",
             uiOutput(ns("player_pool_rows"))
           )
@@ -1047,47 +827,47 @@ nhl_handbuild_server <- function(id) {
       
       get_sort_icon <- function(col) {
         if (sort_col == col) {
-          if (sort_dir == "desc") "â–¼" else "â–²"
+          if (sort_dir == "desc") "Ã¢â€“Â¼" else "Ã¢â€“Â²"
         } else {
-          "â–½"
+          "Ã¢â€“Â½"
         }
       }
       
       get_header_class <- function(col) {
-        if (sort_col == col) "nhl-sort-header active" else "nhl-sort-header"
+        if (sort_col == col) "sort-header active" else "sort-header"
       }
       
       header <- div(
-        class = "nhl-pool-header",
+        class = "pool-header",
         div(
           class = get_header_class("player_name"),
           onclick = sprintf("Shiny.setInputValue('%s', Math.random(), {priority: 'event'})", ns("sort_player")),
           span("PLAYER"),
-          span(class = "nhl-sort-icon", get_sort_icon("player_name"))
+          span(class = "sort-icon", get_sort_icon("player_name"))
         ),
         div(
           class = get_header_class("salary"),
           onclick = sprintf("Shiny.setInputValue('%s', Math.random(), {priority: 'event'})", ns("sort_salary")),
           span("SAL"),
-          span(class = "nhl-sort-icon", get_sort_icon("salary"))
+          span(class = "sort-icon", get_sort_icon("salary"))
         ),
         div(
           class = get_header_class("fpts_median"),
           onclick = sprintf("Shiny.setInputValue('%s', Math.random(), {priority: 'event'})", ns("sort_median")),
           span("MED"),
-          span(class = "nhl-sort-icon", get_sort_icon("fpts_median"))
+          span(class = "sort-icon", get_sort_icon("fpts_median"))
         ),
         div(
           class = get_header_class("fpts_ceiling"),
           onclick = sprintf("Shiny.setInputValue('%s', Math.random(), {priority: 'event'})", ns("sort_ceiling")),
           span("CEIL"),
-          span(class = "nhl-sort-icon", get_sort_icon("fpts_ceiling"))
+          span(class = "sort-icon", get_sort_icon("fpts_ceiling"))
         ),
         div(
           class = get_header_class("value_median"),
           onclick = sprintf("Shiny.setInputValue('%s', Math.random(), {priority: 'event'})", ns("sort_value")),
           span("VAL"),
-          span(class = "nhl-sort-icon", get_sort_icon("value_median"))
+          span(class = "sort-icon", get_sort_icon("value_median"))
         )
       )
       
@@ -1098,23 +878,23 @@ nhl_handbuild_server <- function(id) {
         can_afford <- (stats$total_salary + p$salary) <= cap
         clickable <- !is_locked && can_afford
         
-        row_class <- "nhl-pool-row"
-        if (is_locked) row_class <- paste(row_class, "nhl-pool-row--locked")
-        if (!can_afford && !is_locked) row_class <- paste(row_class, "nhl-pool-row--unaffordable")
+        row_class <- "pool-row"
+        if (is_locked) row_class <- paste(row_class, "pool-row--locked")
+        if (!can_afford && !is_locked) row_class <- paste(row_class, "pool-row--unaffordable")
         
         pos_display <- p$pos_display %||% p$position
         
         row_content <- div(
           class = row_class,
           div(
-            class = "nhl-player-cell",
-            div(class = "nhl-player-name", p$player_name),
-            div(class = "nhl-player-meta", sprintf("%s â€¢ %s", pos_display, p$team))
+            class = "player-cell",
+            div(class = "player-name", p$player_name),
+            div(class = "player-meta", sprintf("%s Ã¢â‚¬Â¢ %s", pos_display, p$team))
           ),
-          div(class = "nhl-salary", sprintf("$%.1f", p$salary)),
-          div(class = "nhl-median", if (is.na(p$fpts_median) || p$fpts_median == 0) "â€”" else sprintf("%.1f", p$fpts_median)),
-          div(class = "nhl-ceiling", if (is.na(p$fpts_ceiling) || p$fpts_ceiling == 0) "â€”" else sprintf("%.1f", p$fpts_ceiling)),
-          div(class = "nhl-value", if (is.na(p$value_median) || p$value_median == 0) "â€”" else sprintf("%.2f", p$value_median))
+          div(class = "stat-cell", sprintf("$%.1f", p$salary)),
+          div(class = "stat-cell stat-cell--success", if (is.na(p$fpts_median) || p$fpts_median == 0) "Ã¢â‚¬â€" else sprintf("%.1f", p$fpts_median)),
+          div(class = "stat-cell stat-cell--warning", if (is.na(p$fpts_ceiling) || p$fpts_ceiling == 0) "Ã¢â‚¬â€" else sprintf("%.1f", p$fpts_ceiling)),
+          div(class = "stat-cell stat-cell--muted", if (is.na(p$value_median) || p$value_median == 0) "Ã¢â‚¬â€" else sprintf("%.2f", p$value_median))
         )
         
         if (clickable) {
@@ -1230,7 +1010,7 @@ nhl_handbuild_server <- function(id) {
                 style = "flex: 1;",
                 tags$strong(slot_data$player_name),
                 tags$span(style = "color: var(--text-muted); margin-left: 6px; font-size: 0.85rem;",
-                          sprintf("%s â€¢ $%.1f", slot_data$team, slot_data$salary))
+                          sprintf("%s Ã¢â‚¬Â¢ $%.1f", slot_data$team, slot_data$salary))
               ),
               div(
                 style = "text-align: right; min-width: 80px;",
@@ -1499,21 +1279,21 @@ nhl_handbuild_server <- function(id) {
         title = sprintf("Generated Lineups (%d)", length(lineups)),
         color = "sky",
         div(
-          class = "nhl-lineups-grid",
+          class = "lineups-grid",
           lapply(seq_along(lineups), function(i) {
             lu <- lineups[[i]]
             
             # Calculate delta to optimal
             delta <- lu$total_blended - best_projection
-            delta_class <- if (delta >= 0) "nhl-lineup-delta positive" else "nhl-lineup-delta"
+            delta_class <- if (delta >= 0) "lineup-delta lineup-delta--positive" else "lineup-delta"
             delta_text <- if (delta >= 0) sprintf("+%.1f pts", delta) else sprintf("%.1f pts", delta)
             players_diff <- lu$players_different %||% 0
             
             div(
-              class = "nhl-lineup-card",
+              class = "lineup-card",
               div(
-                class = "nhl-lineup-card-header",
-                div(class = "nhl-lineup-card-title", sprintf("Lineup #%d", i)),
+                class = "lineup-card__header",
+                div(class = "lineup-card__title", sprintf("Lineup #%d", i)),
                 div(
                   style = "text-align: right;",
                   # PROMINENT delta display with players different
@@ -1525,31 +1305,31 @@ nhl_handbuild_server <- function(id) {
                       sprintf("%d diff", as.integer(players_diff))
                     )
                   ),
-                  div(class = "nhl-lineup-card-stats",
+                  div(class = "lineup-card__stats",
                       sprintf("$%.1f | Med: %.1f | Ceil: %.1f", 
                               lu$total_salary, lu$total_median, lu$total_ceiling))
                 )
               ),
               # Player rows container
               div(
-                class = "nhl-lineup-players",
+                class = "lineup-card__players",
                 lapply(lu$slot_order, function(slot_name) {
                   player <- lu$lineup[[slot_name]]
                   if (is.null(player)) {
                     # Show empty slot
                     div(
-                      class = "nhl-lineup-row",
-                      div(class = "nhl-pos-badge", style = "background: #E5E9F0;", substr(slot_name, 1, 2)),
+                      class = "lineup-slot",
+                      div(class = "position-badge position-badge--xs", style = "background: #E5E9F0;", substr(slot_name, 1, 2)),
                       div(style = "font-style: italic; color: #999;", "(empty)"),
-                      div("â€”"),
-                      div("â€”")
+                      div("Ã¢â‚¬â€"),
+                      div("Ã¢â‚¬â€")
                     )
                   } else {
                     pos_color <- NHL_POSITION_COLORS[[player$position]]$bg %||% "#E5E9F0"
                     
                     div(
-                      class = "nhl-lineup-row",
-                      div(class = "nhl-pos-badge", style = sprintf("background: %s;", pos_color), substr(slot_name, 1, 2)),
+                      class = "lineup-slot",
+                      div(class = "position-badge position-badge--xs", style = sprintf("background: %s;", pos_color), substr(slot_name, 1, 2)),
                       div(style = "font-weight: 600; font-size: 0.8rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;", player$player_name),
                       div(style = "font-size: 0.75rem; text-align: center;", sprintf("$%.1f", player$salary)),
                       div(

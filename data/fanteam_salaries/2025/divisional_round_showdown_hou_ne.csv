@@ -1,0 +1,39 @@
+Tournament,PlayerID,Name,FName,Club,Lineup,Position,Price
+1068254,4352577,Johnson,D'Ernest,NE,unexpected,running_back,4.1
+1068254,4352867,Stroud,C.J.,HOU,expected,quarterback,16.6
+1068254,4352868,Mertz,Graham,HOU,injured,quarterback,14.1
+1068254,4352869,Mills,Davis,HOU,unexpected,quarterback,16.1
+1068254,4352871,Marks,Woody,HOU,expected,running_back,12.4
+1068254,4352872,Johnson,Jakob,HOU,unexpected,running_back,4
+1068254,4352873,Jordan,Jawhar,HOU,injured,running_back,5.5
+1068254,4352874,Ogunbowale,Dare,HOU,unexpected,running_back,5.1
+1068254,4352875,Chubb,Nick,HOU,expected,running_back,6.1
+1068254,4352878,Watson,Justin,HOU,injured,wide_receiver,4.3
+1068254,4352879,Berrios,Braxton,HOU,expected,wide_receiver,4.8
+1068254,4352881,Higgins,Jayden,HOU,expected,wide_receiver,10.1
+1068254,4352885,Hutchinson,Xavier,HOU,expected,wide_receiver,6.8
+1068254,4352888,Collins,Nico,HOU,injured,wide_receiver,16.2
+1068254,4352889,Kirk,Christian,HOU,expected,wide_receiver,7.6
+1068254,4352890,Noel,Jaylin,HOU,expected,wide_receiver,6.3
+1068254,4352891,DEF/ST Texans,,HOU,expected,defense_special,8.8
+1068254,4352892,Schultz,Dalton,HOU,expected,tight_end,11.1
+1068254,4352896,Stover,Cade,HOU,expected,tight_end,5.3
+1068254,4352898,Brooks,British,HOU,unexpected,running_back,4.5
+1068254,4352970,Mitchell,Elijah,NE,refuted,running_back,4
+1068254,4353141,Maye,Drake,NE,expected,quarterback,20
+1068254,4353142,Dobbs,Joshua,NE,unexpected,quarterback,17.5
+1068254,4353144,Stevenson,Rhamondre,NE,expected,running_back,13.2
+1068254,4353146,Henderson,TreVeyon,NE,expected,running_back,13.3
+1068254,4353147,Jennings,Terrell,NE,possible,running_back,4.4
+1068254,4353152,Chism III,Efton,NE,expected,wide_receiver,6.3
+1068254,4353155,Douglas,DeMario,NE,expected,wide_receiver,8
+1068254,4353156,Williams,Kyle,NE,expected,wide_receiver,6.6
+1068254,4353157,Boutte,Kayshon,NE,expected,wide_receiver,10
+1068254,4353160,Diggs,Stefon,NE,expected,wide_receiver,14.5
+1068254,4353161,Hooper,Austin,NE,expected,tight_end,6.8
+1068254,4353164,DEF/ST Patriots,,NE,expected,defense_special,9.3
+1068254,4353167,Henry,Hunter,NE,expected,tight_end,12.4
+1068254,4353168,Westover,Jack,NE,expected,tight_end,4.1
+1068254,4353198,DeVito,Tommy,NE,injured,quarterback,17.4
+1068254,4353285,Bryant,Harrison,HOU,unexpected,tight_end,4.1
+1068254,4459271,Wayne,Jared,HOU,unexpected,wide_receiver,4.2

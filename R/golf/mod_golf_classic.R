@@ -15,7 +15,7 @@ library(lpSolve)
 GOLF_DEFAULT_HEADSHOT <- "https://a.espncdn.com/combiner/i?img=/i/headshots/nophoto.png&w=200&h=146"
 
 # Card color for Golf UI elements (gold from APP_COLORS)
-GOLF_CARD_COLOR <- "#D4A84B"
+GOLF_CARD_COLOR <- "gold"  # Named color for ui_card()
 
 # Path to golf headshots CSV file
 GOLF_HEADSHOTS_PATH <- "data/golf/player_headshots/player_headshots.csv"

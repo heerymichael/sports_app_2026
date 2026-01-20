@@ -765,56 +765,7 @@ nfl_showdown_ui <- function(id) {
       title = "Settings",
       color = NFL_CARD_COLOR,
       
-      # CSS for showdown-specific styling
-      tags$style(HTML("
-        .salary-cap-input input.form-control {
-          height: 38px !important;
-        }
-        
-        /* Position filter buttons - INACTIVE state (raised with shadow) */
-        .btn-position-filter {
-          padding: 6px 16px !important;
-          font-size: 0.85rem !important;
-          font-weight: 600 !important;
-          border: 2px solid #3B3226 !important;
-          border-radius: 6px !important;
-          background: #ffffff !important;
-          color: #3B3226 !important;
-          box-shadow: 3px 3px 0px #3B3226 !important;
-          transition: all 0.1s ease !important;
-          position: relative !important;
-          top: 0 !important;
-          left: 0 !important;
-          cursor: pointer !important;
-          outline: none !important;
-        }
-        
-        .btn-position-filter:hover:not(.active) {
-          background: #f5f5f5 !important;
-        }
-        
-        .btn-position-filter:focus {
-          outline: none !important;
-        }
-        
-        /* ACTIVE state - Match btn-primary (dusty mauve) */
-        .btn-position-filter.active {
-          background: #9B8A9E !important;
-          color: #ffffff !important;
-          border-color: #3B3226 !important;
-          box-shadow: none !important;
-          top: 3px !important;
-          left: 3px !important;
-        }
-        
-        .btn-position-filter.active:hover {
-          background: #8A7A8D !important;
-        }
-        
-        .btn-position-filter.active:focus {
-          box-shadow: inset 0 2px 4px rgba(0,0,0,0.2) !important;
-        }
-      ")),
+      # NOTE: Showdown/position filter styles are in styles.css
       
       fluidRow(
         column(3,
@@ -1916,7 +1867,7 @@ nfl_showdown_server <- function(id) {
       # Helper for sort indicator
       sort_indicator <- function(col) {
         if (sort_col == col) {
-          if (sort_dir == "desc") " â–¼" else " â–²"
+          if (sort_dir == "desc") " Ã¢â€“Â¼" else " Ã¢â€“Â²"
         } else {
           ""
         }
@@ -2015,7 +1966,7 @@ nfl_showdown_server <- function(id) {
           div(
             style = sprintf("display: grid; grid-template-columns: 1fr 65px 65px 55px 50px 90px; gap: 0.25rem; padding: 0.4rem 0.75rem; align-items: center; border-bottom: 1px solid var(--bg-secondary); %s", row_style),
             
-            # Player cell with headshot - Name on top, Position Â· Team below
+            # Player cell with headshot - Name on top, Position Ã‚Â· Team below
             div(
               style = "display: flex; align-items: center; gap: 0.5rem; min-width: 0;",
               create_headshot_html(p$headshot_url, p$team_bg_color, "tiny", p$position, p$team),
@@ -2588,7 +2539,7 @@ nfl_showdown_server <- function(id) {
                       }
                     ),
                     
-                    # Player name Â· Team Â· Position (position slightly heavier)
+                    # Player name Ã‚Â· Team Ã‚Â· Position (position slightly heavier)
                     div(
                       style = "flex: 1; min-width: 0; overflow: hidden;",
                       tags$span(

@@ -7,12 +7,16 @@
 #' Create a styled value box
 #' @param value The main value to display
 #' @param label Caption/label below the value
-#' @param color Accent color: "teal", "coral", "sage", "yellow", "sky"
+#' @param color Accent color. Preferred: "teal", "coral", "sage", "gold", "frost"
+#'              Also accepts: "yellow" (alias for gold), "sky" (alias for frost)
 #' @param icon Optional icon name (not currently implemented)
 #' @return Shiny tag
 ui_value_box <- function(value, label, color = "teal", icon = NULL) {
   
-  valid_colors <- c("teal", "coral", "sage", "yellow", "sky")
+  # Valid colors - matches APP_COLORS naming
+  # yellow/sky are aliases for backward compatibility
+  valid_colors <- c("teal", "coral", "sage", "gold", "yellow", "frost", "sky")
+  
   if (!(color %in% valid_colors)) {
     color <- "teal"
   }
@@ -30,7 +34,8 @@ ui_value_box <- function(value, label, color = "teal", icon = NULL) {
 #' @return Shiny UI output
 value_box_output <- function(outputId, color = "teal") {
   
-  valid_colors <- c("teal", "coral", "sage", "yellow", "sky")
+  valid_colors <- c("teal", "coral", "sage", "gold", "yellow", "frost", "sky")
+  
   if (!(color %in% valid_colors)) {
     color <- "teal"
   }

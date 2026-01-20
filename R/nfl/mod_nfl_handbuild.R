@@ -60,52 +60,7 @@ nfl_handbuild_ui <- function(id) {
       tags$p(class = "text-muted", "Build lineups manually with optimization assistance")
     ),
     
-    # CSS for position filter buttons
-    tags$style(HTML("
-      /* Position filter buttons - INACTIVE state (raised with shadow) */
-      .btn-position-filter {
-        padding: 6px 16px !important;
-        font-size: 0.85rem !important;
-        font-weight: 600 !important;
-        border: 2px solid #3B3226 !important;
-        border-radius: 6px !important;
-        background: #ffffff !important;
-        color: #3B3226 !important;
-        box-shadow: 3px 3px 0px #3B3226 !important;
-        transition: all 0.1s ease !important;
-        position: relative !important;
-        top: 0 !important;
-        left: 0 !important;
-        cursor: pointer !important;
-        outline: none !important;
-      }
-      
-      .btn-position-filter:hover:not(.active) {
-        background: #f5f5f5 !important;
-      }
-      
-      .btn-position-filter:focus {
-        outline: none !important;
-      }
-      
-      /* ACTIVE state - Match btn-primary (dusty mauve) */
-      .btn-position-filter.active {
-        background: #9B8A9E !important;
-        color: #ffffff !important;
-        border-color: #3B3226 !important;
-        box-shadow: none !important;
-        top: 3px !important;
-        left: 3px !important;
-      }
-      
-      .btn-position-filter.active:hover {
-        background: #8A7A8D !important;
-      }
-      
-      .btn-position-filter.active:focus {
-        box-shadow: inset 0 2px 4px rgba(0,0,0,0.2) !important;
-      }
-    ")),
+    # NOTE: Position filter button styles are in styles.css (.btn-position-filter)
     
     # ==========================================================================
     # FILTERS CARD
@@ -817,7 +772,7 @@ nfl_handbuild_server <- function(id) {
           left_join(player_data %>% select(player, blended), by = "player") %>%
           mutate(
             adj_value = blended * (1 + adj_pct / 100),
-            display = sprintf("%s: %.1f ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¾Ãƒâ€šÃ‚Â¢ %.1f (%+.0f%%)", player, blended, adj_value, adj_pct)
+            display = sprintf("%s: %.1f ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¾ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ %.1f (%+.0f%%)", player, blended, adj_value, adj_pct)
           )
       } else {
         adj_df <- adj_df %>%
@@ -1061,7 +1016,7 @@ nfl_handbuild_server <- function(id) {
             ),
             
             # Arrow
-            span(style = "color: var(--text-muted); font-size: 1.2rem;", "ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¾Ãƒâ€šÃ‚Â¢"),
+            span(style = "color: var(--text-muted); font-size: 1.2rem;", "ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¾ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢"),
             
             # Stack requirement
             div(
@@ -1490,7 +1445,7 @@ nfl_handbuild_server <- function(id) {
       # Helper for sort indicator
       sort_indicator <- function(col) {
         if (sort_col == col) {
-          if (sort_dir == "desc") " ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Å“Ãƒâ€šÃ‚Â¼" else " ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Å“Ãƒâ€šÃ‚Â²"
+          if (sort_dir == "desc") " ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â€šÂ¬Ã…â€œÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¼" else " ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â€šÂ¬Ã…â€œÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â²"
         } else {
           ""
         }
@@ -1919,7 +1874,7 @@ nfl_handbuild_server <- function(id) {
       showNotification("Generating lineups...", type = "message", id = "gen_notif", duration = NULL)
       
       tryCatch({
-        lineups <- generate_lineups_with_stacking(
+        lineups <- generate_lineups_with_variance(
           players = rv$player_data,
           num_lineups = input$num_lineups %||% 10,
           salary_cap = input$salary_cap %||% 120,
@@ -2194,7 +2149,7 @@ nfl_handbuild_server <- function(id) {
             style = "text-align: center;",
             div(style = "font-size: 0.75rem; text-transform: uppercase; color: var(--text-muted);", "Optimal"),
             div(style = "font-size: 1.25rem; font-weight: 700; color: var(--accent-teal);", 
-                if (optimal_proj > 0) sprintf("%.1f", optimal_proj) else "--Ãƒâ€šÃ‚Â")
+                if (optimal_proj > 0) sprintf("%.1f", optimal_proj) else "--ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â")
           ),
           div(
             style = "text-align: center;",
@@ -2203,7 +2158,7 @@ nfl_handbuild_server <- function(id) {
               style = sprintf("font-size: 1.25rem; font-weight: 700; color: %s;",
                               if (optimal_proj > 0) "var(--accent-coral)" else "var(--text-muted)"
               ),
-              if (optimal_proj > 0) sprintf("%+.1f", best_proj - optimal_proj) else "--Ãƒâ€šÃ‚Â"
+              if (optimal_proj > 0) sprintf("%+.1f", best_proj - optimal_proj) else "--ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â"
             )
           )
         ),
@@ -2343,253 +2298,9 @@ nfl_handbuild_server <- function(id) {
 }
 
 
+
 # =============================================================================
-# OPTIMIZATION FUNCTIONS
+# NOTE: Optimization functions (optimize_lineup_lp, generate_lineups_with_variance,
+# check_stacking_rules) are defined in nfl_optimizer.R and sourced via global.R
+# Do NOT duplicate them here - use the centralized versions
 # =============================================================================
-
-#' Optimize a single lineup using linear programming
-#' @param players Data frame with player data
-#' @param projection_col Column to optimize on
-#' @param salary_cap Maximum salary
-#' @param locked_players Players to lock in
-#' @param excluded_players Players to exclude
-#' @return Data frame with optimized lineup or NULL
-optimize_lineup_lp <- function(players, projection_col, salary_cap,
-                               locked_players = NULL, excluded_players = NULL) {
-  
-  # Filter excluded
-  available <- players
-  if (!is.null(excluded_players) && length(excluded_players) > 0) {
-    available <- available %>% filter(!(player %in% excluded_players))
-  }
-  
-  n <- nrow(available)
-  if (n == 0) return(NULL)
-  
-  # Verify locked players exist
-  if (!is.null(locked_players) && length(locked_players) > 0) {
-    missing <- setdiff(locked_players, available$player)
-    if (length(missing) > 0) return(NULL)
-  }
-  
-  # Objective function
-  objective <- available[[projection_col]]
-  
-  # Constraints
-  constraint_matrix <- rbind(
-    as.numeric(available$position == "QB"),        # QB = 1
-    as.numeric(available$position == "RB"),        # RB >= 2
-    as.numeric(available$position == "WR"),        # WR >= 3
-    as.numeric(available$position == "TE"),        # TE >= 1
-    as.numeric(available$position == "DST"),       # DST = 1
-    as.numeric(available$position %in% c("RB", "WR", "TE")),  # FLEX total >= 6
-    rep(1, n),                                      # Total = 9
-    available$salary                                # Salary <= cap
-  )
-  
-  constraint_dirs <- c("==", ">=", ">=", ">=", "==", ">=", "==", "<=")
-  constraint_rhs <- c(1, 2, 3, 1, 1, 6, 9, salary_cap)
-  
-  # Add locked player constraints
-  if (!is.null(locked_players) && length(locked_players) > 0) {
-    for (player in locked_players) {
-      if (player %in% available$player) {
-        constraint_matrix <- rbind(
-          constraint_matrix,
-          as.numeric(available$player == player)
-        )
-        constraint_dirs <- c(constraint_dirs, "==")
-        constraint_rhs <- c(constraint_rhs, 1)
-      }
-    }
-  }
-  
-  # Solve
-  solution <- lp(
-    direction = "max",
-    objective.in = objective,
-    const.mat = constraint_matrix,
-    const.dir = constraint_dirs,
-    const.rhs = constraint_rhs,
-    all.bin = TRUE
-  )
-  
-  if (solution$status != 0) return(NULL)
-  
-  # Extract lineup
-  lineup <- available[solution$solution == 1, ] %>%
-    mutate(
-      projection = .data[[projection_col]],
-      value = projection / salary
-    ) %>%
-    select(player, position, team, salary, projection, value,
-           any_of(c("opponent", "home", "headshot_url", "team_bg_color"))) %>%
-    arrange(match(position, c("QB", "RB", "WR", "TE", "DST")))
-  
-  lineup
-}
-
-
-#' Generate multiple lineups with variance and conditional stacking rules
-#' @param players Data frame with player data
-#' @param num_lineups Number of lineups to generate
-#' @param salary_cap Maximum salary
-#' @param variance_pct Variance percentage
-#' @param locked_players Players to lock in
-#' @param adjustments List of player adjustments (name -> pct)
-#' @param stacking_rules List of conditional stacking rules
-#' @param stack_game Game key for game stack
-#' @param min_game_players Min players from selected game
-#' @return List of lineup data frames
-generate_lineups_with_stacking <- function(players, num_lineups, salary_cap,
-                                           variance_pct = 10, locked_players = NULL,
-                                           adjustments = list(),
-                                           stacking_rules = list(),
-                                           stack_game = "",
-                                           min_game_players = 4) {
-  
-  lineups <- list()
-  lineup_signatures <- character(0)
-  
-  # Apply adjustments to create base projections
-  players_base <- players %>%
-    mutate(
-      base_projection = sapply(1:n(), function(i) {
-        adj_pct <- adjustments[[player[i]]] %||% 0
-        blended[i] * (1 + adj_pct / 100)
-      })
-    )
-  
-  # Parse game stack if applicable
-  game_teams <- if (stack_game != "") {
-    strsplit(stack_game, "_")[[1]]
-  } else {
-    NULL
-  }
-  
-  attempts <- 0
-  max_attempts <- num_lineups * 50
-  
-  while (length(lineups) < num_lineups && attempts < max_attempts) {
-    attempts <- attempts + 1
-    
-    # Apply random variance - FRESH for each lineup
-    set.seed(Sys.time() + attempts)
-    
-    players_varied <- players_base %>%
-      mutate(
-        variance_mult = 1 + runif(n(), -variance_pct/100, variance_pct/100),
-        varied_projection = base_projection * variance_mult
-      )
-    
-    # Optimize with varied projections
-    lineup <- optimize_lineup_lp(
-      players = players_varied,
-      projection_col = "varied_projection",
-      salary_cap = salary_cap,
-      locked_players = locked_players
-    )
-    
-    if (is.null(lineup)) next
-    
-    # Check stacking rules (conditional + game stack)
-    if (!check_stacking_rules(lineup, players_base, stacking_rules, game_teams, min_game_players)) {
-      next
-    }
-    
-    # Check for duplicates
-    sig <- paste(sort(lineup$player), collapse = "|")
-    if (sig %in% lineup_signatures) next
-    
-    # Restore base projections (with adjustments applied)
-    lineup <- lineup %>%
-      mutate(projection = players_base$base_projection[match(player, players_base$player)])
-    
-    lineups[[length(lineups) + 1]] <- lineup
-    lineup_signatures <- c(lineup_signatures, sig)
-  }
-  
-  lineups
-}
-
-
-#' Check if lineup meets conditional stacking rules
-#' @param lineup Lineup data frame
-#' @param players Full player data
-#' @param stacking_rules List of conditional stacking rules
-#' @param game_teams Teams in selected game (for game stack)
-#' @param min_game_players Min players from selected game
-#' @return TRUE if lineup passes all applicable stacking rules
-check_stacking_rules <- function(lineup, players, stacking_rules, game_teams, min_game_players) {
-  
-  # Check game stack requirement first (applies to all lineups)
-  if (!is.null(game_teams) && length(game_teams) >= 2) {
-    game_players <- lineup %>%
-      filter(team %in% game_teams) %>%
-      nrow()
-    
-    if (game_players < min_game_players) {
-      return(FALSE)
-    }
-  }
-  
-  # If no conditional rules, lineup passes
-  if (length(stacking_rules) == 0) return(TRUE)
-  
-  # Get QB info
-  qb_row <- lineup %>% filter(position == "QB")
-  if (nrow(qb_row) == 0) return(FALSE)
-  
-  qb_name <- qb_row$player[1]
-  qb_team <- qb_row$team[1]
-  
-  # Get opponent from player data
-  qb_player_data <- players %>% filter(player == qb_name)
-  qb_opponent <- if (nrow(qb_player_data) > 0 && "opponent" %in% names(qb_player_data)) {
-    qb_player_data$opponent[1]
-  } else {
-    ""
-  }
-  
-  # Find applicable rule for this QB
-  applicable_rule <- NULL
-  for (rule in stacking_rules) {
-    if (qb_name %in% rule$qbs) {
-      applicable_rule <- rule
-      break
-    }
-  }
-  
-  # If no rule applies to this QB, lineup passes
-  if (is.null(applicable_rule)) return(TRUE)
-  
-  # Check same-team stack requirement
-  if (applicable_rule$same_team_min > 0) {
-    same_team_players <- lineup %>%
-      filter(
-        position %in% applicable_rule$same_team_positions,
-        team == qb_team
-      ) %>%
-      nrow()
-    
-    if (same_team_players < applicable_rule$same_team_min) {
-      return(FALSE)
-    }
-  }
-  
-  # Check opponent stack requirement
-  if (applicable_rule$opp_min > 0 && qb_opponent != "") {
-    opp_players <- lineup %>%
-      filter(
-        position %in% applicable_rule$opp_positions,
-        team == qb_opponent
-      ) %>%
-      nrow()
-    
-    if (opp_players < applicable_rule$opp_min) {
-      return(FALSE)
-    }
-  }
-  
-  TRUE
-}

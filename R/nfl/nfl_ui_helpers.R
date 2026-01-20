@@ -42,18 +42,12 @@ create_position_badge <- function(position, size = "normal") {
 create_adjustment_badge <- function(adj_pct, size = "normal") {
   if (is.null(adj_pct) || adj_pct == 0) return(NULL)
   
-  is_positive <- adj_pct > 0
-  bg_color <- if (is_positive) "rgba(139, 168, 134, 0.2)" else "rgba(232, 131, 121, 0.2)"
-  text_color <- if (is_positive) "var(--accent-sage)" else "var(--accent-coral)"
-  
-  font_size <- if (size == "small") "0.65rem" else "0.75rem"
-  padding <- if (size == "small") "0.1rem 0.25rem" else "0.15rem 0.35rem"
+  # Use CSS classes from styles.css
+  sign_class <- if (adj_pct > 0) "adjustment-badge--positive" else "adjustment-badge--negative"
+  size_class <- if (size == "small") "adjustment-badge--sm" else ""
   
   tags$span(
-    style = sprintf(
-      "font-size: %s; padding: %s; border-radius: 3px; background: %s; color: %s; font-weight: 600;",
-      font_size, padding, bg_color, text_color
-    ),
+    class = paste("adjustment-badge", sign_class, size_class),
     sprintf("%+.0f%%", adj_pct)
   )
 }
@@ -70,7 +64,7 @@ create_adjustment_badge <- function(adj_pct, size = "normal") {
 create_value_indicator <- function(value, optimal = NULL, show_sign = TRUE) {
   
   if (is.null(optimal) || optimal == 0) {
-    return(tags$span(style = "color: var(--text-muted);", "—"))
+    return(tags$span(style = "color: var(--text-muted);", "â€”"))
   }
   
   diff <- value - optimal
@@ -360,7 +354,7 @@ create_stat_box <- function(label, value, format_str = "%.1f",
     ),
     div(
       style = sprintf("font-size: 1.25rem; font-weight: 700; color: %s;", value_color),
-      if (is.na(value) || is.null(value)) "—" else sprintf(format_str, value)
+      if (is.na(value) || is.null(value)) "â€”" else sprintf(format_str, value)
     )
   )
 }

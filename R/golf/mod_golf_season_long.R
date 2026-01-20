@@ -767,7 +767,7 @@ golf_season_long_server <- function(id) {
             style = list(verticalAlign = "middle")
           ),
           RankDiffPct = colDef(
-            name = "Rank Î”%", 
+            name = "Rank ÃŽâ€%", 
             width = 90, 
             align = "center",
             cell = function(value) {
