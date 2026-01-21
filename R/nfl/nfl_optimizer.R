@@ -173,22 +173,33 @@ optimize_lineup_lp <- function(players, projection_col, salary_cap,
 #' )
 generate_lineups_with_variance <- function(players, num_lineups, salary_cap,
                                            variance_pct = 10, locked_players = NULL,
+                                           excluded_players = NULL,
                                            adjustments = list(),
                                            stacking_rules = list(),
                                            stack_game = "",
-                                           min_game_players = 4) {
+                                           min_game_players = 4,
+                                           corr_rules = list()) {
   
   log_debug(">>> generate_lineups_with_variance() called", level = "INFO")
   log_debug(">>>   num_lineups:", num_lineups, level = "INFO")
   log_debug(">>>   variance_pct:", variance_pct, level = "INFO")
+  log_debug(">>>   excluded_players:", length(excluded_players %||% c()), level = "INFO")
   log_debug(">>>   stacking_rules:", length(stacking_rules), level = "INFO")
+  log_debug(">>>   corr_rules:", length(corr_rules), level = "INFO")
   log_debug(">>>   stack_game:", stack_game, level = "INFO")
   
   lineups <- list()
   lineup_signatures <- character(0)
   
+  # Filter excluded players first
+  available_players <- players
+  if (!is.null(excluded_players) && length(excluded_players) > 0) {
+    available_players <- available_players %>% filter(!(player %in% excluded_players))
+    log_debug(">>>   After exclusions:", nrow(available_players), "players", level = "INFO")
+  }
+  
   # Apply adjustments to create base projections
-  players_base <- players %>%
+  players_base <- available_players %>%
     mutate(
       base_projection = sapply(1:n(), function(i) {
         adj_pct <- adjustments[[player[i]]] %||% 0

@@ -116,6 +116,103 @@ join_golf_headshots <- function(player_df) {
 # Google Sheet ID for projections (shared with season management)
 GOLF_CLASSIC_PROJECTIONS_SHEET_ID <- "1yJJAOv5hzNZagYUG7FLpNmRIRC76L0fJNGPbzK61lbw"
 
+# Google Sheet ID for FanTeam salaries (Golf Classic specific)
+GOLF_CLASSIC_SALARIES_SHEET_ID <- "12I3uMfY_V5apa0u6DGcQctIvJETJFonUJwm3aqiuvhI"
+
+#' Normalize player name for matching
+#' @param name Player name to normalize
+#' @return Normalized name (lowercase, no special chars)
+normalize_classic_name <- function(name) {
+  if (is.na(name) || name == "") return("")
+  
+  name_lower <- tolower(trimws(name))
+  
+  # Handle "LastName, FirstName" format
+  if (grepl(",", name_lower)) {
+    parts <- strsplit(name_lower, ",")[[1]]
+    if (length(parts) == 2) {
+      name_lower <- paste(trimws(parts[2]), trimws(parts[1]))
+    }
+  }
+  
+  # Remove special characters, normalize spaces
+  name_lower <- gsub("[^a-z0-9 ]", " ", name_lower)
+  name_lower <- gsub("\\s+", " ", trimws(name_lower))
+  
+  return(name_lower)
+}
+
+#' Load FanTeam salaries for a tournament from the salaries sheet
+#' @param tournament_name Name of the sheet/tournament to load
+#' @return Data frame with player_name, salary, match_key or NULL if not found
+load_classic_fanteam_salaries <- function(tournament_name) {
+  log_debug("load_classic_fanteam_salaries() for:", tournament_name, level = "INFO")
+  
+  tryCatch({
+    googlesheets4::gs4_deauth()
+    
+    # Check if tournament sheet exists in salaries workbook
+    ss <- googlesheets4::gs4_get(GOLF_CLASSIC_SALARIES_SHEET_ID)
+    available_sheets <- ss$sheets$name
+    
+    if (!tournament_name %in% available_sheets) {
+      log_debug("Tournament not found in salaries sheet:", tournament_name, level = "WARN")
+      log_debug("Available sheets:", paste(available_sheets, collapse = ", "), level = "DEBUG")
+      return(NULL)
+    }
+    
+    salaries_raw <- googlesheets4::read_sheet(
+      GOLF_CLASSIC_SALARIES_SHEET_ID,
+      sheet = tournament_name
+    ) %>%
+      janitor::clean_names()
+    
+    log_debug("Raw salary columns:", paste(names(salaries_raw), collapse = ", "), level = "DEBUG")
+    
+    # Check for FanTeam format (f_name + name) or simple format
+    if (all(c("f_name", "name") %in% names(salaries_raw))) {
+      log_debug("Detected FanTeam export format", level = "INFO")
+      salaries <- salaries_raw %>%
+        mutate(
+          player_name = paste0(f_name, " ", name),
+          salary = as.numeric(price)
+        )
+      # Filter out refuted if column exists
+      if ("lineup" %in% names(salaries)) {
+        salaries <- salaries %>% filter(lineup != "refuted")
+      }
+    } else {
+      # Simple format - look for name and price columns
+      name_col <- intersect(names(salaries_raw), c("player_name", "player", "golfer", "name"))
+      price_col <- intersect(names(salaries_raw), c("price", "salary", "sal", "cost"))
+      
+      if (length(name_col) == 0 || length(price_col) == 0) {
+        log_debug("Could not find name or price columns in salaries", level = "ERROR")
+        return(NULL)
+      }
+      
+      log_debug("Using name column:", name_col[1], "price column:", price_col[1], level = "DEBUG")
+      
+      salaries <- salaries_raw %>%
+        rename(player_name = !!name_col[1], salary = !!price_col[1]) %>%
+        mutate(salary = as.numeric(salary))
+    }
+    
+    # Create match key for joining
+    salaries <- salaries %>%
+      mutate(match_key = sapply(player_name, normalize_classic_name)) %>%
+      select(player_name, salary, match_key) %>%
+      filter(!is.na(salary) & !is.na(player_name) & player_name != "")
+    
+    log_debug("Loaded", nrow(salaries), "FanTeam salaries", level = "INFO")
+    return(salaries)
+    
+  }, error = function(e) {
+    log_debug("Error loading FanTeam salaries:", e$message, level = "ERROR")
+    return(NULL)
+  })
+}
+
 #' Get available tournaments from Google Sheets
 #' Returns sheet names from the projections workbook (full tournaments only, not daily rounds)
 get_golf_tournaments_gsheet <- function() {
@@ -182,7 +279,7 @@ load_golf_tournament_data <- function(tournament_name) {
     }
     
     # Find ceiling projection column
-    ceiling_col <- intersect(names(data), c("ceiling", "ceil", "upside", "high"))
+    ceiling_col <- intersect(names(data), c("ceiling", "ceil", "upside", "high", "dk_ceiling"))
     if (length(ceiling_col) > 0) {
       data <- data %>% mutate(ceiling = as.numeric(.data[[ceiling_col[1]]]))
     } else {
@@ -190,12 +287,28 @@ load_golf_tournament_data <- function(tournament_name) {
       data$ceiling <- data$median * 1.2
     }
     
-    # Find salary column
-    salary_col <- intersect(names(data), c("salary", "dk_salary", "price", "sal", "cost"))
-    if (length(salary_col) > 0) {
-      data <- data %>% mutate(salary = as.numeric(.data[[salary_col[1]]]))
+    # Create match key for joining with FanTeam salaries
+    data <- data %>%
+      mutate(match_key = sapply(player_name, normalize_classic_name))
+    
+    # Load FanTeam salaries from separate sheet and join
+    ft_salaries <- load_classic_fanteam_salaries(tournament_name)
+    if (!is.null(ft_salaries) && nrow(ft_salaries) > 0) {
+      log_debug("Joining FanTeam salaries...", level = "INFO")
+      
+      data <- data %>%
+        left_join(ft_salaries %>% select(match_key, salary), by = "match_key")
+      
+      matched_count <- sum(!is.na(data$salary))
+      unmatched_count <- sum(is.na(data$salary))
+      log_debug(sprintf("Matched %d of %d players to FanTeam salaries", matched_count, nrow(data)), level = "INFO")
+      
+      if (unmatched_count > 0) {
+        unmatched_names <- data %>% filter(is.na(salary)) %>% pull(player_name) %>% head(10)
+        log_debug("Unmatched players (first 10):", paste(unmatched_names, collapse = ", "), level = "WARN")
+      }
     } else {
-      log_debug("No salary column found", level = "WARN")
+      log_debug("No FanTeam salaries loaded - salary will be NA", level = "WARN")
       data$salary <- NA_real_
     }
     
@@ -223,8 +336,9 @@ load_golf_tournament_data <- function(tournament_name) {
     
     # Select and clean final columns
     data <- data %>%
+      mutate(player_id = row_number()) %>%
       select(
-        player_name, salary, median, ceiling, blended, value,
+        player_id, player_name, salary, median, ceiling, blended, value,
         own_large, own_small
       ) %>%
       filter(!is.na(player_name) & player_name != "")

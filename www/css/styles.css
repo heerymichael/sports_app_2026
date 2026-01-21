@@ -825,7 +825,7 @@ details summary::-webkit-details-marker {
 }
 
 details summary::before {
-  content: 'Ã¢â€“Â¸';
+  content: 'ÃƒÂ¢Ã¢â‚¬â€œÃ‚Â¸';
   display: inline-block;
   margin-right: 0.5rem;
   transition: transform var(--transition-fast);
@@ -1988,6 +1988,74 @@ details > *:not(summary) {
 
 .generate-variations-card .form-group {
   margin-bottom: 0;
+}
+
+/* Position toggle group - Stabilo Illustrated style */
+.position-toggle-group {
+  margin-bottom: 0;
+}
+
+.position-toggle-group .control-label {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  margin-bottom: 0.35rem;
+  display: block;
+}
+
+.position-toggle-group .shiny-input-container {
+  width: auto !important;
+}
+
+.position-toggle-group .shiny-options-group {
+  display: flex;
+  gap: 0.25rem;
+  margin-top: 0;
+}
+
+.position-toggle-group .checkbox-inline {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 38px;
+  height: 34px;
+  margin: 0 !important;
+  padding: 0 !important;
+  background: var(--bg-white);
+  border: 2px solid var(--outline);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.position-toggle-group .checkbox-inline input[type="checkbox"] {
+  position: absolute;
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.position-toggle-group .checkbox-inline span {
+  font-size: 0.7rem;
+  font-weight: 700;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  pointer-events: none;
+}
+
+.position-toggle-group .checkbox-inline:hover {
+  background: var(--bg-secondary);
+  border-color: var(--text-secondary);
+}
+
+.position-toggle-group .checkbox-inline:has(input:checked) {
+  background: var(--accent-coral);
+  border-color: var(--text-primary);
+  box-shadow: 2px 2px 0 var(--shadow);
+}
+
+.position-toggle-group .checkbox-inline:has(input:checked) span {
+  color: var(--text-primary);
 }
 
 /* -----------------------------------------------------------------------------

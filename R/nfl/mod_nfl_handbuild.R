@@ -62,6 +62,21 @@ nfl_handbuild_ui <- function(id) {
     
     # NOTE: Position filter button styles are in styles.css (.btn-position-filter)
     
+    # Hidden inputs for server-referenced controls (removed from UI but still needed)
+    shinyjs::hidden(
+      div(
+        selectInput(ns("stack_game"), NULL, choices = c("None" = "")),
+        numericInput(ns("min_game_players"), NULL, value = 4),
+        selectizeInput(ns("rule_qbs"), NULL, choices = NULL, multiple = TRUE),
+        numericInput(ns("rule_same_min"), NULL, value = 1),
+        numericInput(ns("rule_opp_min"), NULL, value = 0),
+        checkboxGroupInput(ns("rule_same_pos"), NULL, choices = c("RB", "WR", "TE"), selected = c("WR", "TE")),
+        checkboxGroupInput(ns("rule_opp_pos"), NULL, choices = c("RB", "WR", "TE"), selected = c("WR")),
+        actionButton(ns("add_rule"), NULL),
+        actionButton(ns("clear_rules"), NULL)
+      )
+    ),
+    
     # ==========================================================================
     # FILTERS CARD
     # ==========================================================================
@@ -102,65 +117,6 @@ nfl_handbuild_ui <- function(id) {
     tags$br(),
     
     # ==========================================================================
-    # PROJECTION ADJUSTMENTS (Boost/Dock as %)
-    # ==========================================================================
-    ui_card(
-      title = "Projection Adjustments",
-      color = NFL_CARD_COLOR,
-      
-      div(
-        style = "margin-bottom: 0.75rem; font-size: 0.85rem; color: var(--text-muted);",
-        "Boost or dock player projections as a percentage. Applied to the blended projection."
-      ),
-      
-      fluidRow(
-        column(4,
-               selectInput(ns("adj_position"), "Position",
-                           choices = c("All" = "all", "QB", "RB", "WR", "TE", "DST"),
-                           selected = "all"
-               )
-        ),
-        column(8,
-               selectizeInput(ns("adj_player"), "Select Player",
-                              choices = c("Select player..." = ""),
-                              selected = "",
-                              options = list(placeholder = "Choose player to adjust...")
-               )
-        )
-      ),
-      
-      fluidRow(
-        column(6,
-               numericInput(ns("adj_pct"), "Adjustment %",
-                            value = 0, min = -50, max = 100, step = 5
-               ),
-               div(
-                 style = "font-size: 0.75rem; color: var(--text-muted); margin-top: -0.5rem;",
-                 "e.g. +10% boost or -15% dock"
-               )
-        ),
-        column(6,
-               div(
-                 style = "padding-top: 1.65rem; display: flex; gap: 0.5rem;",
-                 actionButton(ns("apply_adj"), "Apply",
-                              class = "btn-primary",
-                              style = "flex: 1;"
-                 ),
-                 actionButton(ns("clear_adj"), "Clear All",
-                              class = "btn-secondary",
-                              style = "flex: 1;"
-                 )
-               )
-        )
-      ),
-      
-      # Show current adjustments
-      uiOutput(ns("adjustments_display"))
-    ),
-    
-    tags$br(),
-    
-    # ==========================================================================
     # OPTIMAL LINEUPS (Full Width - Shows both standard and adjusted)
     # ==========================================================================
     fluidRow(
@@ -185,7 +141,7 @@ nfl_handbuild_ui <- function(id) {
     tags$br(),
     
     # ==========================================================================
-    # BUILD YOUR LINEUP (Full Width - Below Optimal)
+    # BUILD YOUR LINEUP (Full Width - Player Pool + Lineup only)
     # ==========================================================================
     fluidRow(
       column(12,
@@ -265,119 +221,17 @@ nfl_handbuild_ui <- function(id) {
                         )
                  ),
                  
-                 # Right side: Lineup display only (no generate variations here)
+                 # Right side: Lineup display only
                  column(5,
                         # Current lineup display
-                        uiOutput(ns("lineup_display"))
-                 )
-               ),
-               
-               # =======================================================
-               # GENERATE VARIATIONS - Full width below
-               # =======================================================
-               div(
-                 style = "margin-top: 1rem; padding: 0.75rem; background: var(--bg-tertiary); border-radius: 8px; border: 1px solid var(--outline);",
-                 
-                 # Section header
-                 div(
-                   style = "font-weight: 700; font-size: 0.85rem; color: var(--text-primary); margin-bottom: 0.5rem;",
-                   "Generate Variations"
-                 ),
-                 
-                 # Two column layout: Instructions left, Settings right
-                 fluidRow(
-                   column(6,
-                          # Completion instructions
-                          textAreaInput(
-                            ns("completion_instructions"),
-                            label = NULL,
-                            value = "",
-                            placeholder = "Describe how to complete lineups (e.g., stack WRs with QB, bring-back from opponent...)",
-                            rows = 2
-                          )
-                   ),
-                   column(6,
-                          # Settings row: # Lineups, Variance, Game Stack
-                          div(
-                            style = "display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 0.5rem;",
-                            div(
-                              style = "font-size: 0.75rem;",
-                              numericInput(ns("num_lineups"), "# Lineups", value = 10, min = 1, max = 50, step = 1)
-                            ),
-                            div(
-                              style = "font-size: 0.75rem;",
-                              numericInput(ns("variance_pct"), "Variance %", value = 15, min = 0, max = 50, step = 5)
-                            ),
-                            div(
-                              style = "font-size: 0.75rem;",
-                              selectInput(ns("stack_game"), "Game Stack", choices = c("None" = ""))
-                            )
-                          )
-                   )
-                 ),
-                 
-                 # Collapsible advanced stacking rules
-                 tags$details(
-                   style = "margin-top: 0.5rem;",
-                   tags$summary(
-                     style = "font-size: 0.75rem; font-weight: 600; color: var(--text-muted); cursor: pointer; user-select: none;",
-                     "Advanced Stacking Rules"
-                   ),
-                   div(
-                     style = "padding: 0.5rem 0;",
-                     fluidRow(
-                       column(6,
-                              # QB selection + Add rule
-                              div(
-                                style = "display: grid; grid-template-columns: 2fr 1fr; gap: 0.5rem; margin-bottom: 0.5rem;",
-                                selectizeInput(ns("rule_qbs"), "If QB is...",
-                                               choices = c("Loading..." = ""),
-                                               multiple = TRUE,
-                                               options = list(placeholder = "Select QB(s)")
-                                ),
-                                div(
-                                  style = "padding-top: 1.5rem;",
-                                  actionButton(ns("add_rule"), "Add", class = "btn-primary btn-sm", style = "width: 100%;")
-                                )
-                              )
-                       ),
-                       column(3,
-                              # Same team stack
-                              div(style = "font-size: 0.7rem; font-weight: 600; color: var(--text-muted);", "Same Team"),
-                              div(
-                                style = "display: flex; align-items: center; gap: 0.25rem;",
-                                numericInput(ns("rule_same_min"), NULL, value = 1, min = 0, max = 4, step = 1, width = "50px"),
-                                checkboxGroupInput(ns("rule_same_pos"), NULL, choices = c("RB", "WR", "TE"), selected = c("WR", "TE"), inline = TRUE)
-                              )
-                       ),
-                       column(3,
-                              # Opponent stack
-                              div(style = "font-size: 0.7rem; font-weight: 600; color: var(--text-muted);", "Opponent"),
-                              div(
-                                style = "display: flex; align-items: center; gap: 0.25rem;",
-                                numericInput(ns("rule_opp_min"), NULL, value = 0, min = 0, max = 3, step = 1, width = "50px"),
-                                checkboxGroupInput(ns("rule_opp_pos"), NULL, choices = c("RB", "WR", "TE"), selected = c("WR"), inline = TRUE)
-                              )
-                       )
-                     ),
-                     # Min game players + current rules
-                     div(
-                       style = "display: flex; align-items: center; gap: 0.5rem; margin-top: 0.5rem;",
-                       span(style = "font-size: 0.7rem; color: var(--text-muted);", "Min players from game:"),
-                       numericInput(ns("min_game_players"), NULL, value = 4, min = 2, max = 6, step = 1, width = "60px"),
-                       div(style = "flex: 1;"),
-                       actionButton(ns("clear_rules"), "Clear Rules", class = "btn-secondary btn-sm")
-                     ),
-                     uiOutput(ns("stacking_rules_display"))
-                   )
-                 ),
-                 
-                 # Action buttons - full width row
-                 div(
-                   style = "display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 0.5rem; margin-top: 0.75rem;",
-                   actionButton(ns("autocomplete"), "Autocomplete", class = "btn-secondary", style = "font-size: 0.85rem;"),
-                   actionButton(ns("clear_all"), "Clear", class = "btn-secondary", style = "font-size: 0.85rem;"),
-                   actionButton(ns("generate"), "Generate", class = "btn-primary", style = "font-size: 0.85rem; font-weight: 700;")
+                        uiOutput(ns("lineup_display")),
+                        
+                        # Action buttons below lineup
+                        div(
+                          style = "display: flex; gap: 0.5rem; margin-top: 0.75rem;",
+                          actionButton(ns("autocomplete"), "Autocomplete", class = "btn-primary", style = "flex: 1; font-size: 0.85rem;"),
+                          actionButton(ns("clear_all"), "Clear", class = "btn-secondary", style = "flex: 1; font-size: 0.85rem;")
+                        )
                  )
                )
              )
@@ -387,12 +241,207 @@ nfl_handbuild_ui <- function(id) {
     tags$br(),
     
     # ==========================================================================
-    # GENERATED LINEUPS (Full Width)
+    # PLAYER RULES & ADJUSTMENTS (Golf-style format)
     # ==========================================================================
-    fluidRow(
-      column(12,
-             uiOutput(ns("results_panel"))
-      )
+    ui_card(
+      title = "Player Rules & Adjustments",
+      color = NFL_CARD_COLOR,
+      
+      # Lock Players Row
+      fluidRow(
+        column(9,
+               selectizeInput(ns("lock_players"), "Lock Players (Always Include)",
+                              choices = NULL, multiple = TRUE,
+                              options = list(placeholder = "Select players to lock in every lineup...")
+               )
+        ),
+        column(3,
+               div(
+                 style = "margin-top: 25px; display: flex; justify-content: flex-end;",
+                 actionButton(ns("apply_lock"), "Lock", class = "btn btn-outline-success", style = "width: 100px;")
+               )
+        )
+      ),
+      
+      # Exclude Players Row
+      fluidRow(
+        column(9,
+               selectizeInput(ns("exclude_players"), "Exclude Players",
+                              choices = NULL, multiple = TRUE,
+                              options = list(placeholder = "Select players to exclude from all lineups...")
+               )
+        ),
+        column(3,
+               div(
+                 style = "margin-top: 25px; display: flex; justify-content: flex-end;",
+                 actionButton(ns("apply_exclude"), "Exclude", class = "btn btn-outline-danger", style = "width: 100px;")
+               )
+        )
+      ),
+      
+      # Applied lock/exclude display
+      uiOutput(ns("lock_exclude_display")),
+      
+      tags$hr(),
+      
+      # Grouped Boost/Dock
+      tags$h6(class = "fw-bold mb-2", icon("users"), " Grouped Boost/Dock"),
+      tags$p(class = "text-muted small mb-3", "Apply uniform boost or dock to selected players"),
+      
+      fluidRow(
+        column(5,
+               selectizeInput(ns("grouped_players"), "Players",
+                              choices = NULL, multiple = TRUE,
+                              options = list(placeholder = "Select players...")
+               )
+        ),
+        column(2,
+               selectInput(ns("grouped_action"), "Action", choices = c("Boost", "Dock"))
+        ),
+        column(2,
+               numericInput(ns("grouped_pct"), "Adjust %", value = 10, min = 0, max = 100, step = 5)
+        ),
+        column(3,
+               div(style = "margin-top: 25px; display: flex; justify-content: flex-end;",
+                   actionButton(ns("add_grouped_rule"), "Add Rule", class = "btn btn-primary", style = "width: 120px; text-align: center;")
+               )
+        )
+      ),
+      
+      uiOutput(ns("grouped_rules_display")),
+      
+      tags$hr(),
+      
+      # Correlation Rules
+      tags$h6(class = "fw-bold mb-2", icon("link"), " Correlation Rules"),
+      tags$p(class = "text-muted small mb-3", "When trigger player is in lineup, boost/dock target players"),
+      
+      # Row 1: Trigger
+      fluidRow(
+        column(4,
+               selectizeInput(ns("corr_trigger"), "If This Player Is In Lineup",
+                              choices = NULL,
+                              options = list(placeholder = "Select trigger player...")
+               )
+        )
+      ),
+      
+      # Row 2: Boost Targets
+      fluidRow(
+        column(6,
+               selectizeInput(ns("corr_boost_targets"), "Boost These Players",
+                              choices = NULL, multiple = TRUE,
+                              options = list(placeholder = "Select players to boost...")
+               )
+        ),
+        column(2,
+               numericInput(ns("corr_boost_pct"), "Boost %", value = 10, min = 0, max = 100, step = 5)
+        )
+      ),
+      
+      # Row 3: Dock Targets
+      fluidRow(
+        column(6,
+               selectizeInput(ns("corr_dock_targets"), "Dock These Players",
+                              choices = NULL, multiple = TRUE,
+                              options = list(placeholder = "Select players to dock...")
+               )
+        ),
+        column(2,
+               numericInput(ns("corr_dock_pct"), "Dock %", value = 10, min = 0, max = 100, step = 5)
+        ),
+        column(4,
+               div(style = "margin-top: 25px; display: flex; justify-content: flex-end;",
+                   actionButton(ns("add_corr_rule"), "Add Correlation Rule", class = "btn btn-primary", style = "min-width: 180px; text-align: center;")
+               )
+        )
+      ),
+      
+      uiOutput(ns("corr_rules_display")),
+      
+      tags$hr(),
+      
+      # QB Stacking Rules - clean layout matching other sections
+      tags$h6(class = "fw-bold mb-2", icon("football"), " QB Stacking Rules"),
+      tags$p(class = "text-muted small mb-3", "When QB is selected, require same-team and/or opponent players"),
+      
+      fluidRow(
+        column(4,
+               selectizeInput(ns("qb_stack_qbs"), "If QB Is...",
+                              choices = NULL, multiple = TRUE,
+                              options = list(placeholder = "Select QB(s)...")
+               )
+        ),
+        column(2,
+               numericInput(ns("qb_stack_same_min"), "Same Team Min", value = 1, min = 0, max = 4, step = 1)
+        ),
+        column(2,
+               div(
+                 class = "position-toggle-group",
+                 tags$label(class = "control-label", "Same Team Pos"),
+                 checkboxGroupInput(ns("qb_stack_same_pos"), NULL,
+                                    choices = c("RB", "WR", "TE"), 
+                                    selected = c("WR", "TE"),
+                                    inline = TRUE)
+               )
+        ),
+        column(2,
+               numericInput(ns("qb_stack_opp_min"), "Opponent Min", value = 0, min = 0, max = 3, step = 1)
+        ),
+        column(2,
+               div(
+                 class = "position-toggle-group",
+                 tags$label(class = "control-label", "Opponent Pos"),
+                 checkboxGroupInput(ns("qb_stack_opp_pos"), NULL,
+                                    choices = c("RB", "WR", "TE"), 
+                                    selected = c("WR"),
+                                    inline = TRUE)
+               )
+        )
+      ),
+      
+      div(
+        style = "display: flex; justify-content: flex-end; margin-top: -0.5rem;",
+        actionButton(ns("add_qb_stack_rule"), "Add QB Stack Rule", class = "btn btn-primary", style = "min-width: 160px;")
+      ),
+      
+      uiOutput(ns("qb_stack_rules_display"))
+    ),
+    
+    tags$br(),
+    
+    # ==========================================================================
+    # GENERATE LINEUPS
+    # ==========================================================================
+    ui_card(
+      title = "Generate Lineups",
+      color = NFL_CARD_COLOR,
+      
+      div(
+        style = "display: flex; justify-content: center; gap: 2rem; margin-bottom: 1.5rem;",
+        div(style = "width: 150px;",
+            numericInput(ns("num_lineups"), "# Lineups", value = 10, min = 1, max = 50)
+        ),
+        div(style = "width: 150px;",
+            numericInput(ns("variance_pct"), "Variance %", value = 15, min = 0, max = 50)
+        )
+      ),
+      
+      div(
+        style = "text-align: center; margin-bottom: 1.5rem;",
+        actionButton(
+          ns("generate"),
+          tagList(icon("play"), " GENERATE LINEUPS"),
+          class = "btn btn-success btn-lg",
+          style = "padding: 1rem 3rem; font-size: 1.2rem; font-weight: 700; text-transform: uppercase; box-shadow: 4px 4px 0 rgba(0,0,0,0.2);"
+        )
+      ),
+      
+      uiOutput(ns("lineup_summary_stats")),
+      
+      tags$hr(),
+      
+      uiOutput(ns("results_panel"))
     )
   )
 }
@@ -425,8 +474,8 @@ nfl_handbuild_server <- function(id) {
         TE = NULL, FLEX = NULL, DST = NULL
       ),
       generated_lineups = NULL,     # Generated lineup variations
-      projection_adjustments = list(),  # Player projection adjustments (name -> pct)
-      stacking_rules = list(),      # Conditional stacking rules
+      projection_adjustments = list(),  # Player projection adjustments (name -> pct) - calculated from rules
+      stacking_rules = list(),      # Conditional stacking rules (QB-based)
       available_games = NULL,       # Games for game stack selection
       position_filter = "all",      # Current position filter for player pool
       team_filter = "all",          # Current team filter for player pool
@@ -434,7 +483,13 @@ nfl_handbuild_server <- function(id) {
       completion_instructions = "", # User instructions for lineup generation
       unmatched_players = NULL,     # Players with projections but no salary data
       loading = FALSE,
-      initialized = FALSE
+      initialized = FALSE,
+      # New golf-style rules
+      locked_players = character(0),   # Players always included
+      excluded_players = character(0), # Players always excluded  
+      grouped_rules = list(),          # Grouped boost/dock rules
+      corr_rules = list(),             # Correlation rules (trigger -> boost/dock targets)
+      qb_stack_rules = list()          # QB stacking rules (QB -> same team + opponent requirements)
     )
     
     # =========================================================================
@@ -550,7 +605,21 @@ nfl_handbuild_server <- function(id) {
           if (nrow(qbs) > 0) {
             qb_choices <- setNames(qbs$player, qbs$label)
             updateSelectizeInput(session, "rule_qbs", choices = qb_choices)
+            updateSelectizeInput(session, "qb_stack_qbs", choices = qb_choices)
           }
+          
+          # Update player dropdowns for rules section
+          player_choices <- data %>%
+            arrange(desc(blended)) %>%
+            mutate(label = sprintf("%s (%s, %s) - %.1f pts", player, position, team, blended)) %>%
+            {setNames(.$player, .$label)}
+          
+          updateSelectizeInput(session, "lock_players", choices = player_choices, server = TRUE)
+          updateSelectizeInput(session, "exclude_players", choices = player_choices, server = TRUE)
+          updateSelectizeInput(session, "grouped_players", choices = player_choices, server = TRUE)
+          updateSelectizeInput(session, "corr_trigger", choices = c("Select trigger..." = "", player_choices))
+          updateSelectizeInput(session, "corr_boost_targets", choices = player_choices, server = TRUE)
+          updateSelectizeInput(session, "corr_dock_targets", choices = player_choices, server = TRUE)
           
           # Update team filter selector with logos
           teams <- data %>%
@@ -601,6 +670,13 @@ nfl_handbuild_server <- function(id) {
           rv$adjusted_optimal_projection <- 0
           rv$generated_lineups <- NULL
           rv$stacking_rules <- list()  # Clear stacking rules too
+          
+          # Clear golf-style rules
+          rv$locked_players <- character(0)
+          rv$excluded_players <- character(0)
+          rv$grouped_rules <- list()
+          rv$corr_rules <- list()
+          rv$qb_stack_rules <- list()
           
           # Reset lineup slots
           rv$lineup_slots <- list(
@@ -676,6 +752,476 @@ nfl_handbuild_server <- function(id) {
       updateNumericInput(session, "salary_cap", value = new_cap)
       log_debug(">>> Salary cap updated to:", new_cap, level = "INFO")
     }, ignoreInit = TRUE)
+    
+    # =========================================================================
+    # LOCK/EXCLUDE HANDLERS
+    # =========================================================================
+    
+    observeEvent(input$apply_lock, {
+      req(input$lock_players)
+      req(length(input$lock_players) > 0)
+      
+      log_debug(">>> Locking players:", paste(input$lock_players, collapse = ", "), level = "INFO")
+      rv$locked_players <- unique(c(rv$locked_players, input$lock_players))
+      updateSelectizeInput(session, "lock_players", selected = character(0))
+    })
+    
+    observeEvent(input$apply_exclude, {
+      req(input$exclude_players)
+      req(length(input$exclude_players) > 0)
+      
+      log_debug(">>> Excluding players:", paste(input$exclude_players, collapse = ", "), level = "INFO")
+      rv$excluded_players <- unique(c(rv$excluded_players, input$exclude_players))
+      updateSelectizeInput(session, "exclude_players", selected = character(0))
+    })
+    
+    observeEvent(input$remove_locked, {
+      log_debug(">>> Removing locked player:", input$remove_locked, level = "INFO")
+      rv$locked_players <- setdiff(rv$locked_players, input$remove_locked)
+    })
+    
+    observeEvent(input$remove_excluded, {
+      log_debug(">>> Removing excluded player:", input$remove_excluded, level = "INFO")
+      rv$excluded_players <- setdiff(rv$excluded_players, input$remove_excluded)
+    })
+    
+    output$lock_exclude_display <- renderUI({
+      locked <- rv$locked_players
+      excluded <- rv$excluded_players
+      player_data <- rv$player_data
+      
+      if (length(locked) == 0 && length(excluded) == 0) return(NULL)
+      
+      div(
+        style = "display: flex; flex-direction: column; gap: 0.4rem; margin-top: 1rem;",
+        
+        # Locked players
+        lapply(locked, function(p) {
+          # Get player info for display
+          player_info <- if (!is.null(player_data)) {
+            player_data %>% filter(player == p)
+          } else {
+            NULL
+          }
+          pos_team <- if (!is.null(player_info) && nrow(player_info) > 0) {
+            sprintf("%s, %s", player_info$position[1], player_info$team[1])
+          } else {
+            ""
+          }
+          
+          div(
+            style = "display: flex; align-items: center; padding: 0.4rem 0.6rem; background: white; border: 2px solid var(--accent-sage); border-radius: 6px;",
+            
+            # Lock badge
+            div(
+              style = "background: var(--accent-sage); color: white; padding: 0.2rem 0.5rem; border-radius: 4px; font-size: 0.75rem; font-weight: 700; margin-right: 0.75rem;",
+              icon("lock"), " LOCKED"
+            ),
+            
+            # Player name + info
+            div(
+              style = "flex: 1; font-weight: 600; font-size: 0.9rem;",
+              p,
+              if (pos_team != "") span(style = "font-weight: 400; color: var(--text-muted); font-size: 0.8rem; margin-left: 0.5rem;", paste0("(", pos_team, ")"))
+            ),
+            
+            # Remove button
+            actionButton(
+              ns(paste0("remove_locked_", gsub("[^a-zA-Z0-9]", "_", p))),
+              icon("times"),
+              class = "btn-secondary",
+              style = "padding: 0.2rem 0.4rem; min-width: auto; font-size: 0.7rem;",
+              onclick = sprintf("Shiny.setInputValue('%s', '%s', {priority: 'event'}); return false;", ns("remove_locked"), p)
+            )
+          )
+        }),
+        
+        # Excluded players
+        lapply(excluded, function(p) {
+          # Get player info for display
+          player_info <- if (!is.null(player_data)) {
+            player_data %>% filter(player == p)
+          } else {
+            NULL
+          }
+          pos_team <- if (!is.null(player_info) && nrow(player_info) > 0) {
+            sprintf("%s, %s", player_info$position[1], player_info$team[1])
+          } else {
+            ""
+          }
+          
+          div(
+            style = "display: flex; align-items: center; padding: 0.4rem 0.6rem; background: white; border: 2px solid var(--accent-coral); border-radius: 6px;",
+            
+            # Exclude badge
+            div(
+              style = "background: var(--accent-coral); color: white; padding: 0.2rem 0.5rem; border-radius: 4px; font-size: 0.75rem; font-weight: 700; margin-right: 0.75rem;",
+              icon("ban"), " EXCLUDED"
+            ),
+            
+            # Player name + info
+            div(
+              style = "flex: 1; font-weight: 600; font-size: 0.9rem;",
+              p,
+              if (pos_team != "") span(style = "font-weight: 400; color: var(--text-muted); font-size: 0.8rem; margin-left: 0.5rem;", paste0("(", pos_team, ")"))
+            ),
+            
+            # Remove button
+            actionButton(
+              ns(paste0("remove_excluded_", gsub("[^a-zA-Z0-9]", "_", p))),
+              icon("times"),
+              class = "btn-secondary",
+              style = "padding: 0.2rem 0.4rem; min-width: auto; font-size: 0.7rem;",
+              onclick = sprintf("Shiny.setInputValue('%s', '%s', {priority: 'event'}); return false;", ns("remove_excluded"), p)
+            )
+          )
+        })
+      )
+    })
+    
+    # =========================================================================
+    # GROUPED BOOST/DOCK RULES
+    # =========================================================================
+    
+    observeEvent(input$add_grouped_rule, {
+      req(input$grouped_players)
+      req(length(input$grouped_players) > 0)
+      
+      action <- input$grouped_action
+      pct <- input$grouped_pct %||% 10
+      key <- paste0(action, "_", pct)
+      
+      log_debug(">>> Adding grouped rule:", key, "for", length(input$grouped_players), "players", level = "INFO")
+      
+      if (key %in% names(rv$grouped_rules)) {
+        rv$grouped_rules[[key]]$players <- unique(c(rv$grouped_rules[[key]]$players, input$grouped_players))
+      } else {
+        rv$grouped_rules[[key]] <- list(
+          action = action,
+          pct = pct,
+          players = input$grouped_players
+        )
+      }
+      
+      updateSelectizeInput(session, "grouped_players", selected = character(0))
+    })
+    
+    observeEvent(input$remove_grouped_rule, {
+      log_debug(">>> Removing grouped rule:", input$remove_grouped_rule, level = "INFO")
+      rv$grouped_rules[[input$remove_grouped_rule]] <- NULL
+    })
+    
+    output$grouped_rules_display <- renderUI({
+      rules <- rv$grouped_rules
+      if (length(rules) == 0) return(NULL)
+      
+      div(
+        style = "display: flex; flex-direction: column; gap: 0.4rem; margin-top: 1rem;",
+        lapply(names(rules), function(key) {
+          rule <- rules[[key]]
+          is_boost <- rule$action == "Boost"
+          
+          div(
+            style = sprintf(
+              "display: flex; align-items: center; padding: 0.4rem 0.6rem; background: white; border: 2px solid %s; border-radius: 6px;",
+              if (is_boost) "var(--accent-sage)" else "var(--accent-coral)"
+            ),
+            
+            # Action badge
+            div(
+              style = sprintf(
+                "background: %s; color: white; padding: 0.2rem 0.5rem; border-radius: 4px; font-size: 0.75rem; font-weight: 700; margin-right: 0.75rem; white-space: nowrap;",
+                if (is_boost) "var(--accent-sage)" else "var(--accent-coral)"
+              ),
+              sprintf("%s %d%%", toupper(rule$action), rule$pct)
+            ),
+            
+            # Player names
+            div(
+              style = "flex: 1; font-weight: 600; font-size: 0.9rem;",
+              paste(rule$players, collapse = ", ")
+            ),
+            
+            # Remove button
+            actionButton(
+              ns(paste0("remove_grouped_", gsub("[^a-zA-Z0-9]", "_", key))),
+              icon("times"),
+              class = "btn-secondary",
+              style = "padding: 0.2rem 0.4rem; min-width: auto; font-size: 0.7rem;",
+              onclick = sprintf("Shiny.setInputValue('%s', '%s', {priority: 'event'}); return false;", ns("remove_grouped_rule"), key)
+            )
+          )
+        })
+      )
+    })
+    
+    # =========================================================================
+    # CORRELATION RULES (supports multiple boost/dock groups per trigger)
+    # =========================================================================
+    
+    observeEvent(input$add_corr_rule, {
+      req(input$corr_trigger)
+      req(input$corr_trigger != "")
+      
+      trigger <- input$corr_trigger
+      boost_targets <- input$corr_boost_targets %||% character(0)
+      boost_pct <- input$corr_boost_pct %||% 10
+      dock_targets <- input$corr_dock_targets %||% character(0)
+      dock_pct <- input$corr_dock_pct %||% 10
+      
+      log_debug(">>> Adding correlation rule for trigger:", trigger, level = "INFO")
+      
+      if (trigger %in% names(rv$corr_rules)) {
+        existing <- rv$corr_rules[[trigger]]
+        
+        # Add boost targets to matching pct group or create new group
+        if (length(boost_targets) > 0) {
+          matched <- FALSE
+          for (i in seq_along(existing$boost_groups)) {
+            if (existing$boost_groups[[i]]$pct == boost_pct) {
+              existing$boost_groups[[i]]$targets <- unique(c(existing$boost_groups[[i]]$targets, boost_targets))
+              matched <- TRUE
+              break
+            }
+          }
+          if (!matched) {
+            existing$boost_groups <- append(existing$boost_groups, list(list(pct = boost_pct, targets = boost_targets)))
+          }
+        }
+        
+        # Add dock targets to matching pct group or create new group
+        if (length(dock_targets) > 0) {
+          matched <- FALSE
+          for (i in seq_along(existing$dock_groups)) {
+            if (existing$dock_groups[[i]]$pct == dock_pct) {
+              existing$dock_groups[[i]]$targets <- unique(c(existing$dock_groups[[i]]$targets, dock_targets))
+              matched <- TRUE
+              break
+            }
+          }
+          if (!matched) {
+            existing$dock_groups <- append(existing$dock_groups, list(list(pct = dock_pct, targets = dock_targets)))
+          }
+        }
+        
+        rv$corr_rules[[trigger]] <- existing
+      } else {
+        rv$corr_rules[[trigger]] <- list(
+          trigger = trigger,
+          boost_groups = if (length(boost_targets) > 0) list(list(pct = boost_pct, targets = boost_targets)) else list(),
+          dock_groups = if (length(dock_targets) > 0) list(list(pct = dock_pct, targets = dock_targets)) else list()
+        )
+      }
+      
+      updateSelectizeInput(session, "corr_trigger", selected = "")
+      updateSelectizeInput(session, "corr_boost_targets", selected = character(0))
+      updateSelectizeInput(session, "corr_dock_targets", selected = character(0))
+    })
+    
+    observeEvent(input$remove_corr_rule, {
+      log_debug(">>> Removing correlation rule:", input$remove_corr_rule, level = "INFO")
+      rv$corr_rules[[input$remove_corr_rule]] <- NULL
+    })
+    
+    output$corr_rules_display <- renderUI({
+      rules <- rv$corr_rules
+      if (length(rules) == 0) return(NULL)
+      
+      div(
+        style = "display: flex; flex-direction: column; gap: 0.4rem; margin-top: 1rem;",
+        lapply(names(rules), function(trigger) {
+          rule <- rules[[trigger]]
+          
+          div(
+            style = "display: flex; align-items: center; padding: 0.4rem 0.6rem; background: white; border: 2px solid var(--accent-plum); border-radius: 6px;",
+            
+            # IF badge
+            div(
+              style = "background: var(--text-primary); color: white; padding: 0.2rem 0.4rem; border-radius: 4px; font-size: 0.7rem; font-weight: 700; margin-right: 0.5rem;",
+              "IF"
+            ),
+            
+            # Trigger name
+            div(
+              style = "font-weight: 600; font-size: 0.9rem; min-width: 120px;",
+              trigger
+            ),
+            
+            # Arrow
+            span(style = "color: var(--text-muted); font-size: 1.2rem; margin: 0 0.5rem;", HTML("&#8594;")),
+            
+            # Effects
+            div(
+              style = "flex: 1; display: flex; flex-wrap: wrap; gap: 0.4rem; align-items: center;",
+              
+              # Boost groups
+              lapply(rule$boost_groups, function(group) {
+                div(
+                  style = "display: inline-flex; align-items: center; gap: 0.25rem; padding: 0.15rem 0.4rem; background: rgba(139, 168, 134, 0.2); border-radius: 4px;",
+                  span(
+                    style = "font-weight: 700; color: var(--accent-sage); font-size: 0.75rem;",
+                    sprintf("+%d%%", group$pct)
+                  ),
+                  span(style = "font-size: 0.85rem; font-weight: 500;", paste(group$targets, collapse = ", "))
+                )
+              }),
+              
+              # Dock groups
+              lapply(rule$dock_groups, function(group) {
+                div(
+                  style = "display: inline-flex; align-items: center; gap: 0.25rem; padding: 0.15rem 0.4rem; background: rgba(232, 131, 121, 0.2); border-radius: 4px;",
+                  span(
+                    style = "font-weight: 700; color: var(--accent-coral); font-size: 0.75rem;",
+                    sprintf("-%d%%", group$pct)
+                  ),
+                  span(style = "font-size: 0.85rem; font-weight: 500;", paste(group$targets, collapse = ", "))
+                )
+              })
+            ),
+            
+            # Remove button
+            actionButton(
+              ns(paste0("remove_corr_", gsub("[^a-zA-Z0-9]", "_", trigger))),
+              icon("times"),
+              class = "btn-secondary",
+              style = "padding: 0.2rem 0.4rem; min-width: auto; font-size: 0.7rem;",
+              onclick = sprintf("Shiny.setInputValue('%s', '%s', {priority: 'event'}); return false;", ns("remove_corr_rule"), trigger)
+            )
+          )
+        })
+      )
+    })
+    
+    # =========================================================================
+    # QB STACKING RULES
+    # =========================================================================
+    
+    observeEvent(input$add_qb_stack_rule, {
+      req(input$qb_stack_qbs)
+      req(length(input$qb_stack_qbs) > 0)
+      
+      qbs <- input$qb_stack_qbs
+      same_min <- input$qb_stack_same_min %||% 0
+      same_pos <- input$qb_stack_same_pos %||% c()
+      opp_min <- input$qb_stack_opp_min %||% 0
+      opp_pos <- input$qb_stack_opp_pos %||% c()
+      
+      # Validate rule makes sense
+      if (same_min == 0 && opp_min == 0) {
+        showNotification("Rule must require at least 1 same-team or opponent player", type = "warning")
+        return()
+      }
+      
+      if (same_min > 0 && length(same_pos) == 0) {
+        showNotification("Select positions for same-team stack", type = "warning")
+        return()
+      }
+      
+      if (opp_min > 0 && length(opp_pos) == 0) {
+        showNotification("Select positions for opponent stack", type = "warning")
+        return()
+      }
+      
+      log_debug(">>> Adding QB stack rule for:", paste(qbs, collapse = ", "), level = "INFO")
+      
+      # Create rule
+      rule <- list(
+        id = paste0("qb_stack_", length(rv$qb_stack_rules) + 1, "_", sample(1000:9999, 1)),
+        qbs = qbs,
+        same_team_min = same_min,
+        same_team_positions = same_pos,
+        opp_min = opp_min,
+        opp_positions = opp_pos
+      )
+      
+      rv$qb_stack_rules <- append(rv$qb_stack_rules, list(rule))
+      
+      # Reset inputs
+      updateSelectizeInput(session, "qb_stack_qbs", selected = character(0))
+      updateNumericInput(session, "qb_stack_same_min", value = 1)
+      updateNumericInput(session, "qb_stack_opp_min", value = 0)
+      
+      showNotification(sprintf("Added QB stack rule for %s", paste(qbs, collapse = ", ")), type = "message")
+    })
+    
+    observeEvent(input$remove_qb_stack_rule, {
+      rule_id <- input$remove_qb_stack_rule
+      log_debug(">>> Removing QB stack rule:", rule_id, level = "INFO")
+      rv$qb_stack_rules <- Filter(function(r) r$id != rule_id, rv$qb_stack_rules)
+    })
+    
+    output$qb_stack_rules_display <- renderUI({
+      rules <- rv$qb_stack_rules
+      player_data <- rv$player_data
+      
+      if (length(rules) == 0) return(NULL)
+      
+      div(
+        style = "display: flex; flex-direction: column; gap: 0.4rem; margin-top: 1rem;",
+        lapply(rules, function(rule) {
+          rule_id <- rule$id
+          
+          # Get QB display with team info
+          qb_display <- if (!is.null(player_data)) {
+            qb_info <- player_data %>%
+              filter(player %in% rule$qbs) %>%
+              mutate(display = paste0(player, " (", team, ")"))
+            paste(qb_info$display, collapse = ", ")
+          } else {
+            paste(rule$qbs, collapse = ", ")
+          }
+          
+          # Build rule description
+          same_desc <- if (rule$same_team_min > 0) {
+            sprintf("%d+ %s (same team)", rule$same_team_min, paste(rule$same_team_positions, collapse = "/"))
+          } else {
+            NULL
+          }
+          
+          opp_desc <- if (rule$opp_min > 0) {
+            sprintf("%d+ %s (opponent)", rule$opp_min, paste(rule$opp_positions, collapse = "/"))
+          } else {
+            NULL
+          }
+          
+          stack_desc <- paste(c(same_desc, opp_desc), collapse = " + ")
+          
+          div(
+            style = "display: flex; align-items: center; gap: 0.75rem; padding: 0.5rem 0.75rem; background: white; border: 2px solid var(--accent-frost); border-radius: 6px;",
+            
+            # QB indicator
+            div(
+              style = "background: var(--text-primary); color: white; padding: 0.2rem 0.4rem; border-radius: 4px; font-size: 0.7rem; font-weight: 700;",
+              "IF QB"
+            ),
+            
+            # QB names
+            div(
+              style = "flex: 1; font-weight: 600; font-size: 0.85rem;",
+              qb_display
+            ),
+            
+            # Arrow
+            span(style = "color: var(--text-muted); font-size: 1.2rem;", HTML("&#8594;")),
+            
+            # Stack requirement
+            div(
+              style = "flex: 1; font-size: 0.85rem; color: var(--text-secondary);",
+              stack_desc
+            ),
+            
+            # Remove button
+            actionButton(
+              ns(paste0("remove_qb_stack_", gsub("[^a-zA-Z0-9]", "_", rule_id))),
+              icon("times"),
+              class = "btn-secondary",
+              style = "padding: 0.2rem 0.4rem; min-width: auto; font-size: 0.7rem;",
+              onclick = sprintf("Shiny.setInputValue('%s', '%s', {priority: 'event'}); return false;", ns("remove_qb_stack_rule"), rule_id)
+            )
+          )
+        })
+      )
+    })
     
     # =========================================================================
     # PROJECTION ADJUSTMENTS (as %)
@@ -772,7 +1318,7 @@ nfl_handbuild_server <- function(id) {
           left_join(player_data %>% select(player, blended), by = "player") %>%
           mutate(
             adj_value = blended * (1 + adj_pct / 100),
-            display = sprintf("%s: %.1f ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¾ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ %.1f (%+.0f%%)", player, blended, adj_value, adj_pct)
+            display = sprintf("%s: %.1f ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€šÃ‚Â¾ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ %.1f (%+.0f%%)", player, blended, adj_value, adj_pct)
           )
       } else {
         adj_df <- adj_df %>%
@@ -1016,7 +1562,7 @@ nfl_handbuild_server <- function(id) {
             ),
             
             # Arrow
-            span(style = "color: var(--text-muted); font-size: 1.2rem;", "ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¾ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢"),
+            span(style = "color: var(--text-muted); font-size: 1.2rem;", "ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€šÃ‚Â¾ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢"),
             
             # Stack requirement
             div(
@@ -1148,8 +1694,21 @@ nfl_handbuild_server <- function(id) {
       
       req(rv$player_data)
       
+      # Get excluded players for adjusted optimal
+      excluded <- rv$excluded_players
+      
+      # Build combined adjustments from projection_adjustments + grouped_rules
+      adjustments <- rv$projection_adjustments
+      for (rule in rv$grouped_rules) {
+        adj_value <- if (rule$action == "Boost") rule$pct else -rule$pct
+        for (p in rule$players) {
+          existing <- adjustments[[p]] %||% 0
+          adjustments[[p]] <- existing + adj_value
+        }
+      }
+      
       tryCatch({
-        # Standard optimal (no adjustments)
+        # Standard optimal (no adjustments, no exclusions - true optimal)
         optimal <- optimize_lineup_lp(
           players = rv$player_data,
           projection_col = "blended",
@@ -1164,16 +1723,16 @@ nfl_handbuild_server <- function(id) {
           log_debug(">>> Standard optimal:", rv$optimal_projection, "pts", level = "INFO")
         }
         
-        # Adjusted optimal (with adjustments applied)
-        if (length(rv$projection_adjustments) > 0) {
-          adjusted_players <- get_adjusted_players(rv$player_data, rv$projection_adjustments)
+        # Adjusted optimal (with adjustments applied and exclusions)
+        if (length(adjustments) > 0 || length(excluded) > 0) {
+          adjusted_players <- get_adjusted_players(rv$player_data, adjustments)
           
           adjusted_optimal <- optimize_lineup_lp(
             players = adjusted_players,
             projection_col = "adjusted_blended",
             salary_cap = input$salary_cap %||% 120,
             locked_players = NULL,
-            excluded_players = NULL
+            excluded_players = excluded
           )
           
           if (!is.null(adjusted_optimal)) {
@@ -1445,7 +2004,7 @@ nfl_handbuild_server <- function(id) {
       # Helper for sort indicator
       sort_indicator <- function(col) {
         if (sort_col == col) {
-          if (sort_dir == "desc") " ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â€šÂ¬Ã…â€œÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¼" else " ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â€šÂ¬Ã…â€œÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â²"
+          if (sort_dir == "desc") " ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã¢â‚¬Å“ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¼" else " ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã¢â‚¬Å“ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â²"
         } else {
           ""
         }
@@ -1779,8 +2338,27 @@ nfl_handbuild_server <- function(id) {
       
       req(rv$player_data)
       
-      locked <- get_locked_players()
+      # Get manually locked players from lineup slots (existing behavior)
+      manual_locked <- get_locked_players()
+      
+      # Combine with golf-style locked players
+      locked <- unique(c(manual_locked, rv$locked_players))
+      
+      # Get excluded players
+      excluded <- rv$excluded_players
+      
+      # Build combined adjustments from projection_adjustments + grouped_rules
       adjustments <- rv$projection_adjustments
+      
+      # Add grouped rules to adjustments
+      for (rule in rv$grouped_rules) {
+        adj_value <- if (rule$action == "Boost") rule$pct else -rule$pct
+        for (p in rule$players) {
+          # Combine adjustments (sum them)
+          existing <- adjustments[[p]] %||% 0
+          adjustments[[p]] <- existing + adj_value
+        }
+      }
       
       # Use adjusted projections if any adjustments exist
       if (length(adjustments) > 0) {
@@ -1797,7 +2375,7 @@ nfl_handbuild_server <- function(id) {
           projection_col = proj_col,
           salary_cap = input$salary_cap %||% 120,
           locked_players = locked,
-          excluded_players = NULL
+          excluded_players = excluded
         )
         
         if (is.null(optimal)) {
@@ -1864,12 +2442,48 @@ nfl_handbuild_server <- function(id) {
       
       req(rv$player_data)
       
-      locked <- get_locked_players()
+      # Get manually locked players from lineup slots (existing behavior)
+      manual_locked <- get_locked_players()
+      
+      # Combine with golf-style locked players
+      locked <- unique(c(manual_locked, rv$locked_players))
+      
+      # Get excluded players
+      excluded <- rv$excluded_players
+      
+      # Build combined adjustments from projection_adjustments + grouped_rules
       adjustments <- rv$projection_adjustments
+      
+      # Add grouped rules to adjustments
+      for (rule in rv$grouped_rules) {
+        adj_value <- if (rule$action == "Boost") rule$pct else -rule$pct
+        for (p in rule$players) {
+          existing <- adjustments[[p]] %||% 0
+          adjustments[[p]] <- existing + adj_value
+        }
+      }
+      
+      # Combine old stacking_rules with new qb_stack_rules
       stacking_rules <- rv$stacking_rules
+      
+      # Convert qb_stack_rules to the format expected by generate_lineups_with_variance
+      for (qb_rule in rv$qb_stack_rules) {
+        converted_rule <- list(
+          id = qb_rule$id,
+          qbs = qb_rule$qbs,
+          same_team_min = qb_rule$same_team_min,
+          same_team_positions = qb_rule$same_team_positions,
+          opp_min = qb_rule$opp_min,
+          opp_positions = qb_rule$opp_positions
+        )
+        stacking_rules <- append(stacking_rules, list(converted_rule))
+      }
       
       # Capture completion instructions for display with results
       rv$completion_instructions <- input$completion_instructions %||% ""
+      
+      # Store corr_rules for use in lineup validation/adjustment
+      corr_rules <- rv$corr_rules
       
       showNotification("Generating lineups...", type = "message", id = "gen_notif", duration = NULL)
       
@@ -1880,10 +2494,12 @@ nfl_handbuild_server <- function(id) {
           salary_cap = input$salary_cap %||% 120,
           variance_pct = input$variance_pct %||% 15,
           locked_players = locked,
+          excluded_players = excluded,
           adjustments = adjustments,
           stacking_rules = stacking_rules,
           stack_game = input$stack_game %||% "",
-          min_game_players = input$min_game_players %||% 4
+          min_game_players = input$min_game_players %||% 4,
+          corr_rules = corr_rules
         )
         
         rv$generated_lineups <- lineups
@@ -2057,6 +2673,49 @@ nfl_handbuild_server <- function(id) {
     })
     
     # =========================================================================
+    # OUTPUT: Lineup Summary Stats
+    # =========================================================================
+    
+    output$lineup_summary_stats <- renderUI({
+      n <- length(rv$generated_lineups)
+      opt <- rv$optimal_projection
+      
+      if (n == 0) return(NULL)
+      
+      projections <- sapply(rv$generated_lineups, function(l) sum(l$projection))
+      
+      div(
+        style = "display: flex; justify-content: center; gap: 2rem; margin-bottom: 1rem;",
+        
+        div(
+          style = "text-align: center;",
+          div(style = "font-size: 0.75rem; text-transform: uppercase; color: var(--text-muted);", "Lineups"),
+          div(style = "font-size: 1.25rem; font-weight: 700;", n)
+        ),
+        
+        if (!is.null(opt) && !is.na(opt)) {
+          div(
+            style = "text-align: center;",
+            div(style = "font-size: 0.75rem; text-transform: uppercase; color: var(--text-muted);", "Optimal"),
+            div(style = "font-size: 1.25rem; font-weight: 700; color: var(--accent-sage);", sprintf("%.1f", opt))
+          )
+        },
+        
+        div(
+          style = "text-align: center;",
+          div(style = "font-size: 0.75rem; text-transform: uppercase; color: var(--text-muted);", "Best"),
+          div(style = "font-size: 1.25rem; font-weight: 700; color: var(--accent-coral);", sprintf("%.1f", max(projections)))
+        ),
+        
+        div(
+          style = "text-align: center;",
+          div(style = "font-size: 0.75rem; text-transform: uppercase; color: var(--text-muted);", "Average"),
+          div(style = "font-size: 1.25rem; font-weight: 700;", sprintf("%.1f", mean(projections)))
+        )
+      )
+    })
+    
+    # =========================================================================
     # OUTPUT: Results Panel
     # =========================================================================
     
@@ -2069,19 +2728,9 @@ nfl_handbuild_server <- function(id) {
       
       if (is.null(lineups) || length(lineups) == 0) {
         return(
-          ui_card(
-            title = "Generated Lineups",
-            color = NFL_CARD_COLOR,
-            div(
-              style = "text-align: center; padding: 3rem; color: var(--text-muted);",
-              tags$p("No lineups generated yet."),
-              tags$p(style = "font-size: 0.85rem;", 
-                     "1. Optionally add players to lock them in"),
-              tags$p(style = "font-size: 0.85rem;", 
-                     "2. Configure stacking rules"),
-              tags$p(style = "font-size: 0.85rem;", 
-                     "3. Click 'Generate Lineups' to create variations")
-            )
+          div(
+            class = "text-muted text-center py-4",
+            "No lineups generated yet"
           )
         )
       }
@@ -2110,59 +2759,7 @@ nfl_handbuild_server <- function(id) {
       # Get completion instructions
       completion_instructions <- rv$completion_instructions
       
-      ui_card(
-        title = sprintf("Generated Lineups (%d)%s", length(lineups), 
-                        if (has_adjustments) " - Projections Adjusted" else ""),
-        color = NFL_CARD_COLOR,
-        
-        # Show completion instructions if provided
-        if (!is.null(completion_instructions) && nchar(trimws(completion_instructions)) > 0) {
-          div(
-            style = "background: var(--bg-tertiary); border-left: 3px solid var(--accent-plum); padding: 0.75rem 1rem; margin-bottom: 1rem; border-radius: 0 6px 6px 0;",
-            div(
-              style = "font-size: 0.7rem; text-transform: uppercase; font-weight: 600; color: var(--text-muted); margin-bottom: 0.25rem;",
-              "Completion Instructions"
-            ),
-            div(
-              style = "font-size: 0.85rem; color: var(--text-secondary); font-style: italic;",
-              completion_instructions
-            )
-          )
-        },
-        
-        # Summary stats
-        div(
-          style = "display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem; margin-bottom: 1.5rem; padding-bottom: 1rem; border-bottom: 2px solid var(--bg-secondary);",
-          div(
-            style = "text-align: center;",
-            div(style = "font-size: 0.75rem; text-transform: uppercase; color: var(--text-muted);", 
-                if (has_adjustments) "Best (Adj)" else "Best"),
-            div(style = "font-size: 1.25rem; font-weight: 700; color: var(--accent-sage);", sprintf("%.1f", best_proj))
-          ),
-          div(
-            style = "text-align: center;",
-            div(style = "font-size: 0.75rem; text-transform: uppercase; color: var(--text-muted);", 
-                if (has_adjustments) "Avg (Adj)" else "Average"),
-            div(style = "font-size: 1.25rem; font-weight: 700;", sprintf("%.1f", avg_proj))
-          ),
-          div(
-            style = "text-align: center;",
-            div(style = "font-size: 0.75rem; text-transform: uppercase; color: var(--text-muted);", "Optimal"),
-            div(style = "font-size: 1.25rem; font-weight: 700; color: var(--accent-teal);", 
-                if (optimal_proj > 0) sprintf("%.1f", optimal_proj) else "--ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â")
-          ),
-          div(
-            style = "text-align: center;",
-            div(style = "font-size: 0.75rem; text-transform: uppercase; color: var(--text-muted);", "Best vs Opt"),
-            div(
-              style = sprintf("font-size: 1.25rem; font-weight: 700; color: %s;",
-                              if (optimal_proj > 0) "var(--accent-coral)" else "var(--text-muted)"
-              ),
-              if (optimal_proj > 0) sprintf("%+.1f", best_proj - optimal_proj) else "--ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â"
-            )
-          )
-        ),
-        
+      div(
         # Lineup cards - grid layout for full width
         div(
           style = "display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem;",

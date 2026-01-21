@@ -28,8 +28,8 @@ get_sports_config <- function() {
       color = APP_COLORS$gold,
       color_light = "#F5E0B8",
       icon_scale = 1.0,  # Base size (taller icon)
-      sections = c("classic", "showdown", "season_long", "season_management"),
-      default_section = "classic"
+      sections = c("this_week", "season_management", "classic", "showdown"),
+      default_section = "this_week"
     ),
     
     nfl = list(
@@ -141,6 +141,12 @@ get_sections_config <- function() {
       icon = "zap"
     ),
     
+    this_week = list(
+      id = "this_week",
+      name = "This Week",
+      icon = "calendar-check"
+    ),
+    
     season_long = list(
       id = "season_long",
       name = "Season Long",
@@ -149,7 +155,7 @@ get_sections_config <- function() {
     
     season_management = list(
       id = "season_management",
-      name = "Management",
+      name = "Season Long",
       icon = "clipboard-list"
     )
   )

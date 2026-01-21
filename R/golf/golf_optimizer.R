@@ -49,9 +49,10 @@ optimize_golf_classic_lp <- function(players,
     log_debug(">>>   After exclusions:", nrow(available), "players", level = "DEBUG")
   }
   
-  # Filter out players without projections
+  # Filter out players without projections OR without salary
   available <- available %>% 
-    filter(!is.na(.data[[projection_col]]) & .data[[projection_col]] > 0)
+    filter(!is.na(.data[[projection_col]]) & .data[[projection_col]] > 0) %>%
+    filter(!is.na(salary) & salary > 0)
   
   n <- nrow(available)
   if (n < 6) {
@@ -225,7 +226,7 @@ optimize_golf_classic_lp <- function(players,
 #' @param players Data frame with player data
 #' @param projection_col Projection column to use
 #' @param num_lineups Number of unique lineups
-#' @param variance_pct Percentage variance (e.g., 15 for Â±15%)
+#' @param variance_pct Percentage variance (e.g., 15 for Ã‚Â±15%)
 #' @param salary_cap Maximum salary
 #' @param locked_players Players to lock in
 #' @param excluded_players Players to exclude

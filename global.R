@@ -187,6 +187,8 @@ source("R/golf/mod_golf_classic.R")        # Classic (full tournament) module
 cat("[STARTUP]     mod_golf_classic.R loaded\n")
 source("R/golf/mod_golf_showdown.R")       # Showdown (single day) module
 cat("[STARTUP]     mod_golf_showdown.R loaded\n")
+source("R/golf/mod_golf_this_week.R")      # This Week (projections comparison) module
+cat("[STARTUP]     mod_golf_this_week.R loaded\n")
 source("R/golf/mod_golf_season_long.R")    # Season long (Underdog Scramble) module
 cat("[STARTUP]     mod_golf_season_long.R loaded\n")
 source("R/golf/mod_golf_season_management.R")  # Season long management module

@@ -175,7 +175,8 @@ nfl_ffpc_bestball_server <- function(id) {
       draft_history = NULL,      # Historical draft counts per player
       draft_pairs = NULL,        # Historical player pairing counts
       total_drafts = 0,          # Total number of drafts for percentage calc
-      initialized = FALSE
+      initialized = FALSE,
+      rows_to_show = 48          # Window size: 4 rounds (48 picks)
     )
     
     # Load headshots once at startup
@@ -1108,6 +1109,9 @@ nfl_ffpc_bestball_server <- function(id) {
       my_picks_set <- pick_info$my_picks
       near_picks_set <- c(pick_info$light_before, pick_info$light_after)
       
+      # Window: show up to rows_to_show (default 48 = 4 rounds, +12 each "Show more")
+      visible_count <- min(nrow(available), rv$rows_to_show)
+      
       # Helper to render fraction HTML
       render_fraction <- function(lookup, total, player_name) {
         if (is.null(lookup) || total == 0) return("-")
@@ -1117,8 +1121,8 @@ nfl_ffpc_bestball_server <- function(id) {
                      paired_count, total))
       }
       
-      # Build table rows (optimized)
-      table_rows <- lapply(1:nrow(available), function(i) {
+      # Build table rows (optimized) - only render visible window
+      table_rows <- lapply(1:visible_count, function(i) {
         row <- available[i, ]
         
         # Fast target check using pre-computed set
@@ -1303,7 +1307,20 @@ nfl_ffpc_bestball_server <- function(id) {
             # Body
             tags$tbody(table_rows)
           )
-        )
+        ),
+        
+        # Show more button (if there are more rows beyond the visible window)
+        if (nrow(available) > visible_count) {
+          div(
+            style = "text-align: center; padding: 1rem; border-top: 1px solid var(--outline-light);",
+            actionButton(
+              ns("show_more"),
+              sprintf("Show 12 more (%d remaining)", nrow(available) - visible_count),
+              class = "btn-secondary",
+              icon = icon("chevron-down")
+            )
+          )
+        }
       )
     })
     
@@ -1331,13 +1348,16 @@ nfl_ffpc_bestball_server <- function(id) {
       
       # Calculate my pick positions
       pick_info <- calculate_my_picks(draft_spot, num_teams, total_original, players_remaining)
-      is_my_pick <- board_position %in% pick_info$my_picks
+      
+      # Check if it's MY TURN (position 1 is my pick), not just if this specific position is my slot
+      # This allows "reaching" for players further down the board while still counting as my pick
+      is_my_turn <- 1 %in% pick_info$my_picks
       
       log_debug(">>> My pick positions:", paste(pick_info$my_picks, collapse = ","), level = "DEBUG")
-      log_debug(">>> Is my pick:", is_my_pick, level = "DEBUG")
+      log_debug(">>> Is my turn:", is_my_turn, "(position 1 in my picks)", level = "DEBUG")
       
       # If this is at my pick position and it's a trackable position, add to my team
-      if (is_my_pick && position %in% c("QB", "RB", "WR", "TE")) {
+      if (is_my_turn && position %in% c("QB", "RB", "WR", "TE")) {
         player_row <- data[data$PLAYER == player_name, ]
         
         if (nrow(player_row) > 0) {
@@ -1542,7 +1562,18 @@ nfl_ffpc_bestball_server <- function(id) {
         TE = data.frame()
       )
       
+      # Reset window size
+      rv$rows_to_show <- 48
+      
       showNotification("Draft board reset!", type = "message", duration = 2)
+    })
+    
+    # =========================================================================
+    # SHOW MORE ROWS
+    # =========================================================================
+    observeEvent(input$show_more, {
+      rv$rows_to_show <- rv$rows_to_show + 12
+      log_debug(">>> Show more rows, now showing:", rv$rows_to_show, level = "INFO")
     })
     
   })
