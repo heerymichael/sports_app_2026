@@ -119,11 +119,100 @@ GOLF_CLASSIC_PROJECTIONS_SHEET_ID <- "1yJJAOv5hzNZagYUG7FLpNmRIRC76L0fJNGPbzK61l
 # Google Sheet ID for FanTeam salaries (Golf Classic specific)
 GOLF_CLASSIC_SALARIES_SHEET_ID <- "12I3uMfY_V5apa0u6DGcQctIvJETJFonUJwm3aqiuvhI"
 
+# =============================================================================
+# NAME CORRECTIONS (shared between Classic and Showdown)
+# Maps FanTeam names to projection names
+# Add new corrections here as you discover mismatches
+# =============================================================================
+
+GOLF_CLASSIC_SHOWDOWN_NAME_CORRECTIONS <- list(
+  
+  # McNames - FanTeam uses lowercase after "Mc"
+  "Robert Macintyre" = "Robert MacIntyre",
+  "Maverick Mcnealy" = "Maverick McNealy",
+  "Denny Mccarthy" = "Denny McCarthy",
+  "Max Mcgreevy" = "Max McGreevy",
+  "Matt Mccarty" = "Matthew McCarty",
+  
+  # Nickname/full name variations
+  "Christopher Gotterup" = "Chris Gotterup",
+  "chris gotterup" = "Chris Gotterup",
+  "Henry Lebioda" = "Hank Lebioda",
+  "henry lebioda" = "Hank Lebioda",
+  "Cam Davis" = "Cameron Davis",
+  "cam davis" = "Cameron Davis",
+  "Matt McCarty" = "Matthew McCarty",
+  "matt mccarty" = "Matthew McCarty",
+  "Matthias Schmid" = "Matti Schmid",
+  "matthias schmid" = "Matti Schmid",
+  "Zach Bauchou" = "Zachary Bauchou",
+  "zach bauchou" = "Zachary Bauchou",
+  "Alex Noren" = "Alexander Noren",
+  "alex noren" = "Alexander Noren",
+  "Nico Echavarria" = "Nicolas Echavarria",
+  "nico echavarria" = "Nicolas Echavarria",
+  "Kris Ventura" = "Kristoffer Ventura",
+  "kris ventura" = "Kristoffer Ventura",
+  "Sam Stevens" = "Samuel Stevens",
+  "sam stevens" = "Samuel Stevens",
+  "Kota Yuta Kaneko" = "Kota Kaneko",
+  "kota yuta kaneko" = "Kota Kaneko",
+  
+  # Hyphenated/spaced name variations (Asian names)
+  "Seong-Hyeon Kim" = "Seonghyeon Kim",
+  "seong hyeon kim" = "Seonghyeon Kim",
+  "Byeong-Hun An" = "Byeong Hun An",
+  "byeong hun an" = "Byeong Hun An",
+  "Sung-Jae Im" = "Sungjae Im",
+  "sung jae im" = "Sungjae Im",
+  "Hao-Tong Li" = "Haotong Li",
+  "hao tong li" = "Haotong Li",
+  "Ze-Cheng Dou" = "Zecheng Dou",
+  "ze cheng dou" = "Zecheng Dou",
+  
+  # Extended names
+  "Adrien Dumont" = "Adrien Dumont De Chassart",
+  "adrien dumont" = "Adrien Dumont De Chassart",
+  "Jordan L Smith" = "Jordan Smith",
+  "jordan l smith" = "Jordan Smith",
+  
+  # J.J. / J.T. variations
+  "JJ Spaun" = "J.J. Spaun",
+  "jj spaun" = "J.J. Spaun",
+  "JT Poston" = "J.T. Poston"
+)
+
+#' Apply name corrections for Classic/Showdown matching
+#' Shared function used by both modules
+#' @param name Player name to correct
+#' @return Corrected name (or original if no correction found)
+apply_golf_classic_showdown_correction <- function(name) {
+  if (is.na(name) || name == "") return(name)
+  
+  
+  # Try exact match first
+  if (name %in% names(GOLF_CLASSIC_SHOWDOWN_NAME_CORRECTIONS)) {
+    return(GOLF_CLASSIC_SHOWDOWN_NAME_CORRECTIONS[[name]])
+  }
+  
+  # Try lowercase match
+  name_lower <- tolower(trimws(name))
+  if (name_lower %in% names(GOLF_CLASSIC_SHOWDOWN_NAME_CORRECTIONS)) {
+    return(GOLF_CLASSIC_SHOWDOWN_NAME_CORRECTIONS[[name_lower]])
+  }
+  
+  return(name)
+}
+
 #' Normalize player name for matching
+#' Applies name corrections first, then normalizes
 #' @param name Player name to normalize
 #' @return Normalized name (lowercase, no special chars)
 normalize_classic_name <- function(name) {
   if (is.na(name) || name == "") return("")
+  
+  # Apply name corrections first (handles FanTeam -> projection name mapping)
+  name <- apply_golf_classic_showdown_correction(name)
   
   name_lower <- tolower(trimws(name))
   
@@ -239,104 +328,176 @@ get_golf_tournaments_gsheet <- function() {
 }
 
 #' Load tournament data from Google Sheets for Classic format
+#' IMPORTANT: Starts with SALARY file as base, then adds projections only for
+#' players in salary file. This ensures we work with the actual contest field
+#' and can identify naming mismatches between sources.
 #' @param tournament_name Name of the sheet/tournament to load
-#' @return Data frame with player projections and salaries
+#' @return List with: data (player data), unmatched (salary players without projections)
 load_golf_tournament_data <- function(tournament_name) {
   log_debug("load_golf_tournament_data() for:", tournament_name, level = "INFO")
   
   tryCatch({
-    # Deauth for public sheet access (required for shinyapps.io)
     googlesheets4::gs4_deauth()
     
-    data_raw <- googlesheets4::read_sheet(
-      GOLF_CLASSIC_PROJECTIONS_SHEET_ID,
-      sheet = tournament_name
-    ) %>%
-      janitor::clean_names()
-    
-    log_debug("Raw columns:", paste(names(data_raw), collapse = ", "), level = "DEBUG")
-    
-    # Map columns flexibly
-    data <- data_raw
-    
-    # Find player name column
-    name_col <- intersect(names(data), c("golfer", "player_name", "player", "name"))
-    if (length(name_col) > 0) {
-      data <- data %>% rename(player_name = !!name_col[1])
-    } else {
-      log_debug("No player name column found", level = "ERROR")
-      return(NULL)
-    }
-    
-    # Find median projection column
-    median_col <- intersect(names(data), c("median", "dk_points", "projection", "proj", "pts", "fpts", "points"))
-    if (length(median_col) > 0) {
-      log_debug("Using median column:", median_col[1], level = "DEBUG")
-      data <- data %>% mutate(median = as.numeric(.data[[median_col[1]]]))
-    } else {
-      log_debug("No median column found", level = "WARN")
-      data$median <- NA_real_
-    }
-    
-    # Find ceiling projection column
-    ceiling_col <- intersect(names(data), c("ceiling", "ceil", "upside", "high", "dk_ceiling"))
-    if (length(ceiling_col) > 0) {
-      data <- data %>% mutate(ceiling = as.numeric(.data[[ceiling_col[1]]]))
-    } else {
-      # Default ceiling to median * 1.2 if not provided
-      data$ceiling <- data$median * 1.2
-    }
-    
-    # Create match key for joining with FanTeam salaries
-    data <- data %>%
-      mutate(match_key = sapply(player_name, normalize_classic_name))
-    
-    # Load FanTeam salaries from separate sheet and join
+    # =========================================================================
+    # STEP 1: Load SALARIES first (this is the base - actual contest field)
+    # =========================================================================
     ft_salaries <- load_classic_fanteam_salaries(tournament_name)
-    if (!is.null(ft_salaries) && nrow(ft_salaries) > 0) {
-      log_debug("Joining FanTeam salaries...", level = "INFO")
+    
+    if (is.null(ft_salaries) || nrow(ft_salaries) == 0) {
+      log_debug("No FanTeam salaries found for tournament - cannot proceed", level = "ERROR")
+      return(list(data = NULL, unmatched = NULL))
+    }
+    
+    log_debug(sprintf("Loaded %d players from salary file", nrow(ft_salaries)), level = "INFO")
+    
+    # Start with salary data as the base
+    data <- ft_salaries %>%
+      mutate(player_id = row_number())
+    
+    # =========================================================================
+    # STEP 2: Load PROJECTIONS and join to salary players only
+    # =========================================================================
+    proj_raw <- tryCatch({
+      googlesheets4::read_sheet(
+        GOLF_CLASSIC_PROJECTIONS_SHEET_ID,
+        sheet = tournament_name
+      ) %>%
+        janitor::clean_names()
+    }, error = function(e) {
+      log_debug("Error loading projections sheet:", e$message, level = "ERROR")
+      NULL
+    })
+    
+    if (!is.null(proj_raw) && nrow(proj_raw) > 0) {
+      log_debug("Projections raw columns:", paste(names(proj_raw), collapse = ", "), level = "DEBUG")
       
-      data <- data %>%
-        left_join(ft_salaries %>% select(match_key, salary), by = "match_key")
-      
-      matched_count <- sum(!is.na(data$salary))
-      unmatched_count <- sum(is.na(data$salary))
-      log_debug(sprintf("Matched %d of %d players to FanTeam salaries", matched_count, nrow(data)), level = "INFO")
-      
-      if (unmatched_count > 0) {
-        unmatched_names <- data %>% filter(is.na(salary)) %>% pull(player_name) %>% head(10)
-        log_debug("Unmatched players (first 10):", paste(unmatched_names, collapse = ", "), level = "WARN")
+      # Find player name column in projections
+      name_col <- intersect(names(proj_raw), c("golfer", "player_name", "player", "name"))
+      if (length(name_col) > 0) {
+        proj_raw <- proj_raw %>% rename(proj_player_name = !!name_col[1])
+      } else {
+        log_debug("No player name column found in projections", level = "ERROR")
+        proj_raw <- NULL
       }
-    } else {
-      log_debug("No FanTeam salaries loaded - salary will be NA", level = "WARN")
-      data$salary <- NA_real_
     }
     
-    # Find ownership columns
-    own_lg_col <- intersect(names(data), c("own_large", "ownership_large", "dk_ownership", "ownership", "own"))
-    if (length(own_lg_col) > 0) {
-      data <- data %>% mutate(own_large = as.numeric(gsub("%", "", .data[[own_lg_col[1]]])))
+    if (!is.null(proj_raw) && nrow(proj_raw) > 0) {
+      # Find median projection column
+      median_col <- intersect(names(proj_raw), c("median", "dk_points", "projection", "proj", "pts", "fpts", "points"))
+      if (length(median_col) > 0) {
+        log_debug("Using median column:", median_col[1], level = "DEBUG")
+        proj_raw <- proj_raw %>% mutate(median = as.numeric(.data[[median_col[1]]]))
+      } else {
+        log_debug("No median column found", level = "WARN")
+        proj_raw$median <- NA_real_
+      }
+      
+      # Find ceiling projection column
+      ceiling_col <- intersect(names(proj_raw), c("ceiling", "ceil", "upside", "high", "dk_ceiling"))
+      if (length(ceiling_col) > 0) {
+        proj_raw <- proj_raw %>% mutate(ceiling = as.numeric(.data[[ceiling_col[1]]]))
+      } else {
+        proj_raw$ceiling <- proj_raw$median * 1.2
+      }
+      
+      # Find ownership columns
+      own_lg_col <- intersect(names(proj_raw), c("own_large", "ownership_large", "dk_ownership", "ownership", "own"))
+      if (length(own_lg_col) > 0) {
+        proj_raw <- proj_raw %>% mutate(own_large = as.numeric(gsub("%", "", .data[[own_lg_col[1]]])))
+      } else {
+        proj_raw$own_large <- NA_real_
+      }
+      
+      own_sm_col <- intersect(names(proj_raw), c("own_small", "ownership_small", "fd_ownership"))
+      if (length(own_sm_col) > 0) {
+        proj_raw <- proj_raw %>% mutate(own_small = as.numeric(gsub("%", "", .data[[own_sm_col[1]]])))
+      } else {
+        proj_raw$own_small <- NA_real_
+      }
+      
+      # Create match key for projections
+      proj_raw <- proj_raw %>%
+        mutate(match_key = sapply(proj_player_name, normalize_classic_name)) %>%
+        select(match_key, median, ceiling, own_large, own_small)
+      
+      log_debug(sprintf("Prepared %d projections for matching", nrow(proj_raw)), level = "INFO")
+      
+      # Join projections TO salary data (left join keeps all salary players)
+      data <- data %>%
+        left_join(proj_raw, by = "match_key")
+      
+      # Count matches and identify unmatched salary players
+      matched_count <- sum(!is.na(data$median))
+      unmatched_count <- sum(is.na(data$median))
+      
+      log_debug(sprintf("Matched %d of %d salary players to projections", matched_count, nrow(data)), level = "INFO")
+      
+      # Get unmatched players (in salary but NOT in projections - naming issues!)
+      unmatched_players <- NULL
+      if (unmatched_count > 0) {
+        unmatched_players <- data %>% 
+          filter(is.na(median)) %>% 
+          select(player_name, salary) %>%
+          arrange(desc(salary))
+        
+        log_debug(sprintf("WARNING: %d salary players without projection match:", unmatched_count), level = "WARN")
+        log_debug(paste(head(unmatched_players$player_name, 10), collapse = ", "), level = "WARN")
+      }
+      
     } else {
+      log_debug("No projections loaded - projection columns will be NA", level = "WARN")
+      data$median <- NA_real_
+      data$ceiling <- NA_real_
       data$own_large <- NA_real_
-    }
-    
-    own_sm_col <- intersect(names(data), c("own_small", "ownership_small", "fd_ownership"))
-    if (length(own_sm_col) > 0) {
-      data <- data %>% mutate(own_small = as.numeric(gsub("%", "", .data[[own_sm_col[1]]])))
-    } else {
       data$own_small <- NA_real_
+      unmatched_players <- data %>% select(player_name, salary)
     }
     
-    # Create blended projection (median weighted toward ceiling for GPP)
+    # =========================================================================
+    # STEP 3: Calculate derived columns
+    # =========================================================================
     data <- data %>%
       mutate(
-        blended = median * 0.7 + ceiling * 0.3,
-        value = ifelse(!is.na(salary) & salary > 0, blended / salary, NA_real_)
+        # Default ceiling if missing
+        ceiling = ifelse(is.na(ceiling) & !is.na(median), median * 1.2, ceiling),
+        # Blended projection (median weighted toward ceiling for GPP)
+        blended = median * 0.7 + ceiling * 0.3
       )
     
-    # Select and clean final columns
+    # Calculate regression-based value metric
+    # Fits a line through salary vs projection, value = residual (distance from line)
+    # This naturally handles the salary-projection relationship without manual adjustment
+    #   positive = projects above the regression line (underpriced for their salary)
+    #   negative = projects below the regression line (overpriced for their salary)
+    valid_for_value <- data %>% 
+      filter(!is.na(blended) & !is.na(salary) & salary > 0)
+    
+    if (nrow(valid_for_value) >= 3) {
+      # Fit linear regression: projection = intercept + slope × salary
+      value_model <- lm(blended ~ salary, data = valid_for_value)
+      
+      log_debug(sprintf("Value regression: intercept=%.2f, slope=%.2f per $1M, R²=%.3f",
+                        coef(value_model)[1], coef(value_model)[2], 
+                        summary(value_model)$r.squared), level = "INFO")
+      
+      # Calculate expected projection and residual for ALL players
+      data <- data %>%
+        mutate(
+          expected = predict(value_model, newdata = data.frame(salary = salary)),
+          value = ifelse(!is.na(blended) & !is.na(salary) & salary > 0,
+                         blended - expected, NA_real_)
+        ) %>%
+        select(-expected)
+    } else {
+      log_debug("Not enough valid players for regression, value will be NA", level = "WARN")
+      data$value <- NA_real_
+    }
+    
+    # =========================================================================
+    # STEP 4: Clean and finalize
+    # =========================================================================
     data <- data %>%
-      mutate(player_id = row_number()) %>%
       select(
         player_id, player_name, salary, median, ceiling, blended, value,
         own_large, own_small
@@ -346,12 +507,17 @@ load_golf_tournament_data <- function(tournament_name) {
     # Join headshots from CSV file
     data <- join_golf_headshots(data)
     
-    log_debug("Loaded", nrow(data), "golfers", level = "INFO")
-    return(data)
+    log_debug(sprintf("Final dataset: %d golfers from salary file", nrow(data)), level = "INFO")
+    
+    # Return both data and unmatched info
+    return(list(
+      data = data,
+      unmatched = if (exists("unmatched_players")) unmatched_players else NULL
+    ))
     
   }, error = function(e) {
     log_debug("Error loading tournament data:", e$message, level = "ERROR")
-    return(NULL)
+    return(list(data = NULL, unmatched = NULL))
   })
 }
 
@@ -652,22 +818,27 @@ golf_classic_server <- function(id) {
       # Load data from Google Sheets
       showNotification("Loading data from Google Sheets...", type = "message", duration = 2)
       
-      player_data <- load_golf_tournament_data(input$contest_select)
+      result <- load_golf_tournament_data(input$contest_select)
       
-      if (is.null(player_data)) {
-        showNotification("Failed to load tournament data from Google Sheets", type = "error")
+      if (is.null(result$data) || nrow(result$data) == 0) {
+        showNotification("Failed to load tournament data - check salary file exists", type = "error")
         return()
       }
       
-      rv$player_data <- player_data
+      rv$player_data <- result$data
       
-      rv$unmatched_players <- rv$player_data %>%
-        filter(is.na(median)) %>%
-        pull(player_name)
+      # Unmatched players are those in salary file but NOT matched to projections
+      # This is the key diagnostic for naming format issues
+      rv$unmatched_players <- if (!is.null(result$unmatched) && nrow(result$unmatched) > 0) {
+        result$unmatched$player_name
+      } else {
+        character(0)
+      }
       
       matched_count <- sum(!is.na(rv$player_data$median))
       showNotification(
-        sprintf("Loaded %d golfers (%d with projections)", nrow(rv$player_data), matched_count),
+        sprintf("Loaded %d golfers from salary file (%d matched to projections)", 
+                nrow(rv$player_data), matched_count),
         type = "message"
       )
       
@@ -702,9 +873,13 @@ golf_classic_server <- function(id) {
       
       div(
         class = "alert alert-warning mt-3 mb-0",
-        tags$strong(icon("exclamation-triangle"), sprintf(" %d Unmatched: ", length(unmatched))),
+        tags$strong(icon("exclamation-triangle"), sprintf(" %d Salary Players Without Projections: ", length(unmatched))),
+        tags$p(
+          style = "font-size: 0.8rem; margin-top: 0.3rem; margin-bottom: 0;",
+          "These players are in the salary file but couldn't be matched to projections. Check for naming format differences."
+        ),
         tags$span(
-          style = "font-size: 0.85rem;",
+          style = "font-size: 0.85rem; display: block; margin-top: 0.3rem;",
           if (length(unmatched) <= 10) {
             paste(unmatched, collapse = ", ")
           } else {

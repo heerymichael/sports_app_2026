@@ -104,79 +104,35 @@ GOLF_SHOWDOWN_SALARIES_SHEET_ID <- "1QZt9Z5NkIdRyCN2BmKsBYh7Efkk0CJOrvdAfxAGwbd4
 GOLF_SHOWDOWN_PROJECTIONS_SHEET_ID <- "1uk-Ptqfg1MDkyTIxZiqvuLFLdE_M8vr269QEelqWMgY"
 
 # =============================================================================
-# NAME CORRECTIONS
-# Maps variant names to canonical names used in projections
+# NAME CORRECTIONS (use shared table from Classic module)
 # =============================================================================
 
-GOLF_SHOWDOWN_NAME_CORRECTIONS <- list(
-  # McNames - capitalize properly
-  "Robert Macintyre" = "Robert MacIntyre",
-  "Maverick Mcnealy" = "Maverick McNealy",
-  "Denny Mccarthy" = "Denny McCarthy",
-  "Max Mcgreevy" = "Max McGreevy",
-  
-  # Nickname/full name variations
-  "Christopher Gotterup" = "Chris Gotterup",
-  "chris gotterup" = "Chris Gotterup",
-  "Henry Lebioda" = "Hank Lebioda",
-  "henry lebioda" = "Hank Lebioda",
-  "Cam Davis" = "Cameron Davis",
-  "cam davis" = "Cameron Davis",
-  "Matt McCarty" = "Matthew McCarty",
-  "matt mccarty" = "Matthew McCarty",
-  "Matthias Schmid" = "Matti Schmid",
-  "matthias schmid" = "Matti Schmid",
-  "Zach Bauchou" = "Zachary Bauchou",
-  "zach bauchou" = "Zachary Bauchou",
-  "Alex Noren" = "Alexander Noren",
-  "alex noren" = "Alexander Noren",
-  "Nico Echavarria" = "Nicolas Echavarria",
-  "nico echavarria" = "Nicolas Echavarria",
-  "Kris Ventura" = "Kristoffer Ventura",
-  "kris ventura" = "Kristoffer Ventura",
-  "Sam Stevens" = "Samuel Stevens",
-  "sam stevens" = "Samuel Stevens",
-  "Kota Yuta Kaneko" = "Kota Kaneko",
-  
-  # Hyphenated/spaced name variations
-  "Seong-Hyeon Kim" = "Seonghyeon Kim",
-  "seong hyeon kim" = "Seonghyeon Kim",
-  "Byeong-Hun An" = "Byeong Hun An",
-  "byeong hun an" = "Byeong Hun An",
-  "Sung-Jae Im" = "Sungjae Im",
-  "sung jae im" = "Sungjae Im",
-  "Hao-Tong Li" = "Haotong Li",
-  "hao tong li" = "Haotong Li",
-  "Ze-Cheng Dou" = "Zecheng Dou",
-  "ze cheng dou" = "Zecheng Dou",
-  "Adrien Dumont" = "Adrien Dumont De Chassart",
-  "adrien dumont" = "Adrien Dumont De Chassart",
-  "Jordan L Smith" = "Jordan Smith",
-  "jordan l smith" = "Jordan Smith",
-  
-  # J.J. variations
-  "JJ Spaun" = "J.J. Spaun",
-  "jj spaun" = "J.J. Spaun"
-)
+# Use the shared corrections table defined in mod_golf_classic.R
+# This ensures Classic and Showdown use identical name matching
+if (!exists("GOLF_CLASSIC_SHOWDOWN_NAME_CORRECTIONS")) {
+  # Fallback if Classic wasn't loaded first (shouldn't happen in normal operation)
+  GOLF_CLASSIC_SHOWDOWN_NAME_CORRECTIONS <- list(
+    "Robert Macintyre" = "Robert MacIntyre",
+    "Maverick Mcnealy" = "Maverick McNealy",
+    "Denny Mccarthy" = "Denny McCarthy",
+    "Christopher Gotterup" = "Chris Gotterup",
+    "JJ Spaun" = "J.J. Spaun"
+  )
+}
 
-#' Apply name corrections to a player name
-#' @param name Player name to correct
-#' @return Corrected name
-apply_golf_name_correction <- function(name) {
-  if (is.na(name) || name == "") return(name)
-  
-  # Try exact match first
-  if (name %in% names(GOLF_SHOWDOWN_NAME_CORRECTIONS)) {
-    return(GOLF_SHOWDOWN_NAME_CORRECTIONS[[name]])
+# Use the shared correction function from Classic
+if (!exists("apply_golf_classic_showdown_correction")) {
+  apply_golf_classic_showdown_correction <- function(name) {
+    if (is.na(name) || name == "") return(name)
+    if (name %in% names(GOLF_CLASSIC_SHOWDOWN_NAME_CORRECTIONS)) {
+      return(GOLF_CLASSIC_SHOWDOWN_NAME_CORRECTIONS[[name]])
+    }
+    name_lower <- tolower(trimws(name))
+    if (name_lower %in% names(GOLF_CLASSIC_SHOWDOWN_NAME_CORRECTIONS)) {
+      return(GOLF_CLASSIC_SHOWDOWN_NAME_CORRECTIONS[[name_lower]])
+    }
+    return(name)
   }
-  
-  # Try lowercase match
-  name_lower <- tolower(trimws(name))
-  if (name_lower %in% names(GOLF_SHOWDOWN_NAME_CORRECTIONS)) {
-    return(GOLF_SHOWDOWN_NAME_CORRECTIONS[[name_lower]])
-  }
-  
-  return(name)
 }
 
 #' Get available showdown contests from Google Sheets
@@ -201,12 +157,12 @@ get_golf_showdown_sheets_gsheet <- function() {
 }
 
 #' Normalize player name for matching between salaries and projections
-#' Applies name corrections first, then normalizes
+#' Applies shared name corrections first, then normalizes
 normalize_showdown_name <- function(name) {
   if (is.na(name) || name == "") return("")
   
-  # Apply name corrections first
-  name <- apply_golf_name_correction(name)
+  # Apply shared name corrections first (from Classic module)
+  name <- apply_golf_classic_showdown_correction(name)
   
   # Lowercase and clean
   name_lower <- tolower(trimws(name))
@@ -404,12 +360,42 @@ load_showdown_tournament_data <- function(sheet_name) {
       by = "match_key"
     )
   
-  # Calculate blended projection and value
+  # Calculate blended projection
   merged <- merged %>%
     mutate(
-      blended = ifelse(!is.na(median), median * 0.7 + ceiling * 0.3, NA_real_),
-      value = ifelse(!is.na(salary) & salary > 0 & !is.na(blended), blended / salary, NA_real_)
-    ) %>%
+      blended = ifelse(!is.na(median), median * 0.7 + ceiling * 0.3, NA_real_)
+    )
+  
+  # Calculate regression-based value metric
+  # Same approach as Classic for consistency:
+  # Fits a line through salary vs projection, value = residual (distance from line)
+  #   positive = projects above the regression line (underpriced)
+  #   negative = projects below the regression line (overpriced)
+  valid_for_value <- merged %>% 
+    filter(!is.na(blended) & !is.na(salary) & salary > 0)
+  
+  if (nrow(valid_for_value) >= 3) {
+    # Fit linear regression: projection = intercept + slope × salary
+    value_model <- lm(blended ~ salary, data = valid_for_value)
+    
+    log_debug(sprintf("Showdown value regression: intercept=%.2f, slope=%.2f per $1M, R²=%.3f",
+                      coef(value_model)[1], coef(value_model)[2], 
+                      summary(value_model)$r.squared), level = "INFO")
+    
+    # Calculate expected projection and residual for ALL players
+    merged <- merged %>%
+      mutate(
+        expected = predict(value_model, newdata = data.frame(salary = salary)),
+        value = ifelse(!is.na(blended) & !is.na(salary) & salary > 0,
+                       blended - expected, NA_real_)
+      ) %>%
+      select(-expected)
+  } else {
+    log_debug("Not enough valid players for regression, value will be NA", level = "WARN")
+    merged$value <- NA_real_
+  }
+  
+  merged <- merged %>%
     select(
       player_name, salary, median, ceiling, blended, value,
       own_large, own_small
@@ -1172,7 +1158,10 @@ golf_showdown_server <- function(id) {
             name = "Value",
             width = 105,
             align = "center",
-            format = colFormat(digits = 2),
+            cell = function(value) {
+              if (is.na(value)) return("-")
+              sprintf("%+.2f", value)
+            },
             style = function(value) {
               if (heatmap_col == "value" && !is.na(value)) {
                 get_diverging_style(value, 0, value_range[1], value_range[2])
