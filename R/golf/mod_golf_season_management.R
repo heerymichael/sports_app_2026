@@ -739,6 +739,24 @@ find_optimal_transfers_n <- function(roster_players, available_pool, current_bud
     return(NULL)
   }
   
+  # PRE-FILTER: Only consider players who project above worst bench player
+  # This speeds up combinatorics while keeping "budget enabler" players
+  # (players you'd only swap in to free up budget for a stud elsewhere)
+  sorted_roster_projs <- sort(roster_players$projection, decreasing = TRUE)
+  min_bench_proj <- if (length(sorted_roster_projs) >= 10) sorted_roster_projs[10] else min(sorted_roster_projs)
+  
+  pool_before_filter <- nrow(transfer_pool)
+  transfer_pool <- transfer_pool %>%
+    filter(projection > min_bench_proj)
+  
+  log_debug(sprintf("Pool filter: %d -> %d players (keeping proj > %.1f, worst bench)", 
+                    pool_before_filter, nrow(transfer_pool), min_bench_proj), level = "DEBUG")
+  
+  if (nrow(transfer_pool) == 0) {
+    log_debug("No players in pool project better than worst bench player", level = "INFO")
+    return(NULL)
+  }
+  
   # Calculate penalty for this transfer count
   excess_transfers <- max(0, n_transfers - free_transfers)
   total_penalty <- excess_transfers * penalty
@@ -797,7 +815,7 @@ find_optimal_transfers_n <- function(roster_players, available_pool, current_bud
         # Log significant improvements
         if (net_gain > 0 && transfers_improved < 5) {
           transfers_improved <- transfers_improved + 1
-          log_debug(sprintf("Beneficial: %s(%.0f)→%s(%.0f) | cur=%.0f new=%.0f net=+%.1f", 
+          log_debug(sprintf("Beneficial: %s(%.0f)â†’%s(%.0f) | cur=%.0f new=%.0f net=+%.1f", 
                             player_out$player_name, player_out$projection,
                             player_in$player_name, player_in$projection,
                             current_proj, new_proj, net_gain), level = "DEBUG")
@@ -1086,6 +1104,15 @@ golf_season_management_ui <- function(id) {
   # Debug: log what we got for salary tournaments
   log_debug("UI init - salary_tournaments:", paste(salary_tournaments, collapse = ", "), level = "INFO")
   
+  # Default to latest (rightmost) week and tournament
+  default_week <- if (length(weeks) > 0) weeks[length(weeks)] else "Week 1"
+  default_tournament <- if (length(tournaments) > 0) tournaments[length(tournaments)] else NULL
+  default_salary_tournament <- if (length(salary_tournaments) > 0 && salary_tournaments[1] != "") {
+    salary_tournaments[length(salary_tournaments)]
+  } else {
+    NULL
+  }
+  
   tagList(
     # Page header
     div(
@@ -1105,13 +1132,13 @@ golf_season_management_ui <- function(id) {
         column(3,
                selectizeInput(ns("week_select"), "Roster Week",
                               choices = weeks,
-                              selected = if (length(weeks) > 0) weeks[length(weeks)] else "Week 1"
+                              selected = default_week
                )
         ),
         column(5,
                selectizeInput(ns("tournament_select"), "Tournament (Projections)",
                               choices = if (length(tournaments) > 0) tournaments else c("No tournaments found" = ""),
-                              selected = if (length(tournaments) > 0) tournaments[1] else NULL
+                              selected = default_tournament
                )
         ),
         column(4,
@@ -1152,7 +1179,7 @@ golf_season_management_ui <- function(id) {
         column(5,
                selectizeInput(ns("next_tournament_select"), "Next Week Tournament (Salaries & Projections)",
                               choices = if (length(salary_tournaments) > 0) salary_tournaments else c("No tournaments found" = ""),
-                              selected = if (length(salary_tournaments) > 0) salary_tournaments[1] else NULL
+                              selected = default_salary_tournament
                )
         ),
         column(3,
@@ -1184,71 +1211,88 @@ golf_season_management_ui <- function(id) {
           )
         ),
         tags$p(class = "text-muted", style = "font-size: 0.8rem; margin-bottom: 0.75rem;",
-               "Set how many free transfers each roster has banked, then click Calculate. Each transfer above free costs -20 pts."
+               "Set free transfers per roster, then calculate individually or all at once."
         ),
         
-        # Grid layout: 5 roster rows with free transfer input + calculate button
+        # Compact inline layout: all 5 rosters in one row
         div(
-          style = "display: grid; grid-template-columns: repeat(5, 1fr); gap: 0.5rem;",
+          style = "display: flex; gap: 0.75rem; align-items: flex-end; flex-wrap: wrap; margin-bottom: 0.75rem;",
           
           # Roster 1
           div(
-            style = "display: flex; flex-direction: column; gap: 0.25rem; padding: 0.5rem; background: var(--bg-secondary); border-radius: 6px;",
-            tags$label(style = "font-size: 0.75rem; font-weight: 600;", "Roster 1"),
+            style = "display: flex; flex-direction: column; gap: 0.2rem;",
+            tags$label(style = "font-size: 0.7rem; font-weight: 600; color: var(--text-secondary);", "R1"),
             div(
               style = "display: flex; gap: 0.25rem; align-items: center;",
-              numericInput(ns("transfers_r1_free"), NULL, value = 1, min = 0, max = 31, width = "60px"),
-              actionButton(ns("calc_r1_btn"), "Calc", class = "btn btn-primary btn-sm", icon = icon("calculator"), style = "padding: 0.25rem 0.5rem;")
+              numericInput(ns("transfers_r1_free"), NULL, value = 1, min = 0, max = 31, width = "50px"),
+              actionButton(ns("calc_r1_btn"), icon("calculator"), class = "btn btn-outline-primary btn-sm", 
+                           style = "padding: 0.25rem 0.4rem; min-width: auto;", title = "Calculate Roster 1")
             ),
             uiOutput(ns("r1_status"))
           ),
           
           # Roster 2
           div(
-            style = "display: flex; flex-direction: column; gap: 0.25rem; padding: 0.5rem; background: var(--bg-secondary); border-radius: 6px;",
-            tags$label(style = "font-size: 0.75rem; font-weight: 600;", "Roster 2"),
+            style = "display: flex; flex-direction: column; gap: 0.2rem;",
+            tags$label(style = "font-size: 0.7rem; font-weight: 600; color: var(--text-secondary);", "R2"),
             div(
               style = "display: flex; gap: 0.25rem; align-items: center;",
-              numericInput(ns("transfers_r2_free"), NULL, value = 1, min = 0, max = 31, width = "60px"),
-              actionButton(ns("calc_r2_btn"), "Calc", class = "btn btn-primary btn-sm", icon = icon("calculator"), style = "padding: 0.25rem 0.5rem;")
+              numericInput(ns("transfers_r2_free"), NULL, value = 1, min = 0, max = 31, width = "50px"),
+              actionButton(ns("calc_r2_btn"), icon("calculator"), class = "btn btn-outline-primary btn-sm", 
+                           style = "padding: 0.25rem 0.4rem; min-width: auto;", title = "Calculate Roster 2")
             ),
             uiOutput(ns("r2_status"))
           ),
           
           # Roster 3
           div(
-            style = "display: flex; flex-direction: column; gap: 0.25rem; padding: 0.5rem; background: var(--bg-secondary); border-radius: 6px;",
-            tags$label(style = "font-size: 0.75rem; font-weight: 600;", "Roster 3"),
+            style = "display: flex; flex-direction: column; gap: 0.2rem;",
+            tags$label(style = "font-size: 0.7rem; font-weight: 600; color: var(--text-secondary);", "R3"),
             div(
               style = "display: flex; gap: 0.25rem; align-items: center;",
-              numericInput(ns("transfers_r3_free"), NULL, value = 1, min = 0, max = 31, width = "60px"),
-              actionButton(ns("calc_r3_btn"), "Calc", class = "btn btn-primary btn-sm", icon = icon("calculator"), style = "padding: 0.25rem 0.5rem;")
+              numericInput(ns("transfers_r3_free"), NULL, value = 1, min = 0, max = 31, width = "50px"),
+              actionButton(ns("calc_r3_btn"), icon("calculator"), class = "btn btn-outline-primary btn-sm", 
+                           style = "padding: 0.25rem 0.4rem; min-width: auto;", title = "Calculate Roster 3")
             ),
             uiOutput(ns("r3_status"))
           ),
           
           # Roster 4
           div(
-            style = "display: flex; flex-direction: column; gap: 0.25rem; padding: 0.5rem; background: var(--bg-secondary); border-radius: 6px;",
-            tags$label(style = "font-size: 0.75rem; font-weight: 600;", "Roster 4"),
+            style = "display: flex; flex-direction: column; gap: 0.2rem;",
+            tags$label(style = "font-size: 0.7rem; font-weight: 600; color: var(--text-secondary);", "R4"),
             div(
               style = "display: flex; gap: 0.25rem; align-items: center;",
-              numericInput(ns("transfers_r4_free"), NULL, value = 1, min = 0, max = 31, width = "60px"),
-              actionButton(ns("calc_r4_btn"), "Calc", class = "btn btn-primary btn-sm", icon = icon("calculator"), style = "padding: 0.25rem 0.5rem;")
+              numericInput(ns("transfers_r4_free"), NULL, value = 1, min = 0, max = 31, width = "50px"),
+              actionButton(ns("calc_r4_btn"), icon("calculator"), class = "btn btn-outline-primary btn-sm", 
+                           style = "padding: 0.25rem 0.4rem; min-width: auto;", title = "Calculate Roster 4")
             ),
             uiOutput(ns("r4_status"))
           ),
           
           # Roster 5
           div(
-            style = "display: flex; flex-direction: column; gap: 0.25rem; padding: 0.5rem; background: var(--bg-secondary); border-radius: 6px;",
-            tags$label(style = "font-size: 0.75rem; font-weight: 600;", "Roster 5"),
+            style = "display: flex; flex-direction: column; gap: 0.2rem;",
+            tags$label(style = "font-size: 0.7rem; font-weight: 600; color: var(--text-secondary);", "R5"),
             div(
               style = "display: flex; gap: 0.25rem; align-items: center;",
-              numericInput(ns("transfers_r5_free"), NULL, value = 1, min = 0, max = 31, width = "60px"),
-              actionButton(ns("calc_r5_btn"), "Calc", class = "btn btn-primary btn-sm", icon = icon("calculator"), style = "padding: 0.25rem 0.5rem;")
+              numericInput(ns("transfers_r5_free"), NULL, value = 1, min = 0, max = 31, width = "50px"),
+              actionButton(ns("calc_r5_btn"), icon("calculator"), class = "btn btn-outline-primary btn-sm", 
+                           style = "padding: 0.25rem 0.4rem; min-width: auto;", title = "Calculate Roster 5")
             ),
             uiOutput(ns("r5_status"))
+          ),
+          
+          # Spacer
+          div(style = "flex-grow: 1;"),
+          
+          # Calculate All button
+          div(
+            style = "display: flex; flex-direction: column; gap: 0.2rem;",
+            tags$label(style = "font-size: 0.7rem; font-weight: 600; color: transparent;", "-"),
+            actionButton(ns("calc_all_btn"), tagList(icon("play"), " Calculate All"), 
+                         class = "btn btn-primary btn-sm",
+                         style = "padding: 0.35rem 0.75rem; font-weight: 600;")
           )
         )
       ),
@@ -1395,8 +1439,31 @@ golf_season_management_server <- function(id) {
       }
       rv$projections <- projections
       
-      # Match data
+      # Load FanTeam salaries (for correct underdog calculation)
+      showNotification("Loading FanTeam salaries...", type = "message", duration = 2)
+      fanteam_salaries <- load_tournament_salaries(input$tournament_select)
+      
+      # Match data - first to projections, then overlay FanTeam salaries
       matched <- match_roster_to_projections(roster_data, projections)
+      
+      # Replace salary with FanTeam salary for underdog calculation
+      if (!is.null(fanteam_salaries) && nrow(fanteam_salaries) > 0) {
+        log_debug(sprintf("Overlaying FanTeam salaries for %d players", nrow(fanteam_salaries)), level = "INFO")
+        
+        # Remove projection-based salary and join FanTeam salary
+        matched <- matched %>%
+          select(-salary) %>%
+          left_join(
+            fanteam_salaries %>% select(match_key, salary),
+            by = "match_key"
+          )
+        
+        salary_matched <- sum(!is.na(matched$salary))
+        log_debug(sprintf("FanTeam salary matched: %d of %d players", salary_matched, nrow(matched)), level = "INFO")
+      } else {
+        log_debug("WARNING: Could not load FanTeam salaries - underdog may use projection salaries", level = "WARN")
+      }
+      
       rv$matched_data <- matched
       
       matched_count <- sum(!is.na(matched$projection))
@@ -1647,6 +1714,25 @@ golf_season_management_server <- function(id) {
       calculate_roster_transfers(5)
     })
     
+    # Calculate All button - runs all 5 roster calculations sequentially
+    observeEvent(input$calc_all_btn, {
+      req(rv$transfer_data_loaded, rv$roster_data, rv$next_projections, rv$next_salaries)
+      
+      showNotification("Calculating all rosters...", type = "message", duration = 2)
+      
+      # Get number of rosters
+      rosters <- unique(rv$roster_data$roster)
+      n_rosters <- min(length(rosters), 5)
+      
+      for (i in 1:n_rosters) {
+        if (!rv$roster_calc_status[[paste0("r", i)]]) {
+          calculate_roster_transfers(i)
+        }
+      }
+      
+      showNotification("All roster calculations complete", type = "message")
+    })
+    
     # =========================================================================
     # PER-ROSTER STATUS OUTPUTS
     # =========================================================================
@@ -1770,7 +1856,7 @@ golf_season_management_server <- function(id) {
         div(
           class = "alert alert-warning mt-3 mb-0",
           icon("exclamation-triangle"),
-          sprintf(" %d of %d players matched. %d not playing this week (shown in coral).",
+          sprintf(" %d of %d players matched. %d not playing this week (shown in light coral).",
                   matched_count, total_count, unmatched_count)
         )
       }
@@ -1864,49 +1950,67 @@ golf_season_management_server <- function(id) {
               
               div(
                 style = sprintf(
-                  "display: flex; align-items: center; justify-content: space-between; padding: 0.3rem 0.5rem; border-radius: 4px; background: %s;",
-                  if (is_unmatched) "var(--accent-coral-light, #F5DDD5)" 
+                  "display: flex; align-items: center; padding: 0.3rem 0.5rem; border-radius: 4px; background: %s;",
+                  if (is_unmatched) "#FBEAE6"
                   else if (is_captain) "#E8E0F0"
                   else if (is_underdog) "#FDF6E3"
                   else if (is_bench) "var(--bg-secondary)" 
                   else "white"
                 ),
                 
-                # Rank + Name
-                div(
-                  style = "display: flex; align-items: center; gap: 0.5rem;",
-                  span(
-                    style = sprintf(
-                      "width: 18px; height: 18px; border-radius: 50%%; background: %s; color: white; font-size: 0.65rem; display: flex; align-items: center; justify-content: center; font-weight: 600;",
-                      if (is_captain) "#B48EAD"
-                      else if (is_underdog) "#EBCB8B"
-                      else if (is_unmatched) "var(--accent-coral)"
-                      else if (is_bench) "var(--text-muted)"
-                      else "var(--accent-sage)"
-                    ),
-                    if (is_captain) "C" 
-                    else if (is_underdog) "D"
-                    else player$lineup_rank
+                # Rank badge
+                span(
+                  style = sprintf(
+                    "width: 18px; height: 18px; border-radius: 50%%; background: %s; color: white; font-size: 0.65rem; display: flex; align-items: center; justify-content: center; font-weight: 600; flex-shrink: 0;",
+                    if (is_captain) "#B48EAD"
+                    else if (is_underdog) "#EBCB8B"
+                    else if (is_unmatched) "#E0A89A"
+                    else if (is_bench) "var(--text-muted)"
+                    else "var(--accent-sage)"
                   ),
-                  span(
+                  if (is_captain) "C" 
+                  else if (is_underdog) "D"
+                  else player$lineup_rank
+                ),
+                
+                # Player name - flex grow to fill space
+                span(
+                  style = sprintf(
+                    "flex: 1; font-size: 0.8rem; font-weight: %s; margin-left: 0.5rem; %s",
+                    if (is_captain || is_underdog) "600" else "500",
+                    if (is_unmatched) "color: #B87A6B;" else ""
+                  ),
+                  player$player_name
+                ),
+                
+                # Salary - fixed width for alignment
+                div(
+                  style = "text-align: right; width: 45px; flex-shrink: 0;",
+                  div(style = "font-size: 0.5rem; color: var(--text-muted);", "SAL"),
+                  div(
                     style = sprintf(
-                      "font-size: 0.8rem; font-weight: %s; %s",
-                      if (is_captain || is_underdog) "600" else "500",
-                      if (is_unmatched) "color: var(--accent-coral);" else ""
+                      "font-size: 0.7rem; %s",
+                      if (is_unmatched) "color: #C09080;" 
+                      else if (is_underdog) "color: #EBCB8B; font-weight: 600;"
+                      else "color: var(--text-secondary);"
                     ),
-                    player$player_name
+                    if (is_unmatched || is.na(player$salary)) {
+                      "-"
+                    } else {
+                      sprintf("$%.1f", player$salary)
+                    }
                   )
                 ),
                 
-                # Projection / Effective
+                # Projection / Effective - fixed width for alignment
                 div(
-                  style = "text-align: right; width: 50px;",
+                  style = "text-align: right; width: 55px; flex-shrink: 0;",
                   div(style = "font-size: 0.5rem; color: var(--text-muted);", 
                       if ((is_captain || is_underdog) && !is_unmatched) "EFF" else "PROJ"),
                   div(
                     style = sprintf(
                       "font-size: 0.75rem; font-weight: 600; %s",
-                      if (is_unmatched) "color: var(--accent-coral);" 
+                      if (is_unmatched) "color: #C09080;" 
                       else if (is_captain) "color: #B48EAD;"
                       else if (is_underdog) "color: #EBCB8B;"
                       else if (is_bench) "" 
@@ -1922,14 +2026,21 @@ golf_season_management_server <- function(id) {
                   )
                 ),
                 
-                # Ownership (if available and matched)
-                if (!is_unmatched && !is.na(player$ownership)) {
-                  div(
-                    style = "text-align: right; width: 40px;",
-                    div(style = "font-size: 0.5rem; color: var(--text-muted);", "OWN"),
-                    div(style = "font-size: 0.7rem; color: var(--text-secondary);", sprintf("%.0f%%", player$ownership))
-                  )
-                }
+                # Ownership - fixed width for alignment (always rendered for consistent layout)
+                div(
+                  style = "text-align: right; width: 40px; flex-shrink: 0;",
+                  if (!is_unmatched && !is.na(player$ownership)) {
+                    tagList(
+                      div(style = "font-size: 0.5rem; color: var(--text-muted);", "OWN"),
+                      div(style = "font-size: 0.7rem; color: var(--text-secondary);", sprintf("%.0f%%", player$ownership))
+                    )
+                  } else if (is_unmatched) {
+                    tagList(
+                      div(style = "font-size: 0.5rem; color: var(--text-muted);", "OWN"),
+                      div(style = "font-size: 0.7rem; color: #C09080;", "-")
+                    )
+                  }
+                )
               )
             })
           ),
@@ -1942,7 +2053,7 @@ golf_season_management_server <- function(id) {
             span(tags$span(style = "display: inline-block; width: 10px; height: 10px; border-radius: 2px; background: var(--accent-sage); margin-right: 4px;"), "Starter"),
             span(tags$span(style = "display: inline-block; width: 10px; height: 10px; border-radius: 2px; background: var(--text-muted); margin-right: 4px;"), "Bench"),
             if (unmatched_count > 0) {
-              span(tags$span(style = "display: inline-block; width: 10px; height: 10px; border-radius: 2px; background: var(--accent-coral); margin-right: 4px;"), "Not Playing")
+              span(tags$span(style = "display: inline-block; width: 10px; height: 10px; border-radius: 2px; background: #FBEAE6; border: 1px solid #E0A89A; margin-right: 4px;"), "Not Playing")
             }
           )
         )
@@ -2024,7 +2135,7 @@ golf_season_management_server <- function(id) {
                   style = "display: flex; align-items: center; gap: 0.2rem; margin-bottom: 0.1rem; white-space: nowrap; overflow: hidden;",
                   span(style = "color: var(--accent-coral); font-weight: 600; flex-shrink: 0;", "OUT"),
                   span(style = "overflow: hidden; text-overflow: ellipsis;", out_names[i]),
-                  span(style = "color: var(--text-muted); flex-shrink: 0;", "→"),
+                  span(style = "color: var(--text-muted); flex-shrink: 0;", "â†’"),
                   span(style = "color: var(--accent-sage); font-weight: 600; flex-shrink: 0;", "IN"),
                   span(style = "overflow: hidden; text-overflow: ellipsis;", in_names[i])
                 )
@@ -2098,7 +2209,7 @@ golf_season_management_server <- function(id) {
             if (!is.null(best_scenario) && best_gain > 0) {
               div(
                 style = "background: var(--accent-sage); color: white; padding: 0.25rem 0.5rem; border-radius: 4px; font-size: 0.7rem; font-weight: 600;",
-                sprintf("Best: %d transfer%s → %+.1f pts", best_scenario, if(best_scenario > 1) "s" else "", best_gain)
+                sprintf("Best: %d transfer%s â†’ %+.1f pts", best_scenario, if(best_scenario > 1) "s" else "", best_gain)
               )
             } else {
               div(
