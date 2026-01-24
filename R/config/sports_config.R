@@ -3,6 +3,12 @@
 # 
 # Defines available sports, their sections, and display properties
 # Note: APP_COLORS is sourced from app_themes.R in global.R before this file
+#
+# ARCHIVE NOTE (2026-01-24):
+# - team_dashboard and player_dashboard removed from soccer sections
+# - These modules relied on FBref data which is no longer available
+# - Module files retained but not active: mod_soccer_team_dashboard.R,
+#   mod_soccer_player_dashboard.R
 # =============================================================================
 
 #' Get all available sports
@@ -17,7 +23,8 @@ get_sports_config <- function() {
       color = APP_COLORS$sage,
       color_light = "#C5D4B8",
       icon_scale = 1.2,
-      sections = c("fanteam_contests", "team_dashboard", "player_dashboard"),
+      # Updated: removed team_dashboard, player_dashboard; added betting, player_stats
+      sections = c("fanteam_contests", "player_stats", "betting"),
       default_section = "fanteam_contests"
     ),
     
@@ -96,7 +103,27 @@ get_sections_config <- function() {
       icon = "trophy"
     ),
     
-    # Soccer sections
+    # Soccer sections - ACTIVE
+    fanteam_contests = list(
+      id = "fanteam_contests",
+      name = "FanTeam",
+      icon = "trophy"
+    ),
+    
+    betting = list(
+      id = "betting",
+      name = "Betting",
+      icon = "trending-up"
+    ),
+    
+    player_stats = list(
+      id = "player_stats",
+      name = "Player Stats",
+      icon = "bar-chart-2"
+    ),
+    
+    # Soccer sections - ARCHIVED (FBref dependency)
+    # Kept for reference but not included in soccer.sections
     team_dashboard = list(
       id = "team_dashboard",
       name = "Team",
@@ -107,12 +134,6 @@ get_sections_config <- function() {
       id = "player_dashboard",
       name = "Players",
       icon = "user"
-    ),
-    
-    fanteam_contests = list(
-      id = "fanteam_contests",
-      name = "FanTeam",
-      icon = "trophy"
     ),
     
     # Common sections
@@ -133,12 +154,6 @@ get_sections_config <- function() {
       id = "classic",
       name = "Classic",
       icon = "flag"
-    ),
-    
-    showdown = list(
-      id = "showdown",
-      name = "Showdown",
-      icon = "zap"
     ),
     
     this_week = list(

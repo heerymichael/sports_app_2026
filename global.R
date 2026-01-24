@@ -25,6 +25,10 @@ library(reactable)     # For styled tables
 library(zoo)           # For rolling averages
 library(ggrepel)       # For chart labels
 library(stringi)       # For string normalization (NHL name matching)
+library(httr)          # For Odds API calls
+library(jsonlite)      # For JSON parsing
+library(rvest)         # For BBC scraping
+library(glue)          # For URL construction
 cat("[STARTUP] Packages loaded successfully\n\n")
 
 # Load fonts for ggplot
@@ -155,14 +159,23 @@ source("R/soccer/soccer_fanteam_loader.R") # FanTeam data loading
 cat("[STARTUP]     soccer_fanteam_loader.R loaded\n")
 source("R/soccer/soccer_fanteam_matching.R") # Player name matching
 cat("[STARTUP]     soccer_fanteam_matching.R loaded\n")
-source("R/soccer/mod_soccer_team_dashboard.R")    # Team dashboard module
-cat("[STARTUP]     mod_soccer_team_dashboard.R loaded\n")
-source("R/soccer/mod_soccer_player_dashboard.R")  # Player dashboard module
-cat("[STARTUP]     mod_soccer_player_dashboard.R loaded\n")
+
+# Betting module (new)
+source("R/soccer/soccer_betting_config.R")  # Betting config, league definitions
+cat("[STARTUP]     soccer_betting_config.R loaded\n")
+source("R/soccer/soccer_betting_data.R")    # Odds API, BBC scraper, data prep
+cat("[STARTUP]     soccer_betting_data.R loaded\n")
+source("R/soccer/mod_soccer_betting.R")     # Betting odds module
+cat("[STARTUP]     mod_soccer_betting.R loaded\n")
+
+# ARCHIVED: Team and Player dashboards (FBref data no longer available)
+# source("R/soccer/mod_soccer_team_dashboard.R")    # Team dashboard module
+# source("R/soccer/mod_soccer_player_dashboard.R")  # Player dashboard module
+
 source("R/soccer/mod_soccer_fanteam_contests.R")  # FanTeam contests module
 cat("[STARTUP]     mod_soccer_fanteam_contests.R loaded\n")
-# source("R/soccer/mod_soccer_projections.R")     # Future
-# source("R/soccer/mod_soccer_performance.R")     # Future
+source("R/soccer/mod_soccer_player_stats.R")     # Player stats module
+cat("[STARTUP]     mod_soccer_player_stats.R loaded\n")
 cat("[STARTUP]   Soccer modules loaded\n")
 
 # NHL (Ice Hockey)
