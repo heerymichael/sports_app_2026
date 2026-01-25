@@ -232,15 +232,15 @@ get_available_seasons <- function() {
 # PLAYOFF WEEK CONFIGURATION
 # =============================================================================
 
-# Playoff week identifiers in order
-NFL_PLAYOFF_WEEKS <- c("wild_card", "divisional_round", "conference", "super_bowl")
+# Playoff week identifiers in display order (most recent/important first)
+NFL_PLAYOFF_WEEKS <- c("super_bowl", "conference_games", "divisional_round", "wild_card")
 
 # Display labels for playoff weeks
 NFL_PLAYOFF_LABELS <- c(
-  "wild_card" = "Wild Card",
+  "super_bowl" = "Super Bowl",
+  "conference_games" = "Conference Games",
   "divisional_round" = "Divisional Round",
-  "conference" = "Conference Championships",
-  "super_bowl" = "Super Bowl"
+  "wild_card" = "Wild Card"
 )
 
 #' Check if a week identifier is a playoff week

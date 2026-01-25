@@ -1,9 +1,11 @@
 Tournament,PlayerID,Name,FName,Club,Lineup,Position,Price
 1070813,4352577,Johnson,D'Ernest,NE,unexpected,running_back,4.1
+1070813,4352612,Moore,Elijah,DEN,expected,wide_receiver,5
 1070813,4352781,Stidham,Jarrett,DEN,expected,quarterback,16.5
 1070813,4352782,Harvey,RJ,DEN,expected,running_back,15.1
 1070813,4352783,Badie,Tyler,DEN,unexpected,running_back,6.4
 1070813,4352785,McLaughlin,Jaleel,DEN,expected,running_back,8
+1070813,4352787,Dobbins,J.K.,DEN,possible,running_back,12.6
 1070813,4352789,Sutton,Courtland,DEN,expected,wide_receiver,14.4
 1070813,4352791,Bandy,Michael,DEN,expected,wide_receiver,4.5
 1070813,4352792,Bryant,Pat,DEN,unexpected,wide_receiver,10
@@ -14,13 +16,15 @@ Tournament,PlayerID,Name,FName,Club,Lineup,Position,Price
 1070813,4352803,DEF/ST Broncos,,DEN,expected,defense_special,8.1
 1070813,4352805,Engram,Evan,DEN,expected,tight_end,9.8
 1070813,4352806,Adkins,Nate,DEN,expected,tight_end,5
-1070813,4352970,Mitchell,Elijah,NE,refuted,running_back,4
 1070813,4353053,Stafford,Matthew,LAR,expected,quarterback,18.8
+1070813,4353054,Bennett IV,Stetson,LAR,unexpected,quarterback,15
 1070813,4353056,Garoppolo,Jimmy,LAR,unexpected,quarterback,16.3
 1070813,4353057,Corum,Blake,LAR,expected,running_back,10.2
+1070813,4353058,Hunter,Jarquez,LAR,unexpected,running_back,4
 1070813,4353059,Schrader,Cody,DEN,unexpected,running_back,4
 1070813,4353060,Williams,Kyren,LAR,expected,running_back,14.8
 1070813,4353062,Rivers,Ronnie,LAR,unexpected,running_back,4.1
+1070813,4353065,Atwell,Tutu,LAR,unexpected,wide_receiver,5.2
 1070813,4353066,Smith,Xavier,LAR,unexpected,wide_receiver,6.6
 1070813,4353068,Nacua,Puka,LAR,expected,wide_receiver,20
 1070813,4353070,Adams,Davante,LAR,expected,wide_receiver,13.5
@@ -31,6 +35,7 @@ Tournament,PlayerID,Name,FName,Club,Lineup,Position,Price
 1070813,4353076,Ferguson,Terrance,LAR,expected,tight_end,5.7
 1070813,4353077,Higbee,Tyler,LAR,expected,tight_end,8.7
 1070813,4353079,Allen,Davis,LAR,expected,tight_end,5.3
+1070813,4353138,Vannett,Nick,LAR,unexpected,tight_end,4.1
 1070813,4353141,Maye,Drake,NE,expected,quarterback,21.5
 1070813,4353142,Dobbs,Joshua,NE,unexpected,quarterback,18
 1070813,4353144,Stevenson,Rhamondre,NE,expected,running_back,15.2
@@ -40,6 +45,7 @@ Tournament,PlayerID,Name,FName,Club,Lineup,Position,Price
 1070813,4353155,Douglas,DeMario,NE,expected,wide_receiver,9.1
 1070813,4353156,Williams,Kyle,NE,expected,wide_receiver,6.1
 1070813,4353157,Boutte,Kayshon,NE,expected,wide_receiver,10.7
+1070813,4353159,Hollins,Mack,NE,unexpected,wide_receiver,9.5
 1070813,4353160,Diggs,Stefon,NE,expected,wide_receiver,14.8
 1070813,4353161,Hooper,Austin,NE,expected,tight_end,6.8
 1070813,4353164,DEF/ST Patriots,,NE,expected,defense_special,9.9
@@ -48,10 +54,13 @@ Tournament,PlayerID,Name,FName,Club,Lineup,Position,Price
 1070813,4353173,Jones Jr.,Velus,SEA,unexpected,running_back,4.2
 1070813,4353178,Akers,Cam,SEA,unexpected,running_back,4.3
 1070813,4353188,Shaheed,Rashid,SEA,expected,wide_receiver,10.8
+1070813,4353198,DeVito,Tommy,NE,unexpected,quarterback,16.4
 1070813,4353217,Humphrey,Lil'Jordan,DEN,expected,wide_receiver,6.5
 1070813,4353353,Lock,Drew,SEA,unexpected,quarterback,14.4
-1070813,4353355,Darnold,Sam,SEA,possible,quarterback,16.9
+1070813,4353354,Milroe,Jalen,SEA,unexpected,quarterback,13.5
+1070813,4353355,Darnold,Sam,SEA,expected,quarterback,16.9
 1070813,4353357,Russell,Brady,SEA,unexpected,running_back,4
+1070813,4353358,Holani,George,SEA,unexpected,running_back,4.8
 1070813,4353360,Ouzts,Robbie,SEA,possible,running_back,4
 1070813,4353363,Charbonnet,Zach,SEA,injured,running_back,11.1
 1070813,4353364,Walker III,Kenneth,SEA,expected,running_back,14.4
@@ -62,6 +71,6 @@ Tournament,PlayerID,Name,FName,Club,Lineup,Position,Price
 1070813,4353376, DEF/ST Seahawks,,SEA,expected,defense_special,8.8
 1070813,4353378,Saubert,Eric,SEA,unexpected,tight_end,4.2
 1070813,4353379,Kallerup,Nick,SEA,unexpected,tight_end,4
-1070813,4353380,Arroyo,Elijah,SEA,possible,tight_end,5.5
+1070813,4353380,Arroyo,Elijah,SEA,expected,tight_end,5.5
 1070813,4353381,Barner,AJ,SEA,expected,tight_end,11.6
 1070813,4391431,Prentice,Adam,DEN,expected,running_back,4.5

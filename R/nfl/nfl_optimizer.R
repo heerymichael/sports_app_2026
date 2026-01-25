@@ -20,6 +20,7 @@ library(lpSolve)
 #' @param salary_cap Maximum total salary allowed
 #' @param locked_players Character vector of player names that must be included
 #' @param excluded_players Character vector of player names to exclude
+#' @param team_max_rules List of team max rules (each: list(team = "KC", max = 3))
 #' @return Data frame with optimal lineup (9 players) or NULL if no valid lineup found
 #' 
 #' @examples
@@ -28,16 +29,19 @@ library(lpSolve)
 #'   projection_col = "blended",
 #'   salary_cap = 130,
 #'   locked_players = c("Patrick Mahomes"),
-#'   excluded_players = c("Travis Kelce")
+#'   excluded_players = c("Travis Kelce"),
+#'   team_max_rules = list(list(team = "KC", max = 3))
 #' )
 optimize_lineup_lp <- function(players, projection_col, salary_cap,
-                               locked_players = NULL, excluded_players = NULL) {
+                               locked_players = NULL, excluded_players = NULL,
+                               team_max_rules = NULL) {
   
   log_debug(">>> optimize_lineup_lp() called", level = "DEBUG")
   log_debug(">>>   projection_col:", projection_col, level = "DEBUG")
   log_debug(">>>   salary_cap:", salary_cap, level = "DEBUG")
   log_debug(">>>   locked_players:", length(locked_players %||% c()), level = "DEBUG")
   log_debug(">>>   excluded_players:", length(excluded_players %||% c()), level = "DEBUG")
+  log_debug(">>>   team_max_rules:", length(team_max_rules %||% list()), level = "DEBUG")
   
   # Filter excluded players
   available <- players
@@ -109,6 +113,21 @@ optimize_lineup_lp <- function(players, projection_col, salary_cap,
     }
   }
   
+  # Add constraints for team max rules (each team <= max)
+  if (!is.null(team_max_rules) && length(team_max_rules) > 0) {
+    for (rule in team_max_rules) {
+      if (!is.null(rule$team) && !is.null(rule$max)) {
+        constraint_matrix <- rbind(
+          constraint_matrix,
+          as.numeric(available$team == rule$team)
+        )
+        constraint_dirs <- c(constraint_dirs, "<=")
+        constraint_rhs <- c(constraint_rhs, rule$max)
+        log_debug(">>>   Added team max constraint:", rule$team, "<=", rule$max, level = "DEBUG")
+      }
+    }
+  }
+  
   # Solve the LP problem
   solution <- tryCatch({
     lp(
@@ -160,6 +179,7 @@ optimize_lineup_lp <- function(players, projection_col, salary_cap,
 #' @param stacking_rules List of conditional stacking rule objects
 #' @param stack_game Game key for game stack (e.g., "KC_BUF")
 #' @param min_game_players Minimum players from selected game
+#' @param team_max_rules List of team max rules (each: list(team = "KC", max = 3))
 #' @return List of lineup data frames
 #' 
 #' @examples
@@ -169,7 +189,8 @@ optimize_lineup_lp <- function(players, projection_col, salary_cap,
 #'   salary_cap = 130,
 #'   variance_pct = 15,
 #'   locked_players = c("Patrick Mahomes"),
-#'   stacking_rules = list(rule1)
+#'   stacking_rules = list(rule1),
+#'   team_max_rules = list(list(team = "KC", max = 3))
 #' )
 generate_lineups_with_variance <- function(players, num_lineups, salary_cap,
                                            variance_pct = 10, locked_players = NULL,
@@ -178,7 +199,8 @@ generate_lineups_with_variance <- function(players, num_lineups, salary_cap,
                                            stacking_rules = list(),
                                            stack_game = "",
                                            min_game_players = 4,
-                                           corr_rules = list()) {
+                                           corr_rules = list(),
+                                           team_max_rules = NULL) {
   
   log_debug(">>> generate_lineups_with_variance() called", level = "INFO")
   log_debug(">>>   num_lineups:", num_lineups, level = "INFO")
@@ -187,6 +209,7 @@ generate_lineups_with_variance <- function(players, num_lineups, salary_cap,
   log_debug(">>>   stacking_rules:", length(stacking_rules), level = "INFO")
   log_debug(">>>   corr_rules:", length(corr_rules), level = "INFO")
   log_debug(">>>   stack_game:", stack_game, level = "INFO")
+  log_debug(">>>   team_max_rules:", length(team_max_rules %||% list()), level = "INFO")
   
   lineups <- list()
   lineup_signatures <- character(0)
@@ -234,7 +257,8 @@ generate_lineups_with_variance <- function(players, num_lineups, salary_cap,
       players = players_varied,
       projection_col = "varied_projection",
       salary_cap = salary_cap,
-      locked_players = locked_players
+      locked_players = locked_players,
+      team_max_rules = team_max_rules
     )
     
     if (is.null(lineup)) next

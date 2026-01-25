@@ -1,0 +1,316 @@
+Tournament,PlayerID,Name,FName,Club,Lineup,Position,Price,Owned
+1064791,4352517,Dallas,DeeJay,JAX,gameweek_off,running_back,7,0.00
+1064791,4352561,Kalinic,Nikola,CHI,gameweek_off,tight_end,6,0.00
+1064791,4352577,Johnson,D'Ernest,NE,unexpected,running_back,6,0.00
+1064791,4352601,Allen,Josh,BUF,gameweek_off,quarterback,21.5,24.31
+1064791,4352602,Trubisky,Mitchell,BUF,gameweek_off,quarterback,16.5,0.00
+1064791,4352603,Cook,James,BUF,gameweek_off,running_back,19,15.82
+1064791,4352604,Davis,Ray,BUF,gameweek_off,running_back,9.5,0.00
+1064791,4352606,Johnson,Ty,BUF,gameweek_off,running_back,9,0.16
+1064791,4352608,Gilliam,Reggie,BUF,gameweek_off,running_back,6,0.00
+1064791,4352611,Palmer,Joshua,BUF,gameweek_off,wide_receiver,7,0.00
+1064791,4352612,Moore,Elijah,DEN,expected,wide_receiver,7,0.00
+1064791,4352613,Coleman,Keon,BUF,gameweek_off,wide_receiver,9,0.82
+1064791,4352614,Shavers,Tyrell,BUF,gameweek_off,wide_receiver,7.5,0.00
+1064791,4352618,Samuel,Curtis,BUF,gameweek_off,wide_receiver,8,0.16
+1064791,4352620,Shakir,Khalil,BUF,gameweek_off,wide_receiver,10,40.62
+1064791,4352622,DEF/ST Bills,,BUF,gameweek_off,defense_special,8,1.63
+1064791,4352623,Latu,Keleki,BUF,gameweek_off,tight_end,6,0.00
+1064791,4352624,Hawes,Jackson,BUF,gameweek_off,tight_end,7,0.33
+1064791,4352625,Kincaid,Dalton,BUF,gameweek_off,tight_end,10.5,15.01
+1064791,4352627,Knox,Dawson,BUF,gameweek_off,tight_end,8.5,3.75
+1064791,4352630,Dalton,Andy,CAR,gameweek_off,quarterback,13.5,0.00
+1064791,4352631,Young,Bryce,CAR,gameweek_off,quarterback,16.5,0.16
+1064791,4352634,Dowdle,Rico,CAR,gameweek_off,running_back,10.5,0.65
+1064791,4352636,Brooks,Jonathon,CAR,gameweek_off,running_back,6,0.00
+1064791,4352637,Hubbard,Chuba,CAR,gameweek_off,running_back,11,0.00
+1064791,4352638,Etienne,Trevor,CAR,gameweek_off,running_back,7.5,0.00
+1064791,4352639,Coker,Jalen,CAR,gameweek_off,wide_receiver,9,0.65
+1064791,4352642,Legette,Xavier,CAR,gameweek_off,wide_receiver,8,0.00
+1064791,4352643,Moore,David,CAR,gameweek_off,wide_receiver,7,0.00
+1064791,4352645,Tremayne,Brycen,CAR,gameweek_off,wide_receiver,6.5,0.00
+1064791,4352646,Renfrow,Hunter,CAR,gameweek_off,wide_receiver,8,0.00
+1064791,4352647,Thielen,Adam,PIT,gameweek_off,wide_receiver,9,0.00
+1064791,4352648,Horn Jr.,Jimmy,CAR,gameweek_off,wide_receiver,6.5,0.00
+1064791,4352649,McMillan,Tetairoa,CAR,gameweek_off,wide_receiver,10,2.28
+1064791,4352651,DEF/ST Panthers,,CAR,gameweek_off,defense_special,7.5,0.00
+1064791,4352652,Sanders,Ja'Tavion,CAR,gameweek_off,tight_end,9,0.00
+1064791,4352656,Mitchell,James,CAR,gameweek_off,tight_end,6.5,0.00
+1064791,4352657,Tremble,Tommy,CAR,gameweek_off,tight_end,7.5,0.16
+1064791,4352658,Evans,Mitchell,CAR,gameweek_off,tight_end,7,0.00
+1064791,4352659,Bagent,Tyson,CHI,gameweek_off,quarterback,14.5,0.00
+1064791,4352660,Williams,Caleb,CHI,gameweek_off,quarterback,17.5,11.26
+1064791,4352662,Keenum,Case,CHI,gameweek_off,quarterback,14,0.00
+1064791,4352663,Homer,Travis,CHI,gameweek_off,running_back,6.5,0.00
+1064791,4352664,Hankins,Deion,CHI,gameweek_off,running_back,6,0.00
+1064791,4352665,Swift,D'Andre,CHI,gameweek_off,running_back,15,14.68
+1064791,4352666,Monangai,Kyle,CHI,gameweek_off,running_back,9.5,5.06
+1064791,4352667,Johnson,Roschon,CHI,gameweek_off,running_back,7,0.00
+1064791,4352672,Zaccheaus,Olamide,CHI,gameweek_off,wide_receiver,7.5,0.82
+1064791,4352673,Duvernay,Devin,CHI,gameweek_off,wide_receiver,6.5,0.00
+1064791,4352675,Odunze,Rome,CHI,gameweek_off,wide_receiver,12.5,4.40
+1064791,4352676,Burden III,Luther,CHI,gameweek_off,wide_receiver,12,10.93
+1064791,4352679,Walker,Jahdae,CHI,gameweek_off,wide_receiver,8,0.00
+1064791,4352680,Moore,DJ,CHI,gameweek_off,wide_receiver,11.5,8.97
+1064791,4352681,DEF/ST Bears,,CHI,gameweek_off,defense_special,8,2.61
+1064791,4352683,Loveland,Colston,CHI,gameweek_off,tight_end,13,34.09
+1064791,4352685,Kmet,Cole,CHI,gameweek_off,tight_end,9,0.16
+1064791,4352686,Smythe,Durham,CHI,gameweek_off,tight_end,6.5,0.00
+1064791,4352687,Carlson,Stephen,CHI,gameweek_off,tight_end,6,0.00
+1064791,4352717,McLachlan,Tanner,LAC,gameweek_off,tight_end,6,0.00
+1064791,4352728,Strong Jr.,Pierre,GB,gameweek_off,running_back,6,0.00
+1064791,4352729,Williams,Trayveon,CLE,gameweek_off,running_back,6,0.00
+1064791,4352744,Bates,Brenden,CLE,gameweek_off,tight_end,6,0.00
+1064791,4352779,Nix,Bo,DEN,injured,quarterback,20,2.94
+1064791,4352781,Stidham,Jarrett,DEN,expected,quarterback,16,0.00
+1064791,4352782,Harvey,RJ,DEN,expected,running_back,18,16.80
+1064791,4352783,Badie,Tyler,DEN,unexpected,running_back,7,0.16
+1064791,4352785,McLaughlin,Jaleel,DEN,expected,running_back,8,0.33
+1064791,4352786,Burton,Michael,DEN,injured,running_back,6.5,0.00
+1064791,4352787,Dobbins,J.K.,DEN,possible,running_back,11,0.00
+1064791,4352788,Estime,Audric,NO,gameweek_off,running_back,8,0.00
+1064791,4352789,Sutton,Courtland,DEN,expected,wide_receiver,15,7.99
+1064791,4352790,Sherfield Sr.,Trent,ARI,gameweek_off,wide_receiver,6.5,0.00
+1064791,4352791,Bandy,Michael,DEN,expected,wide_receiver,7.5,0.00
+1064791,4352792,Bryant,Pat,DEN,unexpected,wide_receiver,8.5,9.62
+1064791,4352796,Vele,Devaughn,NO,gameweek_off,wide_receiver,9.5,0.00
+1064791,4352797,Mims Jr.,Marvin,DEN,expected,wide_receiver,10.5,0.82
+1064791,4352800,Franklin,Troy,DEN,possible,wide_receiver,9.5,0.00
+1064791,4352801,Trautman,Adam,DEN,expected,tight_end,7.5,0.00
+1064791,4352802,Krull,Lucas,DEN,possible,tight_end,7,0.00
+1064791,4352803,DEF/ST Broncos,,DEN,expected,defense_special,10,2.28
+1064791,4352805,Engram,Evan,DEN,expected,tight_end,10,0.65
+1064791,4352806,Adkins,Nate,DEN,expected,tight_end,8,0.00
+1064791,4352820,Patrick,Tim,JAX,gameweek_off,wide_receiver,8.5,0.00
+1064791,4352836,Love,Jordan,GB,gameweek_off,quarterback,15.5,0.16
+1064791,4352837,Willis,Malik,GB,gameweek_off,quarterback,14.5,0.00
+1064791,4352840,Wilson,Emanuel,GB,gameweek_off,running_back,8.5,0.00
+1064791,4352841,Jacobs,Josh,GB,gameweek_off,running_back,12.5,3.26
+1064791,4352842,Brooks,Chris,GB,gameweek_off,running_back,6.5,0.00
+1064791,4352844,Johnson,Amar,LAC,gameweek_off,running_back,6,0.00
+1064791,4352845,Lloyd,MarShawn,GB,gameweek_off,running_back,6,0.00
+1064791,4352847,Watson,Christian,GB,gameweek_off,wide_receiver,15,1.14
+1064791,4352848,Williams,Savion,GB,gameweek_off,wide_receiver,7.5,0.00
+1064791,4352849,Golden,Matthew,GB,gameweek_off,wide_receiver,8.5,0.00
+1064791,4352851,Doubs,Romeo,GB,gameweek_off,wide_receiver,10.5,0.16
+1064791,4352852,Wicks,Dontayvion,GB,gameweek_off,wide_receiver,8.5,0.00
+1064791,4352853,Reed,Jayden,GB,gameweek_off,wide_receiver,11.5,0.49
+1064791,4352856,Hardman,Mecole,BUF,gameweek_off,wide_receiver,6,0.49
+1064791,4352857,Heath,Malik,ATL,gameweek_off,wide_receiver,7,0.00
+1064791,4352859,FitzPatrick,John,GB,gameweek_off,tight_end,6.5,0.00
+1064791,4352860,Musgrave,Luke,GB,gameweek_off,tight_end,7.5,0.16
+1064791,4352861,Sims,Ben,MIN,gameweek_off,tight_end,6,0.00
+1064791,4352862,DEF/ST Packers,,GB,gameweek_off,defense_special,7.5,0.16
+1064791,4352865,Kraft,Tucker,GB,gameweek_off,tight_end,14.5,0.16
+1064791,4352866,Slovis,Kedon,ARI,gameweek_off,quarterback,15,0.00
+1064791,4352867,Stroud,C.J.,HOU,gameweek_off,quarterback,16.5,2.28
+1064791,4352868,Mertz,Graham,HOU,gameweek_off,quarterback,15,0.00
+1064791,4352869,Mills,Davis,HOU,gameweek_off,quarterback,15.5,0.00
+1064791,4352870,Mixon,Joe,HOU,gameweek_off,running_back,13,0.00
+1064791,4352871,Marks,Woody,HOU,gameweek_off,running_back,10,38.83
+1064791,4352872,Johnson,Jakob,HOU,gameweek_off,running_back,6,0.00
+1064791,4352873,Jordan,Jawhar,HOU,gameweek_off,running_back,8,0.00
+1064791,4352874,Ogunbowale,Dare,HOU,gameweek_off,running_back,7.5,0.00
+1064791,4352875,Chubb,Nick,HOU,gameweek_off,running_back,8,0.16
+1064791,4352876,Pierce,Dameon,KC,gameweek_off,running_back,8.5,0.00
+1064791,4352878,Watson,Justin,HOU,gameweek_off,wide_receiver,6.5,0.00
+1064791,4352879,Berrios,Braxton,HOU,gameweek_off,wide_receiver,6,0.00
+1064791,4352881,Higgins,Jayden,HOU,gameweek_off,wide_receiver,10,11.26
+1064791,4352885,Hutchinson,Xavier,HOU,gameweek_off,wide_receiver,7.5,2.94
+1064791,4352886,Dell,Tank,HOU,gameweek_off,wide_receiver,6,0.00
+1064791,4352887,Metchie III,John,NYJ,gameweek_off,wide_receiver,8,0.00
+1064791,4352888,Collins,Nico,HOU,gameweek_off,wide_receiver,15.5,0.00
+1064791,4352889,Kirk,Christian,HOU,gameweek_off,wide_receiver,9.5,10.44
+1064791,4352890,Noel,Jaylin,HOU,gameweek_off,wide_receiver,7.5,0.00
+1064791,4352891,DEF/ST Texans,,HOU,gameweek_off,defense_special,8.5,28.87
+1064791,4352892,Schultz,Dalton,HOU,gameweek_off,tight_end,11.5,7.50
+1064791,4352895,Jordan,Brevin,HOU,gameweek_off,tight_end,6,0.00
+1064791,4352896,Stover,Cade,HOU,gameweek_off,tight_end,7.5,0.16
+1064791,4352898,Brooks,British,HOU,gameweek_off,running_back,6.5,0.00
+1064791,4352933,Lawrence,Trevor,JAX,gameweek_off,quarterback,19.5,0.82
+1064791,4352934,Mullens,Nick,JAX,gameweek_off,quarterback,14.5,0.00
+1064791,4352936,Allen Jr.,LeQuint,JAX,gameweek_off,running_back,6,0.00
+1064791,4352937,Etienne Jr.,Travis,JAX,gameweek_off,running_back,14,1.96
+1064791,4352939,Bigsby,Tank,PHI,gameweek_off,running_back,10,0.00
+1064791,4352940,Tuten,Bhayshul,JAX,gameweek_off,running_back,8,0.00
+1064791,4352941,Thomas Jr.,Brian,JAX,gameweek_off,wide_receiver,12,0.16
+1064791,4352942,Brown,Dyami,JAX,gameweek_off,wide_receiver,7,0.00
+1064791,4352947,Trammell,Austin,JAX,gameweek_off,wide_receiver,6.5,0.00
+1064791,4352948,Pancol,Eli,IND,gameweek_off,wide_receiver,6,0.00
+1064791,4352949,Hunter,Travis,JAX,gameweek_off,wide_receiver,8,0.00
+1064791,4352951,Washington,Parker,JAX,gameweek_off,wide_receiver,14.5,1.14
+1064791,4352954,Strange,Brenton,JAX,gameweek_off,tight_end,10.5,0.98
+1064791,4352955,Long,Hunter,JAX,gameweek_off,tight_end,7,0.00
+1064791,4352956,DEF/ST Jaguars,,JAX,gameweek_off,defense_special,9,0.33
+1064791,4352957,Morris,Quintin,JAX,gameweek_off,tight_end,7.5,0.00
+1064791,4352960,Mundt,Johnny,JAX,gameweek_off,tight_end,7,0.00
+1064791,4352979,Moore,Skyy,SF,gameweek_off,wide_receiver,6,0.16
+1064791,4353002,Meyers,Jakobi,JAX,gameweek_off,wide_receiver,13.5,1.79
+1064791,4353021,Herbert,Justin,LAC,gameweek_off,quarterback,17.5,0.00
+1064791,4353023,Lance,Trey,LAC,gameweek_off,quarterback,14.5,0.00
+1064791,4353024,Hampton,Omarion,LAC,gameweek_off,running_back,12.5,0.33
+1064791,4353025,Haskins,Hassan,LAC,gameweek_off,running_back,6.5,0.00
+1064791,4353026,Hines,Nyheim,NO,gameweek_off,running_back,6,0.00
+1064791,4353027,Sanders,Raheim,CLE,gameweek_off,running_back,6,0.00
+1064791,4353028,Patterson,Jaret,LAC,gameweek_off,running_back,7,0.00
+1064791,4353029,Vidal,Kimani,LAC,gameweek_off,running_back,10.5,0.00
+1064791,4353030,Harris,Najee,LAC,gameweek_off,running_back,9.5,0.00
+1064791,4353031,McConkey,Ladd,LAC,gameweek_off,wide_receiver,12,0.82
+1064791,4353032,Matlock,Scott,LAC,gameweek_off,running_back,6,0.00
+1064791,4353033,Rice,Brenden,LV,gameweek_off,wide_receiver,6,0.00
+1064791,4353035,Allen,Keenan,LAC,gameweek_off,wide_receiver,11.5,0.16
+1064791,4353037,Harris,Tre',LAC,gameweek_off,wide_receiver,9.5,0.00
+1064791,4353039,Campbell,Dalevon,LAC,gameweek_off,wide_receiver,6,0.00
+1064791,4353041,Johnston,Quentin,LAC,gameweek_off,wide_receiver,10,0.82
+1064791,4353042,Lambert-Smith,Keandre,LAC,gameweek_off,wide_receiver,7.5,0.00
+1064791,4353044,Davis,Derius,LAC,gameweek_off,wide_receiver,7,0.00
+1064791,4353045,Dissly,Will,LAC,gameweek_off,tight_end,9,0.00
+1064791,4353047,Gadsden,Oronde,LAC,gameweek_off,tight_end,10,0.00
+1064791,4353048,Fisk,Tucker,LAC,gameweek_off,tight_end,6.5,0.00
+1064791,4353049,DEF/ST Chargers,,LAC,gameweek_off,defense_special,8.5,0.00
+1064791,4353050,Conklin,Tyler,LAC,gameweek_off,tight_end,8,0.00
+1064791,4353053,Stafford,Matthew,LAR,expected,quarterback,19.5,36.70
+1064791,4353054,Bennett IV,Stetson,LAR,unexpected,quarterback,13,0.00
+1064791,4353056,Garoppolo,Jimmy,LAR,unexpected,quarterback,13.5,0.00
+1064791,4353057,Corum,Blake,LAR,expected,running_back,10.5,5.87
+1064791,4353058,Hunter,Jarquez,LAR,unexpected,running_back,6,0.00
+1064791,4353059,Schrader,Cody,DEN,unexpected,running_back,6,0.00
+1064791,4353060,Williams,Kyren,LAR,expected,running_back,17,21.21
+1064791,4353062,Rivers,Ronnie,LAR,unexpected,running_back,6.5,0.00
+1064791,4353063,Covey,Britain,PHI,gameweek_off,wide_receiver,6.5,0.00
+1064791,4353065,Atwell,Tutu,LAR,unexpected,wide_receiver,9,0.00
+1064791,4353066,Smith,Xavier,LAR,unexpected,wide_receiver,7,0.00
+1064791,4353068,Nacua,Puka,LAR,expected,wide_receiver,22,75.86
+1064791,4353070,Adams,Davante,LAR,expected,wide_receiver,14,44.54
+1064791,4353071,Mumpfield,Konata,LAR,expected,wide_receiver,6,0.98
+1064791,4353073,Whittington,Jordan,LAR,expected,wide_receiver,8.5,0.00
+1064791,4353074,Parkinson,Colby,LAR,expected,tight_end,12.5,6.85
+1064791,4353075,DEF/ST Rams,,LAR,expected,defense_special,9,14.36
+1064791,4353076,Ferguson,Terrance,LAR,expected,tight_end,8.5,0.16
+1064791,4353077,Higbee,Tyler,LAR,expected,tight_end,10,5.87
+1064791,4353079,Allen,Davis,LAR,expected,tight_end,6.5,0.16
+1064791,4353110,Howell,Sam,PHI,gameweek_off,quarterback,14.5,0.00
+1064791,4353126,Jones,Tim,JAX,gameweek_off,wide_receiver,6,0.00
+1064791,4353138,Vannett,Nick,LAR,unexpected,tight_end,6,0.00
+1064791,4353141,Maye,Drake,NE,expected,quarterback,20.5,10.44
+1064791,4353142,Dobbs,Joshua,NE,unexpected,quarterback,14.5,0.00
+1064791,4353143,Gibson,Antonio,NE,injured,running_back,7.5,0.00
+1064791,4353144,Stevenson,Rhamondre,NE,expected,running_back,16,12.72
+1064791,4353146,Henderson,TreVeyon,NE,expected,running_back,13.5,15.82
+1064791,4353147,Jennings,Terrell,NE,possible,running_back,6.5,0.00
+1064791,4353149,Bourne,Kendrick,SF,gameweek_off,wide_receiver,8,0.49
+1064791,4353152,Chism III,Efton,NE,unexpected,wide_receiver,9,0.00
+1064791,4353154,Polk,Ja'Lynn,NO,gameweek_off,wide_receiver,7.5,0.00
+1064791,4353155,Douglas,DeMario,NE,expected,wide_receiver,8.5,0.33
+1064791,4353156,Williams,Kyle,NE,expected,wide_receiver,8.5,0.00
+1064791,4353157,Boutte,Kayshon,NE,expected,wide_receiver,9,4.40
+1064791,4353159,Hollins,Mack,NE,unexpected,wide_receiver,9.5,0.00
+1064791,4353160,Diggs,Stefon,NE,expected,wide_receiver,11,41.11
+1064791,4353161,Hooper,Austin,NE,expected,tight_end,8,0.49
+1064791,4353164,DEF/ST Patriots,,NE,expected,defense_special,7.5,39.31
+1064791,4353167,Henry,Hunter,NE,expected,tight_end,12,18.92
+1064791,4353168,Westover,Jack,NE,unexpected,tight_end,6,0.33
+1064791,4353173,Jones Jr.,Velus,SEA,unexpected,running_back,6.5,0.00
+1064791,4353178,Akers,Cam,SEA,unexpected,running_back,7,0.00
+1064791,4353185,Cooks,Brandin,BUF,gameweek_off,wide_receiver,8.5,5.87
+1064791,4353188,Shaheed,Rashid,SEA,expected,wide_receiver,10.5,2.12
+1064791,4353198,DeVito,Tommy,NE,unexpected,quarterback,14,0.00
+1064791,4353217,Humphrey,Lil'Jordan,DEN,expected,wide_receiver,8,0.16
+1064791,4353244,Gipson,Xavier,NYG,gameweek_off,wide_receiver,7.5,0.00
+1064791,4353261,Hurts,Jalen,PHI,gameweek_off,quarterback,18.5,2.28
+1064791,4353264,McKee,Tanner,PHI,gameweek_off,quarterback,15,0.00
+1064791,4353268,Dillon,A.J.,PHI,gameweek_off,running_back,7,0.00
+1064791,4353269,Shipley,Will,PHI,gameweek_off,running_back,7.5,0.00
+1064791,4353270,Barkley,Saquon,PHI,gameweek_off,running_back,16.5,1.79
+1064791,4353271,Dotson,Jahan,PHI,gameweek_off,wide_receiver,8,0.00
+1064791,4353273,Smith,DeVonta,PHI,gameweek_off,wide_receiver,12.5,1.47
+1064791,4353274,Cooper,Darius,PHI,gameweek_off,wide_receiver,6,0.00
+1064791,4353281,Wilson,Johnny,PHI,gameweek_off,wide_receiver,6,0.00
+1064791,4353282,Brown,A.J.,PHI,gameweek_off,wide_receiver,16.5,2.12
+1064791,4353283,VanSumeren,Ben,PHI,gameweek_off,running_back,6,0.00
+1064791,4353284,Latu,Cameron,PHI,gameweek_off,tight_end,6,0.00
+1064791,4353285,Bryant,Harrison,HOU,gameweek_off,tight_end,6.5,0.00
+1064791,4353286,Jenkins,E.J.,PHI,gameweek_off,tight_end,6,0.00
+1064791,4353287,Calcaterra,Grant,PHI,gameweek_off,tight_end,8.5,0.00
+1064791,4353288,Goedert,Dallas,PHI,gameweek_off,tight_end,11.5,1.31
+1064791,4353289,DEF/ST Eagles,,PHI,gameweek_off,defense_special,9.5,0.65
+1064791,4353291,Granson,Kylen,PHI,gameweek_off,tight_end,7,0.00
+1064791,4353292,Rudolph,Mason,PIT,gameweek_off,quarterback,14,0.00
+1064791,4353293,Thompson,Skylar,PIT,gameweek_off,quarterback,13.5,0.00
+1064791,4353295,Rodgers,Aaron,PIT,gameweek_off,quarterback,15.5,0.16
+1064791,4353296,Howard,Will,PIT,gameweek_off,quarterback,13.5,0.00
+1064791,4353297,Nichols,Lew,PIT,gameweek_off,running_back,6,0.00
+1064791,4353298,Hull,Evan,NO,gameweek_off,running_back,6,0.00
+1064791,4353299,Warren,Jaylen,PIT,gameweek_off,running_back,13,0.82
+1064791,4353300,Johnson,Kaleb,PIT,gameweek_off,running_back,7,0.00
+1064791,4353301,Gainwell,Kenneth,PIT,gameweek_off,running_back,12.5,0.82
+1064791,4353302,Sermon,Trey,PIT,gameweek_off,running_back,6,0.00
+1064791,4353303,Miller,Scotty,PIT,gameweek_off,wide_receiver,7,0.00
+1064791,4353305,Williams,Ke'Shawn,CIN,gameweek_off,wide_receiver,7.5,0.00
+1064791,4353307,Austin III,Calvin,PIT,gameweek_off,wide_receiver,10,0.00
+1064791,4353308,Skowronek,Ben,PIT,gameweek_off,wide_receiver,6.5,0.00
+1064791,4353311,Metcalf,DK,PIT,gameweek_off,wide_receiver,12.5,0.82
+1064791,4353312,Wilson,Roman,PIT,gameweek_off,wide_receiver,8,0.00
+1064791,4353315,Heyward,Connor,PIT,gameweek_off,tight_end,7.5,0.00
+1064791,4353316,Washington,Darnell,PIT,gameweek_off,tight_end,8,0.00
+1064791,4353317,Smith,Jonnu,PIT,gameweek_off,tight_end,9,0.00
+1064791,4353318,DEF/ST Steelers,,PIT,gameweek_off,defense_special,7.5,1.63
+1064791,4353319,Freiermuth,Pat,PIT,gameweek_off,tight_end,9.5,0.16
+1064791,4353322,Jones,Mac,SF,gameweek_off,quarterback,12,0.00
+1064791,4353323,Mordecai,Tanner,SF,gameweek_off,quarterback,11.5,0.00
+1064791,4353324,Purdy,Brock,SF,gameweek_off,quarterback,19,1.63
+1064791,4353325,Bradley,Carter,JAX,gameweek_off,quarterback,15,0.00
+1064791,4353326,Taylor Jr.,Patrick,SF,gameweek_off,running_back,7,0.00
+1064791,4353327,Kiner,Corey,ARI,gameweek_off,running_back,6,0.00
+1064791,4353328,Abdullah,Ameer,IND,gameweek_off,running_back,6,0.00
+1064791,4353329,Juszczyk,Kyle,SF,gameweek_off,running_back,9,0.00
+1064791,4353330,Guerendo,Isaac,SF,gameweek_off,running_back,7,0.00
+1064791,4353331,McCaffrey,Christian,SF,gameweek_off,running_back,21,45.68
+1064791,4353333,James,Jordan,SF,gameweek_off,running_back,7,0.00
+1064791,4353335,Jennings,Jauan,SF,gameweek_off,wide_receiver,14.5,4.89
+1064791,4353336,Cowing,Jacob,SF,gameweek_off,wide_receiver,6,0.00
+1064791,4353337,Hodgins,Isaiah,NYG,gameweek_off,wide_receiver,6,0.00
+1064791,4353338,Chosen,Robbie,WAS,gameweek_off,wide_receiver,6,0.00
+1064791,4353340,Robinson,Demarcus,SF,gameweek_off,wide_receiver,8.5,5.06
+1064791,4353341,Watkins,Jordan,SF,gameweek_off,wide_receiver,6,0.00
+1064791,4353342,Pearsall,Ricky,SF,gameweek_off,wide_receiver,10,0.00
+1064791,4353345,Aiyuk,Brandon,SF,gameweek_off,wide_receiver,7,0.00
+1064791,4353347,Dwelley,Ross,CAR,gameweek_off,tight_end,6,0.00
+1064791,4353348,Farrell,Luke,SF,gameweek_off,tight_end,7,0.00
+1064791,4353349,Tonges,Jake,SF,gameweek_off,tight_end,11,4.40
+1064791,4353350,Willis,Brayden,SF,gameweek_off,tight_end,6,0.00
+1064791,4353351, DEF/ST 49ers,,SF,gameweek_off,defense_special,7.5,1.79
+1064791,4353352,Kittle,George,SF,gameweek_off,tight_end,17.5,0.00
+1064791,4353353,Lock,Drew,SEA,unexpected,quarterback,14,0.16
+1064791,4353354,Milroe,Jalen,SEA,unexpected,quarterback,13.5,0.00
+1064791,4353355,Darnold,Sam,SEA,expected,quarterback,17,6.69
+1064791,4353357,Russell,Brady,SEA,unexpected,running_back,6,0.00
+1064791,4353358,Holani,George,SEA,unexpected,running_back,7.5,0.00
+1064791,4353360,Ouzts,Robbie,SEA,possible,running_back,6,0.65
+1064791,4353363,Charbonnet,Zach,SEA,injured,running_back,15.5,11.09
+1064791,4353364,Walker III,Kenneth,SEA,expected,running_back,14.5,17.94
+1064791,4353365,Smith-Njigba,Jaxon,SEA,expected,wide_receiver,20,38.34
+1064791,4353366,Sims,Steven,ARI,gameweek_off,wide_receiver,6,0.00
+1064791,4353367,Kupp,Cooper,SEA,expected,wide_receiver,9.5,2.12
+1064791,4353369,Horton,Tory,SEA,injured,wide_receiver,12,0.00
+1064791,4353370,Valdes-Scantling,Marquez,PIT,gameweek_off,wide_receiver,8.5,0.00
+1064791,4353371,Bobo,Jake,SEA,unexpected,wide_receiver,6.5,0.00
+1064791,4353373,Plumlee,John Rhys,PIT,gameweek_off,wide_receiver,6,0.00
+1064791,4353374,Young,Dareke,SEA,unexpected,wide_receiver,7,0.00
+1064791,4353375,White,Cody,SEA,injured,wide_receiver,7.5,0.00
+1064791,4353376, DEF/ST Seahawks,,SEA,expected,defense_special,10,6.36
+1064791,4353378,Saubert,Eric,SEA,unexpected,tight_end,6,0.16
+1064791,4353379,Kallerup,Nick,SEA,unexpected,tight_end,6,0.00
+1064791,4353380,Arroyo,Elijah,SEA,expected,tight_end,7.5,0.00
+1064791,4353381,Barner,AJ,SEA,expected,tight_end,9.5,14.68
+1064791,4353437,Whyle,Josh,GB,gameweek_off,tight_end,8,0.00
+1064791,4353440,Dabney,Drake,GB,gameweek_off,tight_end,6.5,0.00
+1064791,4353447,Robinson Jr.,Brian,SF,gameweek_off,running_back,9.5,0.00
+1064791,4391431,Prentice,Adam,DEN,expected,running_back,6.5,0.00
+1064791,4459244,Davis,Gabe,BUF,gameweek_off,wide_receiver,6.5,0.00
+1064791,4459245,Chisena,Dan,CAR,gameweek_off,wide_receiver,6,0.00
+1064791,4459250,Watkins,Quez,PHI,gameweek_off,wide_receiver,6,0.00
+1064791,4459265,Brown,Brittain,CHI,gameweek_off,running_back,8,0.00
+1064791,4459269,Melton,Bo,GB,gameweek_off,wide_receiver,7,0.00
+1064791,4459271,Wayne,Jared,HOU,gameweek_off,wide_receiver,6,0.00
+1064791,4459276,Castles,McCallan,GB,gameweek_off,tight_end,6,0.00

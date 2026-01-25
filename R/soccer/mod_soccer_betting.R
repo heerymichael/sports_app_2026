@@ -124,6 +124,7 @@ soccer_betting_server <- function(id) {
       standings_data = NULL,
       last_updated = NULL,
       loading = FALSE,
+      load_attempted = FALSE,  # Prevents infinite retry loop on error
       selected_leagues = BETTING_DEFAULT_LEAGUES,
       selected_dates = Sys.Date()  # Default to today only (actual dates, not day names)
     )
@@ -133,6 +134,34 @@ soccer_betting_server <- function(id) {
     # =========================================================================
     
     output$league_buttons <- renderUI({
+      # Select All / Deselect All button
+      all_selected <- length(rv$selected_leagues) == length(names(BETTING_LEAGUES))
+      
+      select_all_btn <- div(
+        style = "margin-bottom: var(--space-sm);",
+        tags$button(
+          id = ns("select_all_leagues"),
+          style = paste0(
+            "display: inline-flex; align-items: center; gap: 6px; ",
+            "padding: 6px 12px; border-radius: var(--radius-sm); ",
+            "border: none; cursor: pointer; font-family: var(--font-primary); ",
+            "font-weight: 600; font-size: 0.75rem; text-transform: uppercase; ",
+            "letter-spacing: 0.5px; ",
+            "background-color: transparent; ",
+            "color: ", if (all_selected) "var(--coral)" else "var(--sage-dark)", "; ",
+            "transition: all var(--transition-fast);"
+          ),
+          onclick = sprintf(
+            "Shiny.setInputValue('%s', '%s', {priority: 'event'});",
+            ns("toggle_all_leagues"),
+            if (all_selected) "deselect" else "select"
+          ),
+          icon(if (all_selected) "square-minus" else "square-check", style = "font-size: 0.85rem;"),
+          span(if (all_selected) "Deselect All" else "Select All")
+        )
+      )
+      
+      # Individual league buttons
       buttons <- lapply(names(BETTING_LEAGUES), function(league_name) {
         is_selected <- league_name %in% rv$selected_leagues
         
@@ -169,7 +198,19 @@ soccer_betting_server <- function(id) {
         )
       })
       
-      div(style = "display: flex; flex-wrap: wrap; gap: 4px;", buttons)
+      tagList(
+        select_all_btn,
+        div(style = "display: flex; flex-wrap: wrap; gap: 4px;", buttons)
+      )
+    })
+    
+    # Handle Select All / Deselect All
+    observeEvent(input$toggle_all_leagues, {
+      if (input$toggle_all_leagues == "select") {
+        rv$selected_leagues <- names(BETTING_LEAGUES)
+      } else {
+        rv$selected_leagues <- BETTING_DEFAULT_LEAGUES  # Keep at least default
+      }
     })
     
     observeEvent(input$league_clicked, {
@@ -248,6 +289,7 @@ soccer_betting_server <- function(id) {
     
     observe({
       req(!rv$loading)
+      req(!rv$load_attempted)  # Don't retry if we already tried
       
       if (is.null(rv$odds_data)) {
         log_debug("Soccer Betting: Loading initial data")
@@ -257,11 +299,13 @@ soccer_betting_server <- function(id) {
     
     observeEvent(input$refresh_data, {
       log_debug("Soccer Betting: Manual refresh triggered")
+      rv$load_attempted <- FALSE  # Reset flag for manual refresh
       load_betting_data(force_refresh = TRUE)
     })
     
     load_betting_data <- function(force_refresh = FALSE) {
       rv$loading <- TRUE
+      rv$load_attempted <- TRUE  # Mark that we've attempted to load
       
       tryCatch({
         data <- fetch_betting_data(
@@ -278,6 +322,20 @@ soccer_betting_server <- function(id) {
       }, error = function(e) {
         log_debug("Soccer Betting: Load error -", e$message, level = "ERROR")
         showNotification(paste("Error loading data:", e$message), type = "error", duration = 5)
+        
+        # Set empty data to prevent further retries
+        rv$odds_data <- tibble(
+          match_id = character(),
+          DateTime = as.POSIXct(character()),
+          home_team = character(),
+          away_team = character(),
+          odd_home = numeric(),
+          odd_draw = numeric(),
+          odd_away = numeric(),
+          league_name = character()
+        )
+        rv$standings_data <- tibble()
+        
       }, finally = {
         rv$loading <- FALSE
       })

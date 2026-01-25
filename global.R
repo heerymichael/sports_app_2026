@@ -142,6 +142,8 @@ source("R/nfl/mod_nfl_showdown.R")        # Showdown single-game module
 cat("[STARTUP]     mod_nfl_showdown.R loaded\n")
 source("R/nfl/mod_nfl_ffpc_bestball.R")   # FFPC Bestball module
 cat("[STARTUP]     mod_nfl_ffpc_bestball.R loaded\n")
+source("R/nfl/mod_nfl_fanteam_playoffs.R") # Fanteam Playoffs module
+cat("[STARTUP]     mod_nfl_fanteam_playoffs.R loaded\n")
 # source("R/nfl/mod_nfl_dashboard.R")     # Dashboard (placeholder)
 cat("[STARTUP]   NFL modules loaded\n")
 

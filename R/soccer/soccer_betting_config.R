@@ -45,18 +45,6 @@ BETTING_LEAGUES <- list(
     slug = "soccer_spl",
     bbc_url = "https://www.bbc.co.uk/sport/football/scottish-premiership/table"
   ),
-  "Scottish Championship" = list(
-    slug = "soccer_scotland_championship",
-    bbc_url = "https://www.bbc.co.uk/sport/football/scottish-championship/table"
-  ),
-  "Scottish League One" = list(
-    slug = "soccer_scotland_league_one",
-    bbc_url = "https://www.bbc.co.uk/sport/football/scottish-league-one/table"
-  ),
-  "Scottish League Two" = list(
-    slug = "soccer_scotland_league_two",
-    bbc_url = "https://www.bbc.co.uk/sport/football/scottish-league-two/table"
-  ),
   
   # Top 5 Leagues
   "La Liga" = list(
@@ -83,7 +71,7 @@ BETTING_LEAGUES <- list(
   ),
   "Belgian Pro League" = list(
     slug = "soccer_belgium_first_div",
-    bbc_url = "https://www.bbc.co.uk/sport/football/belgian-first-division-a/table"
+    bbc_url = "https://www.bbc.co.uk/sport/football/belgian-pro-league/table"
   ),
   "Primeira Liga" = list(
     slug = "soccer_portugal_primeira_liga",
@@ -228,6 +216,8 @@ BETTING_EXTRA_MAPPINGS <- c(
   "TSG 1899 Hoffenheim" = "Hoffenheim",
   "FC Koln" = "Koln",
   "1. FC Koln" = "Koln",
+  "1. FC KÃ¶ln" = "Koln",
+  "FC KÃ¶ln" = "Koln",
   "1. FC Köln" = "Koln",
   "FC Köln" = "Koln",
   "FC St. Pauli" = "FC St Pauli",
@@ -238,6 +228,7 @@ BETTING_EXTRA_MAPPINGS <- c(
   "VfL Bochum 1848" = "Bochum",
   "1. FC Union Berlin" = "Union Berlin",
   "Borussia Monchengladbach" = "Borussia Monchengladbach",
+  "Borussia Mönchengladbach" = "Borussia Monchengladbach",
   # Note: "SC Freiburg" is already canonical in TEAM_LOGO_PATHS
   
   # Ligue 1
@@ -281,7 +272,112 @@ BETTING_EXTRA_MAPPINGS <- c(
   "Celtic FC" = "Celtic",
   "Rangers FC" = "Rangers",
   "Falkirk F.C." = "Falkirk",
-  "Falkirk FC" = "Falkirk"
+  "Falkirk FC" = "Falkirk",
+  
+  # Belgian Pro League
+  "Cercle Brugge KSV" = "Cercle Brugge",
+  "Club Brugge KV" = "Club Brugge",
+  "KRC Genk" = "Genk",
+  "RSC Anderlecht" = "Anderlecht",
+  "R. Antwerp FC" = "Antwerp",
+  "Royal Antwerp" = "Antwerp",
+  "KAA Gent" = "Gent",
+  "KV Mechelen" = "Mechelen",
+  "Sint-Truidense VV" = "Sint-Truiden",
+  "OH Leuven" = "Leuven",
+  "Sporting Charleroi" = "Charleroi",
+  "Standard Liege" = "Standard Liege",
+  "Standard de Liege" = "Standard Liege",
+  "Union Saint-Gilloise" = "Union SG",
+  "Royale Union Saint-Gilloise" = "Union SG",
+  "FCV Dender EH" = "Dender",
+  "STVV" = "Sint-Truiden",
+  "Beerschot VA" = "Beerschot",
+  "Beerschot V.A." = "Beerschot",
+  
+  # Primeira Liga (Portugal)
+  "Rio Ave FC" = "Rio Ave",
+  "CF Estrela" = "Estrela",
+  "CF Estrela da Amadora" = "Estrela",
+  "Estrela da Amadora" = "Estrela",
+  "Estrela Amadora" = "Estrela",
+  "SL Benfica" = "Benfica",
+  "Sporting CP" = "Sporting",
+  "Sporting Lisbon" = "Sporting",
+  "FC Porto" = "Porto",
+  "SC Braga" = "Braga",
+  "Vitoria SC" = "Vitoria",
+  "Vitoria de Guimaraes" = "Vitoria",
+  "Gil Vicente FC" = "Gil Vicente",
+  "CD Santa Clara" = "Santa Clara",
+  "Moreirense FC" = "Moreirense",
+  "Boavista FC" = "Boavista",
+  "Casa Pia AC" = "Casa Pia",
+  "GD Estoril Praia" = "Estoril",
+  "Estoril Praia" = "Estoril",
+  "FC Arouca" = "Arouca",
+  "FC Famalicao" = "Famalicao",
+  "Famalicão" = "Famalicao",
+  "AVS Futebol SAD" = "AVS",
+  "SC Farense" = "Farense",
+  "CD Nacional" = "Nacional",
+  "CD Tondela" = "Tondela",
+  "FC Alverca" = "Alverca",
+  
+  # Swiss Super League
+  "FC Basel" = "Basel",
+  "FC Basel 1893" = "Basel",
+  "FC Zurich" = "Zurich",
+  "FC Zürich" = "Zurich",
+  "FC St Gallen" = "St Gallen",
+  "FC St. Gallen" = "St Gallen",
+  "FC St. Gallen 1879" = "St Gallen",
+  "FC Lugano" = "Lugano",
+  "FC Luzern" = "Luzern",
+  "FC Lausanne-Sport" = "Lausanne",
+  "Lausanne-Sport" = "Lausanne",
+  "BSC Young Boys" = "Young Boys",
+  "Yverdon Sport FC" = "Yverdon",
+  "Yverdon-Sport" = "Yverdon",
+  "FC Sion" = "Sion",
+  "FC Winterthur" = "Winterthur",
+  "Grasshopper Club Zurich" = "Grasshoppers",
+  "Grasshoppers" = "Grasshoppers",
+  
+  # Eredivisie (Netherlands)
+  "FC Utrecht" = "Utrecht",
+  "Heracles Almelo" = "Heracles",
+  "Sparta Rotterdam" = "Sparta",
+  "FC Twente" = "Twente",
+  "FC Twente Enschede" = "Twente",
+  "FC Groningen" = "Groningen",
+  "SC Heerenveen" = "Heerenveen",
+  "Fortuna Sittard" = "Fortuna Sittard",
+  "RKC Waalwijk" = "Waalwijk",
+  "NEC Nijmegen" = "NEC",
+  "NEC" = "NEC",
+  "Go Ahead Eagles" = "Go Ahead Eagles",
+  "PEC Zwolle" = "PEC Zwolle",
+  "NAC Breda" = "NAC Breda",
+  "Willem II" = "Willem II",
+  "Almere City FC" = "Almere City",
+  "AZ Alkmaar" = "AZ",
+  "AZ" = "AZ",
+  "PSV Eindhoven" = "PSV",
+  "PSV" = "PSV",
+  "Ajax Amsterdam" = "Ajax",
+  "Ajax" = "Ajax",
+  "Feyenoord Rotterdam" = "Feyenoord",
+  
+  # La Liga 2 / Segunda (if appearing in odds)
+  "Real Oviedo" = "Real Oviedo",
+  "Real Sporting de Gijon" = "Sporting Gijon",
+  "Sporting Gijon" = "Sporting Gijon",
+  "Racing Santander" = "Racing Santander",
+  "Real Zaragoza" = "Zaragoza",
+  "Cadiz CF" = "Cadiz",
+  "Elche CF" = "Elche",
+  "Granada CF" = "Granada"
 )
 
 # =============================================================================
@@ -305,6 +401,19 @@ normalize_betting_team_name <- function(team_name) {
 #' Vectorized version
 normalize_betting_team_names <- function(team_names) {
   sapply(team_names, normalize_betting_team_name, USE.NAMES = FALSE)
+}
+
+#' Apply team name mappings to standings dataframe
+#' @param standings Standings tibble with 'team' column
+#' @return Standings with team names normalized
+apply_betting_team_mappings <- function(standings) {
+  if (is.null(standings) || nrow(standings) == 0) return(standings)
+  
+  standings %>%
+    mutate(
+      team = normalize_betting_team_names(team),
+      team_n = tolower(trimws(team))
+    )
 }
 
 #' Get list of available betting leagues

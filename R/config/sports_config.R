@@ -46,8 +46,8 @@ get_sports_config <- function() {
       color = APP_COLORS$coral,
       color_light = "#E8B8A8",
       icon_scale = 1.2,
-      sections = c("ffpc_bestball", "handbuild", "showdown", "projections"),
-      default_section = "ffpc_bestball"
+      sections = c("fanteam_playoffs", "ffpc_bestball", "handbuild", "showdown", "projections"),
+      default_section = "fanteam_playoffs"
     ),
     
     nhl = list(
@@ -101,6 +101,12 @@ get_sections_config <- function() {
       id = "ffpc_bestball",
       name = "FFPC Bestball",
       icon = "trophy"
+    ),
+    
+    fanteam_playoffs = list(
+      id = "fanteam_playoffs",
+      name = "FT Playoffs",
+      icon = "award"
     ),
     
     # Soccer sections - ACTIVE

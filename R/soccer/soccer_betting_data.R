@@ -47,8 +47,12 @@ process_betting_table <- function(table_data, league_name) {
   # Clean column names
   colnames(table_data) <- tolower(gsub(" ", "_", colnames(table_data)))
   
-  result <- table_data %>%
+  # Convert all columns to character first to avoid list columns from HTML parsing
+  table_data <- table_data %>%
     as_tibble() %>%
+    mutate(across(everything(), ~ if (is.list(.x)) sapply(.x, function(v) paste(v, collapse = " ")) else as.character(.x)))
+  
+  result <- table_data %>%
     mutate(
       team = if ("team" %in% names(.)) gsub("^\\d+", "", team) else 
         if ("club" %in% names(.)) gsub("^\\d+", "", club) else NA_character_,
@@ -63,6 +67,9 @@ process_betting_table <- function(table_data, league_name) {
     ) %>%
     select(any_of(c("team", "games_played", "points", "form"))) %>%
     filter(!is.na(team))
+  
+  # Ensure team is character (belt and suspenders)
+  result$team <- as.character(result$team)
   
   # Calculate form points (last 6 games)
   form_data <- calculate_betting_form_points(result$form)
@@ -341,15 +348,58 @@ fetch_betting_data <- function(selected_leagues = NULL, force_refresh = FALSE) {
     Sys.sleep(BETTING_API_CALL_DELAY)
     
     # Fetch standings from BBC
-    standings <- scrape_betting_bbc_table(league_info$bbc_url, league_name)
-    standings <- apply_betting_team_mappings(standings)
+    standings <- tryCatch({
+      st <- scrape_betting_bbc_table(league_info$bbc_url, league_name)
+      st <- apply_betting_team_mappings(st)
+      
+      # Validate column types before adding to list
+      if (nrow(st) > 0) {
+        st$team <- as.character(st$team)
+        st$team_n <- as.character(st$team_n)
+        st$league_name <- as.character(st$league_name)
+      }
+      st
+    }, error = function(e) {
+      log_debug("Betting Data: Standings error for", league_name, "-", e$message, level = "WARN")
+      empty_betting_standings(league_name)
+    })
+    
     all_standings[[league_name]] <- standings
     
     Sys.sleep(0.5)  # Be nice to BBC
   }
   
-  odds_data <- dplyr::bind_rows(all_odds)
-  standings_data <- dplyr::bind_rows(all_standings)
+  # Safely bind rows with type validation
+  odds_data <- tryCatch({
+    dplyr::bind_rows(all_odds)
+  }, error = function(e) {
+    log_debug("Betting Data: Error binding odds -", e$message, level = "ERROR")
+    # Return only successful leagues
+    valid_odds <- Filter(function(x) nrow(x) > 0, all_odds)
+    if (length(valid_odds) > 0) {
+      dplyr::bind_rows(valid_odds[1])  # At least return first valid
+    } else {
+      empty_betting_odds("Unknown")
+    }
+  })
+  
+  standings_data <- tryCatch({
+    # Filter out any standings with list columns before binding
+    valid_standings <- lapply(all_standings, function(st) {
+      if (is.null(st) || nrow(st) == 0) return(empty_betting_standings(""))
+      # Force all columns to atomic types
+      st$team <- as.character(st$team)
+      st$team_n <- as.character(st$team_n)
+      st$league_name <- as.character(st$league_name)
+      st
+    })
+    dplyr::bind_rows(valid_standings)
+  }, error = function(e) {
+    log_debug("Betting Data: Error binding standings -", e$message, level = "ERROR")
+    # Return empty standings on error
+    empty_betting_standings("Unknown")
+  })
+  
   timestamp <- Sys.time()
   
   # Save to cache
