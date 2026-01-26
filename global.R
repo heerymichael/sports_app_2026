@@ -162,7 +162,13 @@ cat("[STARTUP]     soccer_fanteam_loader.R loaded\n")
 source("R/soccer/soccer_fanteam_matching.R") # Player name matching
 cat("[STARTUP]     soccer_fanteam_matching.R loaded\n")
 
-# Betting module (new)
+# Shot share analysis module
+source("R/soccer/soccer_shot_share.R")       # Shot share analysis functions
+cat("[STARTUP]     soccer_shot_share.R loaded\n")
+source("R/soccer/mod_soccer_shot_share.R")   # Shot share UI module
+cat("[STARTUP]     mod_soccer_shot_share.R loaded\n")
+
+# Betting module
 source("R/soccer/soccer_betting_config.R")  # Betting config, league definitions
 cat("[STARTUP]     soccer_betting_config.R loaded\n")
 source("R/soccer/soccer_betting_data.R")    # Odds API, BBC scraper, data prep

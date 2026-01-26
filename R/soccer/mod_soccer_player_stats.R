@@ -334,57 +334,182 @@ soccer_player_stats_ui <- function(id) {
     tags$br(),
     
     # =========================================================================
-    # Section 2: Stats by Gameweek (Player Comparison)
+    # Section 2: Player Comparison (4 columns)
     # =========================================================================
     ui_card(
       title = "Player Comparison by Gameweek",
       color = "sage",
       
+      # Custom styles for slider
+      tags$style(HTML("
+        .player-stats-slider .irs--shiny .irs-bar {
+          background: var(--accent-sage);
+          border-top: 1px solid var(--accent-sage);
+          border-bottom: 1px solid var(--accent-sage);
+        }
+        .player-stats-slider .irs--shiny .irs-from,
+        .player-stats-slider .irs--shiny .irs-to,
+        .player-stats-slider .irs--shiny .irs-single {
+          background: var(--accent-sage);
+        }
+        .player-stats-slider .irs--shiny .irs-handle {
+          border: 2px solid var(--accent-sage);
+          background: white;
+        }
+        .player-stats-slider .irs--shiny .irs-line {
+          background: var(--bg-secondary);
+        }
+      ")),
+      
+      # Four player selector columns
       fluidRow(
-        column(5,
+        column(3,
+               tags$label("Player 1", class = "control-label", style = "font-weight: 600;"),
                shinyWidgets::pickerInput(
-                 ns("compare_players"),
-                 "Select Players",
+                 ns("compare_team_1"),
+                 NULL,
                  choices = NULL,
                  selected = NULL,
-                 multiple = TRUE,
                  options = shinyWidgets::pickerOptions(
-                   actionsBox = TRUE,
                    liveSearch = TRUE,
-                   maxOptions = 10,
-                   noneSelectedText = "Select players to compare",
-                   selectedTextFormat = "count > 3",
-                   countSelectedText = "{0} players selected"
+                   noneSelectedText = "Select Team"
+                 )
+               ),
+               shinyWidgets::pickerInput(
+                 ns("compare_player_1"),
+                 NULL,
+                 choices = NULL,
+                 selected = NULL,
+                 options = shinyWidgets::pickerOptions(
+                   liveSearch = TRUE,
+                   noneSelectedText = "Select Player"
                  )
                )
         ),
         column(3,
-               sliderInput(
-                 ns("gw_range"),
-                 "Gameweek Range",
-                 min = 1,
-                 max = 38,
-                 value = c(1, 10),
-                 step = 1
+               div(
+                 id = ns("player_2_container"),
+                 style = "opacity: 0.5;",
+                 tags$label("Player 2", class = "control-label", style = "font-weight: 600;"),
+                 shinyWidgets::pickerInput(
+                   ns("compare_team_2"),
+                   NULL,
+                   choices = NULL,
+                   selected = NULL,
+                   options = shinyWidgets::pickerOptions(
+                     liveSearch = TRUE,
+                     noneSelectedText = "Select Team"
+                   )
+                 ),
+                 shinyWidgets::pickerInput(
+                   ns("compare_player_2"),
+                   NULL,
+                   choices = NULL,
+                   selected = NULL,
+                   options = shinyWidgets::pickerOptions(
+                     liveSearch = TRUE,
+                     noneSelectedText = "Select Player"
+                   )
+                 )
+               )
+        ),
+        column(3,
+               div(
+                 id = ns("player_3_container"),
+                 style = "opacity: 0.5;",
+                 tags$label("Player 3", class = "control-label", style = "font-weight: 600;"),
+                 shinyWidgets::pickerInput(
+                   ns("compare_team_3"),
+                   NULL,
+                   choices = NULL,
+                   selected = NULL,
+                   options = shinyWidgets::pickerOptions(
+                     liveSearch = TRUE,
+                     noneSelectedText = "Select Team"
+                   )
+                 ),
+                 shinyWidgets::pickerInput(
+                   ns("compare_player_3"),
+                   NULL,
+                   choices = NULL,
+                   selected = NULL,
+                   options = shinyWidgets::pickerOptions(
+                     liveSearch = TRUE,
+                     noneSelectedText = "Select Player"
+                   )
+                 )
+               )
+        ),
+        column(3,
+               div(
+                 id = ns("player_4_container"),
+                 style = "opacity: 0.5;",
+                 tags$label("Player 4", class = "control-label", style = "font-weight: 600;"),
+                 shinyWidgets::pickerInput(
+                   ns("compare_team_4"),
+                   NULL,
+                   choices = NULL,
+                   selected = NULL,
+                   options = shinyWidgets::pickerOptions(
+                     liveSearch = TRUE,
+                     noneSelectedText = "Select Team"
+                   )
+                 ),
+                 shinyWidgets::pickerInput(
+                   ns("compare_player_4"),
+                   NULL,
+                   choices = NULL,
+                   selected = NULL,
+                   options = shinyWidgets::pickerOptions(
+                     liveSearch = TRUE,
+                     noneSelectedText = "Select Player"
+                   )
+                 )
+               )
+        )
+      ),
+      
+      tags$hr(style = "margin: 0.5rem 0 1rem 0; border-color: var(--bg-secondary);"),
+      
+      # Chart controls row
+      fluidRow(
+        column(4,
+               div(class = "player-stats-slider",
+                   sliderInput(
+                     ns("gw_range"),
+                     "Gameweek Range",
+                     min = 1,
+                     max = 38,
+                     value = c(1, 22),
+                     step = 1
+                   )
                )
         ),
         column(4,
-               div(
-                 style = "padding-top: 25px;",
-                 shinyWidgets::pickerInput(
-                   ns("compare_metric"),
-                   "Metric",
-                   choices = c(
-                     "FanTeam Points" = "total_pts",
-                     "Minutes" = "mins_played",
-                     "Goals" = "goals",
-                     "Assists" = "assists",
-                     "Shots on Target" = "sot",
-                     "Clean Sheets" = "cs",
-                     "Saves" = "saves"
-                   ),
-                   selected = "total_pts"
-                 )
+               shinyWidgets::pickerInput(
+                 ns("compare_metric"),
+                 "Metric",
+                 choices = c(
+                   "FanTeam Points" = "pts",
+                   "Minutes" = "mins",
+                   "Goals" = "goals",
+                   "Assists" = "assists",
+                   "Shots on Target" = "sot",
+                   "Clean Sheets" = "cs",
+                   "Saves" = "saves"
+                 ),
+                 selected = "pts"
+               )
+        ),
+        column(4,
+               shinyWidgets::pickerInput(
+                 ns("chart_type"),
+                 "Chart Type",
+                 choices = c(
+                   "Line Chart" = "line",
+                   "Bar Charts" = "bar"
+                 ),
+                 selected = "line"
                )
         )
       ),
@@ -392,68 +517,6 @@ soccer_player_stats_ui <- function(id) {
       tags$hr(style = "margin: 0.5rem 0 1rem 0; border-color: var(--bg-secondary);"),
       
       uiOutput(ns("comparison_content"))
-    ),
-    
-    tags$br(),
-    
-    # =========================================================================
-    # Section 3: Gameweek Detail
-    # =========================================================================
-    ui_card(
-      title = "Gameweek Detail",
-      color = "sage",
-      
-      fluidRow(
-        column(2,
-               shinyWidgets::pickerInput(
-                 ns("detail_gw"),
-                 "Gameweek",
-                 choices = NULL,
-                 selected = NULL,
-                 options = shinyWidgets::pickerOptions(
-                   liveSearch = FALSE,
-                   size = 10
-                 )
-               )
-        ),
-        column(3,
-               shinyWidgets::pickerInput(
-                 ns("detail_position"),
-                 "Position Filter",
-                 choices = c("All", "GK", "DEF", "MID", "FWD"),
-                 selected = "All",
-                 multiple = TRUE,
-                 options = shinyWidgets::pickerOptions(
-                   actionsBox = TRUE,
-                   noneSelectedText = "All Positions"
-                 )
-               )
-        ),
-        column(3,
-               shinyWidgets::pickerInput(
-                 ns("detail_team"),
-                 "Team Filter",
-                 choices = NULL,
-                 selected = NULL,
-                 multiple = TRUE,
-                 options = shinyWidgets::pickerOptions(
-                   actionsBox = TRUE,
-                   liveSearch = TRUE,
-                   noneSelectedText = "All Teams"
-                 )
-               )
-        ),
-        column(4,
-               div(
-                 style = "padding-top: 25px;",
-                 textOutput(ns("detail_count"))
-               )
-        )
-      ),
-      
-      tags$hr(style = "margin: 0.5rem 0 1rem 0; border-color: var(--bg-secondary);"),
-      
-      reactableOutput(ns("detail_table"))
     )
   )
 }
@@ -511,7 +574,25 @@ soccer_player_stats_server <- function(id) {
         rv$initialized <- TRUE
         
         log_debug("FanTeam stats data loaded successfully", level = "INFO")
-        if (!is.null(rv$overview_data)) log_debug("  Overview:", nrow(rv$overview_data), "rows", level = "INFO")
+        if (!is.null(rv$overview_data)) {
+          log_debug("  Overview:", nrow(rv$overview_data), "rows", level = "INFO")
+          log_debug("  Overview columns:", paste(names(rv$overview_data), collapse = ", "), level = "DEBUG")
+          
+          # Check for Haaland
+          haaland_rows <- rv$overview_data %>% filter(grepl("haaland", tolower(name)))
+          if (nrow(haaland_rows) > 0) {
+            log_debug("  Found Haaland in overview:", nrow(haaland_rows), "rows", level = "DEBUG")
+            log_debug("    x1_mp value:", haaland_rows$x1_mp[1], "type:", class(haaland_rows$x1_mp[1]), level = "DEBUG")
+          } else {
+            log_debug("  WARNING: Haaland NOT found in overview data!", level = "WARN")
+          }
+          
+          # Check x1_mp column
+          if ("x1_mp" %in% names(rv$overview_data)) {
+            x1mp_summary <- summary(as.numeric(rv$overview_data$x1_mp))
+            log_debug("  x1_mp summary - Min:", x1mp_summary[1], "Max:", x1mp_summary[6], "NAs:", sum(is.na(rv$overview_data$x1_mp)), level = "DEBUG")
+          }
+        }
         if (!is.null(rv$by_gw_data)) log_debug("  By GW:", nrow(rv$by_gw_data), "rows", level = "INFO")
         if (!is.null(rv$detail_data)) log_debug("  Detail:", nrow(rv$detail_data), "rows", level = "INFO")
         
@@ -645,40 +726,57 @@ soccer_player_stats_server <- function(id) {
           choicesOpt = list(content = team_content)
         )
         
-        # Update detail team filter
-        shinyWidgets::updatePickerInput(
-          session, "detail_team",
-          choices = teams,
-          selected = NULL,
-          choicesOpt = list(content = team_content)
-        )
+        # Update all 4 comparison team selectors
+        for (i in 1:4) {
+          shinyWidgets::updatePickerInput(
+            session, paste0("compare_team_", i),
+            choices = teams,
+            selected = NULL,
+            choicesOpt = list(content = team_content)
+          )
+        }
       }
     })
     
     # =========================================================================
-    # UPDATE PLAYER CHOICES
+    # UPDATE PLAYER CHOICES BASED ON TEAM SELECTION
     # =========================================================================
     
-    observe({
-      req(rv$overview_data)
-      
-      # Get players sorted by total points
-      players <- rv$overview_data %>%
-        arrange(desc(total_pts)) %>%
-        pull(name) %>%
-        unique()
-      
-      players <- players[!is.na(players) & players != ""]
-      
-      shinyWidgets::updatePickerInput(
-        session, "compare_players",
-        choices = players,
-        selected = NULL
-      )
-    })
+    # Helper function for updating player dropdown based on team
+    update_player_choices <- function(team_input_id, player_input_id) {
+      observe({
+        req(rv$overview_data)
+        
+        team <- input[[team_input_id]]
+        data <- rv$overview_data
+        
+        if (!is.null(team) && team != "") {
+          data <- data %>% filter(team == !!team)
+        }
+        
+        # Get players sorted by total_pts descending
+        players <- data %>%
+          arrange(desc(total_pts)) %>%
+          pull(name) %>%
+          unique()
+        
+        players <- players[!is.na(players) & players != ""]
+        
+        shinyWidgets::updatePickerInput(
+          session, player_input_id,
+          choices = players,
+          selected = NULL
+        )
+      })
+    }
+    
+    update_player_choices("compare_team_1", "compare_player_1")
+    update_player_choices("compare_team_2", "compare_player_2")
+    update_player_choices("compare_team_3", "compare_player_3")
+    update_player_choices("compare_team_4", "compare_player_4")
     
     # =========================================================================
-    # UPDATE GAMEWEEK CHOICES AND SLIDER
+    # UPDATE GAMEWEEK SLIDER
     # =========================================================================
     
     observe({
@@ -704,13 +802,6 @@ soccer_player_stats_server <- function(id) {
             max = max_gw,
             value = c(min_gw, max_gw)
           )
-          
-          # Update detail dropdown (most recent first)
-          shinyWidgets::updatePickerInput(
-            session, "detail_gw",
-            choices = as.character(rev(gws)),
-            selected = as.character(max_gw)
-          )
         }
       }
     })
@@ -724,18 +815,27 @@ soccer_player_stats_server <- function(id) {
       
       data <- rv$overview_data
       
+      log_debug("Overview data before filters:", nrow(data), "rows", level = "DEBUG")
+      log_debug("Overview columns:", paste(names(data), collapse = ", "), level = "DEBUG")
+      
       # Position filter
       pos_filter <- input$position_filter
       if (!is.null(pos_filter) && !"All" %in% pos_filter && length(pos_filter) > 0) {
         data <- data %>% filter(pos %in% pos_filter)
+        log_debug("After position filter:", nrow(data), "rows", level = "DEBUG")
       }
       
       # Min games filter - count non-zero minute appearances
       min_games <- input$min_games
       if (!is.null(min_games) && min_games > 0) {
-        # Use x1_mp (1+ minute appearances) if available, otherwise estimate
+        # Use x1_mp (1+ minute appearances) if available
         if ("x1_mp" %in% names(data)) {
-          data <- data %>% filter(x1_mp >= min_games)
+          # Convert to numeric to handle character columns
+          data <- data %>% 
+            mutate(x1_mp_num = as.numeric(x1_mp)) %>%
+            filter(!is.na(x1_mp_num) & x1_mp_num >= min_games) %>%
+            select(-x1_mp_num)
+          log_debug("After min games filter (x1_mp >=", min_games, "):", nrow(data), "rows", level = "DEBUG")
         }
       }
       
@@ -743,6 +843,7 @@ soccer_player_stats_server <- function(id) {
       team_filter <- input$overview_team_filter
       if (!is.null(team_filter) && length(team_filter) > 0) {
         data <- data %>% filter(team %in% team_filter)
+        log_debug("After team filter:", nrow(data), "rows", level = "DEBUG")
       }
       
       return(data)
@@ -809,7 +910,8 @@ soccer_player_stats_server <- function(id) {
           minWidth = 70,
           align = "center",
           cell = function(value) {
-            sprintf("%.1fM", value / 10)
+            if (is.null(value) || is.na(value) || !is.numeric(value)) return("-")
+            sprintf("%.1fM", as.numeric(value) / 10)
           }
         ),
         total_pts = colDef(
@@ -879,10 +981,22 @@ soccer_player_stats_server <- function(id) {
     # SECTION 2: PLAYER COMPARISON
     # =========================================================================
     
+    # Reactive to get selected players from 4 individual selectors
+    selected_players <- reactive({
+      players <- c(
+        input$compare_player_1,
+        input$compare_player_2,
+        input$compare_player_3,
+        input$compare_player_4
+      )
+      players <- players[!is.null(players) & players != "" & !is.na(players)]
+      return(players)
+    })
+    
     output$comparison_content <- renderUI({
-      players <- input$compare_players
+      players <- selected_players()
       
-      if (is.null(players) || length(players) == 0) {
+      if (length(players) == 0) {
         return(div(
           style = "text-align: center; padding: 3rem; color: var(--text-muted);",
           icon("users", style = "font-size: 2rem; margin-bottom: 1rem;"),
@@ -891,15 +1005,17 @@ soccer_player_stats_server <- function(id) {
       }
       
       tagList(
-        plotOutput(ns("comparison_plot"), height = "400px"),
+        ggiraph::girafeOutput(ns("comparison_plot"), height = "450px"),
         tags$hr(style = "margin: 1rem 0; border-color: var(--bg-secondary);"),
         reactableOutput(ns("comparison_table"))
       )
     })
     
     comparison_data <- reactive({
-      req(rv$detail_data, input$compare_players, input$gw_range)
-      req(length(input$compare_players) > 0)
+      req(rv$detail_data, input$gw_range)
+      
+      players <- selected_players()
+      req(length(players) > 0)
       
       data <- rv$detail_data
       
@@ -910,26 +1026,27 @@ soccer_player_stats_server <- function(id) {
       
       # Filter by selected players and GW range
       data <- data %>%
-        filter(name %in% input$compare_players) %>%
+        filter(name %in% players) %>%
         filter(!!sym(gw_col) >= input$gw_range[1] & !!sym(gw_col) <= input$gw_range[2])
       
       return(data)
     })
     
-    output$comparison_plot <- renderPlot({
+    output$comparison_plot <- ggiraph::renderGirafe({
       data <- comparison_data()
       req(data, nrow(data) > 0)
       
       metric <- input$compare_metric
+      chart_type <- input$chart_type
+      
       if (is.null(metric) || !metric %in% names(data)) {
-        # Try to find a valid metric
-        metric <- intersect(c("total_pts", "pts", "goals", "mins_played"), names(data))[1]
+        metric <- intersect(c("pts", "total_pts", "goals", "mins"), names(data))[1]
         if (is.null(metric)) return(NULL)
       }
       
       gw_col <- if ("gw" %in% names(data)) "gw" else "gameweek"
       
-      # Prepare data for plotting
+      # Prepare data
       plot_data <- data %>%
         mutate(
           gw_num = as.numeric(!!sym(gw_col)),
@@ -939,73 +1056,125 @@ soccer_player_stats_server <- function(id) {
       
       if (nrow(plot_data) == 0) return(NULL)
       
-      # Get metric label
+      # Metric labels
       metric_labels <- c(
-        "total_pts" = "FanTeam Points",
-        "pts" = "Points",
-        "mins_played" = "Minutes",
-        "goals" = "Goals",
-        "assists" = "Assists",
-        "sot" = "Shots on Target",
-        "cs" = "Clean Sheets",
-        "saves" = "Saves"
+        "pts" = "FanTeam Points", "total_pts" = "FanTeam Points",
+        "mins" = "Minutes", "mins_played" = "Minutes",
+        "goals" = "Goals", "assists" = "Assists",
+        "sot" = "Shots on Target", "cs" = "Clean Sheets", "saves" = "Saves"
       )
       metric_label <- if (metric %in% names(metric_labels)) metric_labels[[metric]] else metric
       
-      # Create color palette
+      # Color palette
       n_players <- length(unique(plot_data$name))
-      if (n_players <= 8) {
-        player_colors <- c(
-          APP_COLORS$sage,
-          APP_COLORS$coral,
-          APP_COLORS$primary,
-          "#6B8E23",
-          "#4682B4",
-          "#9370DB",
-          "#20B2AA",
-          "#CD853F"
-        )[1:n_players]
-      } else {
-        player_colors <- scales::hue_pal()(n_players)
-      }
+      player_colors <- c(APP_COLORS$sage, APP_COLORS$coral, APP_COLORS$primary,
+                         "#6B8E23", "#4682B4", "#9370DB", "#20B2AA", "#CD853F")[1:n_players]
       names(player_colors) <- unique(plot_data$name)
       
-      # Create plot
-      ggplot(plot_data, aes(x = gw_num, y = metric_value, color = name, group = name)) +
-        geom_line(linewidth = 1.5) +
-        geom_point(size = 3) +
-        scale_color_manual(values = player_colors) +
-        scale_x_continuous(breaks = seq(min(plot_data$gw_num), max(plot_data$gw_num), by = 1)) +
-        labs(
-          y = metric_label,
-          x = "Gameweek",
-          color = NULL
-        ) +
-        theme_app() +
-        theme(
-          legend.position = "top",
-          legend.text = element_text(size = 11, face = "bold"),
-          axis.title.x = element_text(size = 11),
-          axis.title.y = element_text(size = 11)
+      # Build tooltips
+      plot_data <- plot_data %>%
+        mutate(
+          tooltip_text = sprintf("<b>%s</b><br>GW %d: <b>%.0f</b> %s",
+                                 name, gw_num, metric_value, metric_label)
         )
-    }, bg = "transparent")
+      
+      # Y-axis limits
+      y_max <- max(plot_data$metric_value, na.rm = TRUE) * 1.15
+      y_min <- 0
+      
+      # X-axis breaks
+      gw_breaks <- seq(min(plot_data$gw_num), max(plot_data$gw_num), by = 1)
+      gw_labels <- paste0("GW", gw_breaks)
+      
+      # Build plot
+      if (is.null(chart_type) || chart_type == "line") {
+        p <- ggplot(plot_data, aes(x = gw_num, y = metric_value, color = name, group = name)) +
+          geom_hline(yintercept = 0, color = APP_COLORS$primary, linewidth = 0.8) +
+          ggiraph::geom_line_interactive(linewidth = 1.5, alpha = 0.8) +
+          ggiraph::geom_point_interactive(
+            aes(tooltip = tooltip_text, data_id = paste(name, gw_num)),
+            size = 4
+          ) +
+          scale_color_manual(values = player_colors) +
+          scale_x_continuous(
+            breaks = gw_breaks,
+            labels = gw_labels,
+            position = "top",
+            expand = expansion(mult = c(0.02, 0.02))
+          ) +
+          scale_y_continuous(limits = c(y_min, y_max), expand = expansion(mult = c(0, 0))) +
+          labs(y = metric_label, x = NULL, color = NULL) +
+          theme_app_timeseries() +
+          theme(
+            legend.position = "top",
+            legend.text = element_text(size = 11, face = "bold"),
+            axis.title.y = element_text(size = 11, face = "bold")
+          )
+        
+      } else {
+        # Faceted bar charts
+        p <- ggplot(plot_data, aes(x = gw_num, y = metric_value, fill = name)) +
+          geom_hline(yintercept = 0, color = APP_COLORS$primary, linewidth = 0.8) +
+          ggiraph::geom_col_interactive(
+            aes(tooltip = tooltip_text, data_id = paste(name, gw_num)),
+            width = 0.7
+          ) +
+          facet_wrap(~ name, ncol = 2, scales = "fixed") +
+          scale_fill_manual(values = player_colors) +
+          scale_x_continuous(
+            breaks = function(limits) seq(floor(min(limits)), ceiling(max(limits)), by = 2),
+            position = "top",
+            expand = expansion(mult = c(0.02, 0.02))
+          ) +
+          scale_y_continuous(limits = c(y_min, y_max), expand = expansion(mult = c(0, 0))) +
+          labs(y = metric_label, x = NULL) +
+          theme_app_timeseries() +
+          theme(
+            legend.position = "none",
+            strip.text = element_text(size = 12, face = "bold"),
+            axis.title.y = element_text(size = 11, face = "bold"),
+            panel.spacing = unit(1.5, "lines")
+          )
+      }
+      
+      ggiraph::girafe(
+        ggobj = p,
+        width_svg = 10,
+        height_svg = 5.5,
+        options = list(
+          ggiraph::opts_tooltip(
+            css = "background-color: white; border: 2px solid #3B3226; border-radius: 6px; padding: 8px 12px; font-family: 'Plus Jakarta Sans', sans-serif; font-size: 12px; box-shadow: 3px 3px 0 rgba(59, 50, 38, 0.25);",
+            use_fill = FALSE
+          ),
+          ggiraph::opts_hover(css = "stroke-width: 3; cursor: pointer;"),
+          ggiraph::opts_hover_inv(css = "opacity: 0.3;")
+        )
+      )
+    })
     
     output$comparison_table <- renderReactable({
       data <- comparison_data()
       req(data, nrow(data) > 0)
       
       metric <- input$compare_metric
-      if (is.null(metric) || !metric %in% names(data)) return(NULL)
+      if (is.null(metric) || !metric %in% names(data)) {
+        metric <- intersect(c("pts", "total_pts", "goals", "mins"), names(data))[1]
+        if (is.null(metric)) return(NULL)
+      }
+      
+      # Ensure metric column is numeric
+      data <- data %>%
+        mutate(metric_val = as.numeric(!!sym(metric)))
       
       # Summarize by player
       summary_data <- data %>%
         group_by(name) %>%
         summarise(
           games = n(),
-          total = sum(!!sym(metric), na.rm = TRUE),
-          avg = mean(!!sym(metric), na.rm = TRUE),
-          max = max(!!sym(metric), na.rm = TRUE),
-          min = min(!!sym(metric), na.rm = TRUE),
+          total = sum(metric_val, na.rm = TRUE),
+          avg = mean(metric_val, na.rm = TRUE),
+          max = max(metric_val, na.rm = TRUE),
+          min = min(metric_val, na.rm = TRUE),
           .groups = "drop"
         ) %>%
         arrange(desc(total))
@@ -1024,156 +1193,6 @@ soccer_player_stats_server <- function(id) {
         striped = TRUE,
         compact = TRUE,
         pagination = FALSE
-      )
-    })
-    
-    # =========================================================================
-    # SECTION 3: GAMEWEEK DETAIL
-    # =========================================================================
-    
-    filtered_detail <- reactive({
-      req(rv$detail_data, input$detail_gw)
-      
-      data <- rv$detail_data
-      
-      # Get gameweek column
-      gw_col <- if ("gw" %in% names(data)) "gw"
-      else if ("gameweek" %in% names(data)) "gameweek"
-      else return(NULL)
-      
-      # Filter by selected gameweek
-      data <- data %>% filter(as.character(!!sym(gw_col)) == input$detail_gw)
-      
-      # Position filter
-      pos_filter <- input$detail_position
-      if (!is.null(pos_filter) && !"All" %in% pos_filter && length(pos_filter) > 0) {
-        data <- data %>% filter(pos %in% pos_filter)
-      }
-      
-      # Team filter
-      team_filter <- input$detail_team
-      if (!is.null(team_filter) && length(team_filter) > 0) {
-        data <- data %>% filter(team %in% team_filter)
-      }
-      
-      return(data)
-    })
-    
-    output$detail_count <- renderText({
-      data <- filtered_detail()
-      if (is.null(data)) return("")
-      sprintf("Showing %d players", nrow(data))
-    })
-    
-    output$detail_table <- renderReactable({
-      data <- filtered_detail()
-      req(data, nrow(data) > 0)
-      
-      log_debug("Rendering detail table with", nrow(data), "rows", level = "DEBUG")
-      
-      # Select key columns for display (adjust based on actual columns)
-      display_cols <- c("name", "team", "pos", "pts", "mins", "goals", "sot", 
-                        "assists", "cs", "saves", "gc", "yel", "og", "bonus")
-      
-      # Keep only columns that exist
-      display_cols <- intersect(display_cols, names(data))
-      
-      if (length(display_cols) == 0) {
-        # Fall back to showing all columns except gw
-        display_cols <- setdiff(names(data), c("gw", "gameweek", "scrape_date", "id"))
-      }
-      
-      data <- data %>% select(all_of(display_cols))
-      
-      # Build column definitions
-      col_defs <- list()
-      
-      if ("name" %in% names(data)) {
-        col_defs$name <- colDef(
-          name = "Player",
-          minWidth = 160,
-          sticky = "left",
-          style = list(fontWeight = 600, background = "#fff")
-        )
-      }
-      
-      if ("team" %in% names(data)) {
-        col_defs$team <- colDef(
-          name = "Team",
-          minWidth = 140,
-          cell = function(value) {
-            logo <- get_soccer_team_logo(value)
-            if (!is.null(logo)) {
-              div(
-                style = "display: flex; align-items: center; gap: 8px;",
-                tags$img(src = logo, style = "width: 20px; height: 20px; object-fit: contain;"),
-                span(value)
-              )
-            } else {
-              value
-            }
-          }
-        )
-      }
-      
-      if ("pos" %in% names(data)) {
-        col_defs$pos <- colDef(
-          name = "Pos",
-          minWidth = 55,
-          align = "center",
-          cell = function(value) {
-            color <- get_position_color(value)
-            div(
-              style = sprintf("background: %s; color: white; padding: 2px 8px; border-radius: 4px; font-size: 0.75rem; font-weight: 700;", color),
-              value
-            )
-          }
-        )
-      }
-      
-      if ("pts" %in% names(data)) {
-        col_defs$pts <- colDef(name = "Pts", minWidth = 55, align = "center", style = list(fontWeight = 700))
-      }
-      
-      if ("mins" %in% names(data)) {
-        col_defs$mins <- colDef(name = "Mins", minWidth = 55, align = "center")
-      }
-      
-      # Standard stat columns
-      stat_cols <- c(
-        "goals" = "G", "sot" = "SoT", "assists" = "A", "cs" = "CS",
-        "saves" = "Sv", "gc" = "GC", "yel" = "Y", "og" = "OG", "bonus" = "Bon"
-      )
-      
-      for (col_name in names(stat_cols)) {
-        if (col_name %in% names(data)) {
-          col_defs[[col_name]] <- colDef(
-            name = stat_cols[[col_name]],
-            minWidth = 45,
-            align = "center"
-          )
-        }
-      }
-      
-      reactable(
-        data,
-        theme = app_reactable_theme(),
-        columns = col_defs,
-        defaultColDef = colDef(
-          minWidth = 50,
-          align = "center"
-        ),
-        searchable = TRUE,
-        sortable = TRUE,
-        defaultSorted = if ("pts" %in% names(data)) "pts" else names(data)[1],
-        defaultSortOrder = "desc",
-        pagination = TRUE,
-        defaultPageSize = 25,
-        showPageSizeOptions = TRUE,
-        pageSizeOptions = c(25, 50, 100),
-        striped = TRUE,
-        highlight = TRUE,
-        compact = TRUE
       )
     })
     

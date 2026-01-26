@@ -23,8 +23,8 @@ get_sports_config <- function() {
       color = APP_COLORS$sage,
       color_light = "#C5D4B8",
       icon_scale = 1.2,
-      # Updated: removed team_dashboard, player_dashboard; added betting, player_stats
-      sections = c("fanteam_contests", "player_stats", "betting"),
+      # Updated: added shot_share section
+      sections = c("fanteam_contests", "player_stats", "shot_share", "betting"),
       default_section = "fanteam_contests"
     ),
     
@@ -126,6 +126,12 @@ get_sections_config <- function() {
       id = "player_stats",
       name = "Player Stats",
       icon = "bar-chart-2"
+    ),
+    
+    shot_share = list(
+      id = "shot_share",
+      name = "Shot Share",
+      icon = "pie-chart"
     ),
     
     # Soccer sections - ARCHIVED (FBref dependency)
