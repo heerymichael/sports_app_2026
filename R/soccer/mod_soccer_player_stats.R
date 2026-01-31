@@ -297,8 +297,8 @@ soccer_player_stats_ui <- function(id) {
         column(2,
                numericInput(
                  ns("min_games"),
-                 "Min Games",
-                 value = 3,
+                 "Min Apps",
+                 value = 1,
                  min = 1,
                  max = 38,
                  step = 1
@@ -328,7 +328,136 @@ soccer_player_stats_ui <- function(id) {
       
       tags$hr(style = "margin: 0.5rem 0 1rem 0; border-color: var(--bg-secondary);"),
       
-      reactableOutput(ns("overview_table"))
+      reactableOutput(ns("overview_table")),
+      
+      # Comprehensive methodology explanation
+      div(
+        style = "margin-top: 1.25rem; padding: 1rem 1.25rem; background: var(--bg-secondary); border-radius: 8px; font-size: 0.82rem; color: var(--text-secondary); line-height: 1.6;",
+        
+        # Section 1: Sortino Ratio
+        div(
+          style = "margin-bottom: 0.75rem;",
+          tags$strong("1. Sortino Ratio — Measuring Quality", style = "color: var(--text-primary); font-size: 0.9rem;"),
+          tags$p(
+            style = "margin: 0.4rem 0 0 0;",
+            "Standard deviation penalizes ALL variance equally, but in DFS, upside variance is ",
+            tags$em("good"),
+            ". A player who scores 5, 5, 5, 15 has the same SD as one who scores 5, 5, 5, 0 — but they're clearly not equivalent. ",
+            tags$strong("Sortino"),
+            " fixes this by only measuring ",
+            tags$em("downside"),
+            " deviation (games below their average). The formula is simply: ",
+            tags$code("PPG ÷ Downside Deviation", style = "background: #e8e4df; padding: 1px 4px; border-radius: 3px;"),
+            ". Higher = more reliable points without penalizing ceiling games."
+          )
+        ),
+        
+        # Section 2: Bayesian Adjustment
+        div(
+          style = "margin-bottom: 0.75rem;",
+          tags$strong("2. Bayesian Adjustment — Handling Small Samples", style = "color: var(--text-primary); font-size: 0.9rem;"),
+          tags$p(
+            style = "margin: 0.4rem 0 0 0;",
+            "A player with 4 games including one 18-point haul looks elite, but that's likely noise. Raw Sortino would overrate them. We apply ",
+            tags$strong("Bayesian shrinkage"),
+            ": each player's Sortino is pulled toward their ",
+            tags$em("position average"),
+            " based on sample size. The formula: "
+          ),
+          tags$p(
+            style = "margin: 0.3rem 0; padding-left: 1rem; font-family: monospace; font-size: 0.78rem;",
+            "Adjusted = (Games × Raw_Sortino + 10 × Position_Avg) ÷ (Games + 10)"
+          ),
+          tags$p(
+            style = "margin: 0.3rem 0 0 0;",
+            "With 5 games, a player keeps ~33% of their individual Sortino; with 20 games, ~67%. This means: ",
+            tags$strong("players with few games regress toward 'average for their position'"),
+            " while established players keep most of their rating. No arbitrary cutoffs — the math handles it smoothly."
+          )
+        ),
+        
+        # Section 3: Floor & Ceiling
+        div(
+          style = "margin-bottom: 0.75rem;",
+          tags$strong("3. Floor & Ceiling — Realistic Range", style = "color: var(--text-primary); font-size: 0.9rem;"),
+          tags$p(
+            style = "margin: 0.4rem 0 0 0;",
+            tags$strong("Floor"),
+            " = 2nd worst score; ",
+            tags$strong("Ceiling"),
+            " = 2nd best score. We ignore one outlier each way to show the ",
+            tags$em("realistic"),
+            " range rather than freak results. (Players with <4 games show actual min/max.)"
+          )
+        ),
+        
+        # Section 4: Cash & GPP Grades
+        div(
+          style = "margin-bottom: 0.5rem;",
+          tags$strong("4. Cash & GPP Grades — Contest-Specific Ratings", style = "color: var(--text-primary); font-size: 0.9rem;"),
+          tags$p(
+            style = "margin: 0.4rem 0 0 0;",
+            "Grades combine metrics using ",
+            tags$strong("position-relative percentiles"),
+            " — a midfielder competes with midfielders, not goalkeepers. Each grade uses weightings tailored to the contest type:"
+          ),
+          # Cash weighting box
+          div(
+            style = "margin: 0.5rem 0 0.3rem 0; padding: 0.5rem 0.75rem; background: #E8EFE2; border-radius: 4px; border-left: 3px solid #A3BE8C;",
+            tags$strong("Cash", style = "color: var(--text-primary);"),
+            tags$span(" = ", style = "color: var(--text-secondary);"),
+            tags$span("40% Floor", style = "font-weight: 600;"),
+            tags$span(" + ", style = "color: var(--text-muted);"),
+            tags$span("40% Sortino", style = "font-weight: 600;"),
+            tags$span(" + ", style = "color: var(--text-muted);"),
+            tags$span("20% PPG", style = "font-weight: 600;"),
+            tags$br(),
+            tags$span("Prioritizes reliability: high floor + consistent scoring. PPG weighted lower because volatile high-scorers can hurt cash lineups.", style = "font-size: 0.75rem; color: var(--text-muted); font-style: italic;")
+          ),
+          # GPP weighting box
+          div(
+            style = "margin: 0.3rem 0 0.5rem 0; padding: 0.5rem 0.75rem; background: #FDF8F6; border-radius: 4px; border-left: 3px solid #D08770;",
+            tags$strong("GPP", style = "color: var(--text-primary);"),
+            tags$span(" = ", style = "color: var(--text-secondary);"),
+            tags$span("40% Ceiling", style = "font-weight: 600;"),
+            tags$span(" + ", style = "color: var(--text-muted);"),
+            tags$span("40% PPG", style = "font-weight: 600;"),
+            tags$span(" + ", style = "color: var(--text-muted);"),
+            tags$span("20% Sortino", style = "font-weight: 600;"),
+            tags$br(),
+            tags$span("Prioritizes upside: high ceiling + strong production. Sortino kept at 20% because even in 600-person GPPs you need quality, not pure dart throws.", style = "font-size: 0.75rem; color: var(--text-muted); font-style: italic;")
+          ),
+          tags$p(
+            style = "margin: 0.3rem 0 0 0;",
+            "A player can be ",
+            tags$strong("Cash A / GPP C"),
+            " (reliable but low ceiling) or ",
+            tags$strong("Cash C / GPP A"),
+            " (volatile but explosive). Look for mismatches to find edges for specific contest types."
+          )
+        ),
+        
+        # Color coding key with diverging palette
+        div(
+          style = "padding-top: 0.5rem; border-top: 1px solid var(--border);",
+          tags$strong("Sortino: ", style = "color: var(--text-primary);"),
+          tags$span("≥3.0 ", style = "color: #A3BE8C; font-weight: 700;"),
+          tags$span("Elite ", style = "color: var(--text-secondary);"),
+          tags$span("| 1.5–3.0 ", style = "font-weight: 600;"),
+          tags$span("Average ", style = "color: var(--text-secondary);"),
+          tags$span("| <1.5 ", style = "color: #D08770; font-weight: 700;"),
+          tags$span("Volatile   ", style = "color: var(--text-secondary);"),
+          tags$span(" · ", style = "color: var(--border-dark);"),
+          tags$strong("Grades: ", style = "color: var(--text-primary);"),
+          span(style = "background: #A3BE8C; color: white; padding: 1px 5px; border-radius: 3px; font-size: 0.75rem; font-weight: 700;", "A+"),
+          span(style = "background: #BACEA9; color: white; padding: 1px 5px; border-radius: 3px; font-size: 0.75rem; font-weight: 700; margin-left: 2px;", "A"),
+          span(style = "background: #D1DFC6; padding: 1px 5px; border-radius: 3px; font-size: 0.75rem; font-weight: 700; margin-left: 2px;", "B+"),
+          span(style = "background: #E8EFE2; padding: 1px 5px; border-radius: 3px; font-size: 0.75rem; font-weight: 700; margin-left: 2px;", "B"),
+          span(style = "background: #FFFFFF; border: 1px solid #E5E9F0; padding: 1px 5px; border-radius: 3px; font-size: 0.75rem; font-weight: 700; margin-left: 2px;", "C"),
+          span(style = "background: #F3E1DB; padding: 1px 5px; border-radius: 3px; font-size: 0.75rem; font-weight: 700; margin-left: 2px;", "D"),
+          span(style = "background: #D08770; color: white; padding: 1px 5px; border-radius: 3px; font-size: 0.75rem; font-weight: 700; margin-left: 2px;", "F")
+        )
+      )
     ),
     
     tags$br(),
@@ -628,6 +757,23 @@ soccer_player_stats_server <- function(id) {
       rv$loading <- FALSE
     })
     
+    # Update min_games default to 50% of max appearances
+    observe({
+      req(rv$overview_data)
+      
+      if ("x1_mp" %in% names(rv$overview_data)) {
+        max_apps <- max(as.numeric(rv$overview_data$x1_mp), na.rm = TRUE)
+        default_min <- max(1, floor(max_apps * 0.5))
+        
+        updateNumericInput(
+          session,
+          "min_games",
+          value = default_min,
+          max = max_apps
+        )
+      }
+    }) %>% bindEvent(rv$initialized, once = TRUE)
+    
     # =========================================================================
     # DATA STATUS
     # =========================================================================
@@ -861,41 +1007,212 @@ soccer_player_stats_server <- function(id) {
       
       log_debug("Rendering overview table with", nrow(data), "rows", level = "DEBUG")
       
-      # Select and order columns for display
-      display_cols <- c("name", "team", "pos", "price", "total_pts", "avg_pts", "ppm",
-                        "x1_mp", "mins_played", "goals", "sot", "assists", "cs", "saves")
+      # Get detail data for std dev and histogram calculations
+      detail <- rv$detail_data
       
-      # Keep only columns that exist
+      # Calculate stats from detail data: Sortino ratio, trimmed floor/ceiling, distribution
+      if (!is.null(detail) && nrow(detail) > 0) {
+        # Ensure pts column is numeric
+        pts_col <- if ("pts" %in% names(detail)) "pts" else if ("total_pts" %in% names(detail)) "total_pts" else NULL
+        
+        if (!is.null(pts_col)) {
+          detail[[pts_col]] <- as.numeric(detail[[pts_col]])
+          
+          # Calculate stats per player
+          player_stats <- detail %>%
+            group_by(name) %>%
+            summarise(
+              n_games = n(),
+              player_avg = mean(.data[[pts_col]], na.rm = TRUE),
+              # Trimmed floor/ceiling: 2nd worst/best if 4+ games, else min/max
+              pts_floor = {
+                pts <- sort(.data[[pts_col]][!is.na(.data[[pts_col]])])
+                if (length(pts) >= 4) pts[2] else if (length(pts) > 0) pts[1] else NA_real_
+              },
+              pts_ceiling = {
+                pts <- sort(.data[[pts_col]][!is.na(.data[[pts_col]])], decreasing = TRUE)
+                if (length(pts) >= 4) pts[2] else if (length(pts) > 0) pts[1] else NA_real_
+              },
+              # Downside deviation for Sortino (only penalizes scores below average)
+              downside_dev = {
+                pts <- .data[[pts_col]][!is.na(.data[[pts_col]])]
+                avg <- mean(pts, na.rm = TRUE)
+                below_avg <- pts[pts < avg]
+                if (length(below_avg) > 1) {
+                  sqrt(mean((below_avg - avg)^2))
+                } else {
+                  NA_real_
+                }
+              },
+              pts_list = list(.data[[pts_col]][!is.na(.data[[pts_col]])]),
+              .groups = "drop"
+            )
+          
+          # Join to main data
+          data <- data %>%
+            left_join(player_stats, by = "name")
+          
+          # Calculate raw Sortino ratio (PPG / Downside Deviation)
+          data <- data %>%
+            mutate(
+              sortino_raw = if_else(
+                !is.na(avg_pts) & !is.na(downside_dev) & downside_dev > 0,
+                as.numeric(avg_pts) / downside_dev,
+                NA_real_
+              )
+            )
+          
+          # Bayesian shrinkage: pull Sortino toward position average based on sample size
+          # Formula: adjusted = (n * player_sortino + k * pos_avg) / (n + k)
+          # k = 10 represents "equivalent games" of prior belief
+          k_prior <- 10
+          
+          # Calculate position averages (only from players with sufficient games)
+          pos_averages <- data %>%
+            filter(n_games >= 6, !is.na(sortino_raw)) %>%
+            group_by(pos) %>%
+            summarise(pos_avg_sortino = mean(sortino_raw, na.rm = TRUE), .groups = "drop")
+          
+          # Join position averages and apply shrinkage
+          data <- data %>%
+            left_join(pos_averages, by = "pos") %>%
+            mutate(
+              # If no position average available, use global average
+              pos_avg_sortino = if_else(
+                is.na(pos_avg_sortino),
+                mean(sortino_raw, na.rm = TRUE),
+                pos_avg_sortino
+              ),
+              # Bayesian adjusted Sortino
+              sortino = if_else(
+                !is.na(sortino_raw) & !is.na(n_games),
+                (n_games * sortino_raw + k_prior * pos_avg_sortino) / (n_games + k_prior),
+                NA_real_
+              )
+            )
+        }
+      }
+      
+      # If no detail data, add empty columns
+      if (!"sortino" %in% names(data)) {
+        data$pts_floor <- NA_real_
+        data$pts_ceiling <- NA_real_
+        data$sortino_raw <- NA_real_
+        data$sortino <- NA_real_
+        data$n_games <- NA_integer_
+        data$pts_list <- list(NULL)
+      }
+      
+      # Calculate Cash and GPP grades using position-relative percentiles
+      # Cash: 40% Floor + 40% Sortino + 20% PPG (prioritize reliability)
+      # GPP:  40% Ceiling + 40% PPG + 20% Sortino (prioritize upside + production)
+      if (all(c("pts_floor", "pts_ceiling", "sortino", "avg_pts", "pos") %in% names(data))) {
+        data <- data %>%
+          group_by(pos) %>%
+          mutate(
+            # Position-relative percentiles (0-100)
+            pctl_floor = percent_rank(pts_floor) * 100,
+            pctl_ceiling = percent_rank(pts_ceiling) * 100,
+            pctl_ppg = percent_rank(avg_pts) * 100,
+            pctl_sortino = percent_rank(sortino) * 100
+          ) %>%
+          ungroup() %>%
+          mutate(
+            # Weighted composite scores
+            cash_score = 0.40 * pctl_floor + 0.40 * pctl_sortino + 0.20 * pctl_ppg,
+            gpp_score = 0.40 * pctl_ceiling + 0.40 * pctl_ppg + 0.20 * pctl_sortino,
+            # Convert to letter grades
+            cash_grade = case_when(
+              is.na(cash_score) ~ NA_character_,
+              cash_score >= 90 ~ "A+",
+              cash_score >= 80 ~ "A",
+              cash_score >= 70 ~ "B+",
+              cash_score >= 60 ~ "B",
+              cash_score >= 50 ~ "C+",
+              cash_score >= 40 ~ "C",
+              cash_score >= 30 ~ "D",
+              TRUE ~ "F"
+            ),
+            gpp_grade = case_when(
+              is.na(gpp_score) ~ NA_character_,
+              gpp_score >= 90 ~ "A+",
+              gpp_score >= 80 ~ "A",
+              gpp_score >= 70 ~ "B+",
+              gpp_score >= 60 ~ "B",
+              gpp_score >= 50 ~ "C+",
+              gpp_score >= 40 ~ "C",
+              gpp_score >= 30 ~ "D",
+              TRUE ~ "F"
+            )
+          )
+      }
+      
+      # Select columns for display
+      display_cols <- c("team", "name", "pos", "x1_mp", "mins_played", "total_pts", "avg_pts", 
+                        "pts_floor", "pts_ceiling", "sortino", "cash_grade", "gpp_grade", "pts_list")
       display_cols <- intersect(display_cols, names(data))
       data <- data %>% select(all_of(display_cols))
       
+      # Ensure numeric columns are numeric
+      numeric_cols <- c("x1_mp", "mins_played", "total_pts", "avg_pts", "pts_floor", "pts_ceiling", "sortino")
+      for (col in intersect(numeric_cols, names(data))) {
+        data[[col]] <- as.numeric(data[[col]])
+      }
+      
+      # Calculate global x-axis range for histograms (standardized across all players)
+      all_pts <- unlist(data$pts_list)
+      if (length(all_pts) > 0 && !all(is.na(all_pts))) {
+        hist_min <- floor(min(all_pts, na.rm = TRUE) / 5) * 5
+        hist_max <- ceiling(max(all_pts, na.rm = TRUE) / 5) * 5
+      } else {
+        hist_min <- 0
+        hist_max <- 20
+      }
+      
+      # Calculate global max bin count across all players for consistent bar heights
+      n_bins <- 10
+      bin_width <- (hist_max - hist_min) / n_bins
+      breaks <- seq(hist_min, hist_max, by = bin_width)
+      
+      global_max_count <- 1
+      for (pts_vec in data$pts_list) {
+        pts <- unlist(pts_vec)
+        if (!is.null(pts) && length(pts) > 0 && !all(is.na(pts))) {
+          h <- hist(pts, breaks = breaks, plot = FALSE)
+          global_max_count <- max(global_max_count, max(h$counts))
+        }
+      }
+      
+      # Store for use in cell renderer
+      table_df <- as.data.frame(data)
+      
       # Column definitions
       col_defs <- list(
-        name = colDef(
-          name = "Player",
-          minWidth = 160,
-          sticky = "left",
-          style = list(fontWeight = 600, background = "#fff")
-        ),
         team = colDef(
           name = "Team",
-          minWidth = 140,
+          minWidth = 60,
+          maxWidth = 80,
+          align = "center",
           cell = function(value) {
             logo <- get_soccer_team_logo(value)
             if (!is.null(logo)) {
-              div(
-                style = "display: flex; align-items: center; gap: 8px;",
-                tags$img(src = logo, style = "width: 20px; height: 20px; object-fit: contain;"),
-                span(value)
-              )
+              tags$img(src = logo, style = "width: 24px; height: 24px; object-fit: contain;")
             } else {
-              value
+              ""
             }
           }
+        ),
+        name = colDef(
+          name = "Player",
+          minWidth = 160,
+          align = "left",
+          sticky = "left",
+          style = list(fontWeight = 600, background = "#fff")
         ),
         pos = colDef(
           name = "Pos",
           minWidth = 55,
+          maxWidth = 65,
           align = "center",
           cell = function(value) {
             color <- get_position_color(value)
@@ -905,50 +1222,176 @@ soccer_player_stats_server <- function(id) {
             )
           }
         ),
-        price = colDef(
-          name = "Price",
-          minWidth = 70,
-          align = "center",
-          cell = function(value) {
-            if (is.null(value) || is.na(value) || !is.numeric(value)) return("-")
-            sprintf("%.1fM", as.numeric(value) / 10)
-          }
-        ),
-        total_pts = colDef(
-          name = "Total",
-          minWidth = 70,
-          align = "center",
-          style = function(value) {
-            list(fontWeight = 700)
-          }
-        ),
-        avg_pts = colDef(
-          name = "Avg",
-          minWidth = 60,
-          align = "center",
-          format = colFormat(digits = 1)
-        ),
-        ppm = colDef(
-          name = "PPM",
-          minWidth = 60,
-          align = "center",
-          format = colFormat(digits = 2)
-        ),
         x1_mp = colDef(
           name = "Apps",
           minWidth = 55,
+          maxWidth = 65,
           align = "center"
         ),
         mins_played = colDef(
           name = "Mins",
           minWidth = 60,
+          maxWidth = 75,
           align = "center"
         ),
-        goals = colDef(name = "G", minWidth = 45, align = "center"),
-        sot = colDef(name = "SoT", minWidth = 50, align = "center"),
-        assists = colDef(name = "A", minWidth = 45, align = "center"),
-        cs = colDef(name = "CS", minWidth = 45, align = "center"),
-        saves = colDef(name = "Sv", minWidth = 45, align = "center")
+        total_pts = colDef(
+          name = "Total",
+          minWidth = 65,
+          maxWidth = 80,
+          align = "center",
+          style = function(value) list(fontWeight = 700),
+          cell = function(value) {
+            if (is.null(value) || is.na(value)) return("-")
+            sprintf("%.1f", value)
+          }
+        ),
+        avg_pts = colDef(
+          name = "PPG",
+          minWidth = 60,
+          maxWidth = 75,
+          align = "center",
+          style = function(value) list(fontWeight = 700),
+          format = colFormat(digits = 1)
+        ),
+        pts_floor = colDef(
+          name = "Floor",
+          minWidth = 55,
+          maxWidth = 70,
+          align = "center",
+          cell = function(value) {
+            if (is.null(value) || is.na(value)) return("-")
+            sprintf("%.1f", value)
+          }
+        ),
+        pts_ceiling = colDef(
+          name = "Ceil",
+          minWidth = 55,
+          maxWidth = 70,
+          align = "center",
+          cell = function(value) {
+            if (is.null(value) || is.na(value)) return("-")
+            sprintf("%.1f", value)
+          }
+        ),
+        sortino = colDef(
+          name = "Sortino",
+          minWidth = 65,
+          maxWidth = 80,
+          align = "center",
+          cell = function(value) {
+            if (is.null(value) || is.na(value)) return("-")
+            # Diverging palette: Coral (low) → neutral → Sage (high)
+            color <- if (value >= 3.0) {
+              "#A3BE8C"  # sage - matches grade A+
+            } else if (value < 1.5) {
+              "#D08770"  # coral - matches grade F
+            } else {
+              APP_COLORS$primary
+            }
+            span(
+              style = list(fontWeight = 600, color = color),
+              sprintf("%.2f", value)
+            )
+          }
+        ),
+        cash_grade = colDef(
+          name = "Cash",
+          minWidth = 55,
+          maxWidth = 65,
+          align = "center",
+          cell = function(value) {
+            if (is.null(value) || is.na(value)) return("-")
+            # Diverging palette: Coral (bad) → White (neutral) → Sage (good)
+            # Using APP_COLORS: coral=#D08770, sage=#A3BE8C
+            bg_color <- switch(value,
+                               "A+" = "#A3BE8C",   # sage (full)
+                               "A"  = "#BACEA9",   # 75% toward sage
+                               "B+" = "#D1DFC6",   # 50% toward sage
+                               "B"  = "#E8EFE2",   # 25% toward sage
+                               "C+" = "#FFFFFF",   # white (neutral)
+                               "C"  = "#F3E1DB",   # 25% toward coral
+                               "D"  = "#E8C3B8",   # 50% toward coral
+                               "F"  = "#D08770",   # coral (full)
+                               "#FFFFFF"
+            )
+            text_color <- if (value %in% c("A+", "A", "F")) "#FFFFFF" else APP_COLORS$primary
+            div(
+              style = sprintf(
+                "background: %s; color: %s; padding: 2px 6px; border-radius: 4px; font-weight: 700; font-size: 0.8rem;",
+                bg_color, text_color
+              ),
+              value
+            )
+          }
+        ),
+        gpp_grade = colDef(
+          name = "GPP",
+          minWidth = 55,
+          maxWidth = 65,
+          align = "center",
+          cell = function(value) {
+            if (is.null(value) || is.na(value)) return("-")
+            # Diverging palette: Coral (bad) → White (neutral) → Sage (good)
+            bg_color <- switch(value,
+                               "A+" = "#A3BE8C",   # sage (full)
+                               "A"  = "#BACEA9",   # 75% toward sage
+                               "B+" = "#D1DFC6",   # 50% toward sage
+                               "B"  = "#E8EFE2",   # 25% toward sage
+                               "C+" = "#FFFFFF",   # white (neutral)
+                               "C"  = "#F3E1DB",   # 25% toward coral
+                               "D"  = "#E8C3B8",   # 50% toward coral
+                               "F"  = "#D08770",   # coral (full)
+                               "#FFFFFF"
+            )
+            text_color <- if (value %in% c("A+", "A", "F")) "#FFFFFF" else APP_COLORS$primary
+            div(
+              style = sprintf(
+                "background: %s; color: %s; padding: 2px 6px; border-radius: 4px; font-weight: 700; font-size: 0.8rem;",
+                bg_color, text_color
+              ),
+              value
+            )
+          }
+        ),
+        pts_list = colDef(
+          name = "Points Distribution",
+          minWidth = 180,
+          align = "center",
+          sortable = FALSE,
+          html = TRUE,
+          cell = function(value, index) {
+            pts <- unlist(value)
+            if (is.null(pts) || length(pts) == 0 || all(is.na(pts))) {
+              return(span(style = list(color = APP_COLORS$muted), "-"))
+            }
+            
+            # Calculate histogram using pre-defined breaks
+            h <- hist(pts, breaks = breaks, plot = FALSE)
+            counts <- h$counts
+            
+            # Build bars as divs - heights based on global_max_count for actual game counts
+            bar_width_px <- 14
+            max_height <- 28
+            
+            bars <- lapply(seq_along(counts), function(i) {
+              bar_height <- round((counts[i] / global_max_count) * max_height)
+              
+              div(
+                style = sprintf(
+                  "width: %dpx; height: %dpx; background: %s; border-radius: 2px; margin-right: 2px; display: inline-block; vertical-align: bottom;",
+                  bar_width_px,
+                  max(bar_height, 0),
+                  if (counts[i] > 0) APP_COLORS$sage else "transparent"
+                )
+              )
+            })
+            
+            div(
+              style = "display: flex; align-items: flex-end; justify-content: center; height: 32px; border-bottom: 1px solid #D8D0C4;",
+              bars
+            )
+          }
+        )
       )
       
       # Filter to columns that exist

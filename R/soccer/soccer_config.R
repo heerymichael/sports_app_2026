@@ -76,7 +76,15 @@ LEAGUE_LOGO_PATHS <- c(
   "La Liga" = "soccer_logos/League Logos/LaLiga.jpeg",
   "Bundesliga" = "soccer_logos/League Logos/Bundesliga.png",
   "Championship" = "soccer_logos/League Logos/Championship.png",
-  "Ligue 1" = "soccer_logos/League Logos/Ligue_1.png"
+  "Ligue 1" = "soccer_logos/League Logos/Ligue_Un.svg.png",
+  "League One" = "soccer_logos/League Logos/League_One.svg.png",
+  "League Two" = "soccer_logos/League Logos/League_Two.svg.png",
+  "Primeira Liga" = "soccer_logos/League Logos/Primeira_Liga.png",
+  "Austrian Bundesliga" = "soccer_logos/League Logos/Austrian_Bundesliga.png",
+  "Belgian Pro League" = "soccer_logos/League Logos/Belgian_Pro_League.jpg",
+  "Eredivisie" = "soccer_logos/League Logos/Eredivisie.png",
+  "Swiss Super League" = "soccer_logos/League Logos/Swiss_Super_League.png",
+  "Scottish Premiership" = "soccer_logos/League Logos/Scottish_Premiership.jpg"
 )
 
 # =============================================================================
@@ -132,7 +140,31 @@ TEAM_NAME_MAPPING <- c(
   "Rennes" = "Rennes", "Strasbourg" = "Strasbourg", "Nantes" = "Nantes",
   "Toulouse" = "Toulouse", "Montpellier" = "Montpellier", "Brest" = "Brest",
   "Reims" = "Reims", "Le Havre" = "Le Havre", "Auxerre" = "Auxerre",
-  "Saint-Etienne" = "Saint-Etienne", "Angers" = "Angers"
+  "Saint-Etienne" = "Saint-Etienne", "Angers" = "Angers",
+  # Championship
+  "Birmingham City" = "Birmingham City", "Birmingham" = "Birmingham City",
+  "Blackburn Rovers" = "Blackburn Rovers", "Blackburn" = "Blackburn Rovers",
+  "Bristol City" = "Bristol City", "Bristol" = "Bristol City",
+  "Burnley" = "Burnley",
+  "Cardiff City" = "Cardiff City", "Cardiff" = "Cardiff City",
+  "Coventry City" = "Coventry City", "Coventry" = "Coventry City",
+  "Derby County" = "Derby County", "Derby" = "Derby County",
+  "Hull City" = "Hull City", "Hull" = "Hull City",
+  "Leeds United" = "Leeds United", "Leeds" = "Leeds United",
+  "Luton Town" = "Luton Town", "Luton" = "Luton Town",
+  "Middlesbrough" = "Middlesbrough", "Boro" = "Middlesbrough",
+  "Millwall" = "Millwall",
+  "Norwich City" = "Norwich City", "Norwich" = "Norwich City",
+  "Plymouth Argyle" = "Plymouth Argyle", "Plymouth" = "Plymouth Argyle",
+  "Preston North End" = "Preston North End", "Preston" = "Preston North End",
+  "Queens Park Rangers" = "Queens Park Rangers", "QPR" = "Queens Park Rangers",
+  "Sheffield United" = "Sheffield United", "Sheff Utd" = "Sheffield United",
+  "Sheffield Wednesday" = "Sheffield Wednesday", "Sheff Wed" = "Sheffield Wednesday",
+  "Stoke City" = "Stoke City", "Stoke" = "Stoke City",
+  "Sunderland" = "Sunderland",
+  "Swansea City" = "Swansea City", "Swansea" = "Swansea City",
+  "Watford" = "Watford",
+  "West Brom" = "West Brom", "West Bromwich Albion" = "West Brom", "WBA" = "West Brom"
 )
 
 # =============================================================================
@@ -174,26 +206,30 @@ TEAM_ABBREVIATIONS <- c(
 # =============================================================================
 
 TEAM_LOGO_PATHS <- c(
+  # Premier League - filenames match actual files in www/soccer_logos/Premier League/
   "Arsenal" = "soccer_logos/Premier League/arsenal.svg",
   "Aston Villa" = "soccer_logos/Premier League/aston_villa.svg",
   "Bournemouth" = "soccer_logos/Premier League/bournemouth.svg",
   "Brentford" = "soccer_logos/Premier League/brentford.svg",
   "Brighton" = "soccer_logos/Premier League/brighton.svg",
+  "Burnley" = "soccer_logos/Premier League/burnley.svg",
   "Chelsea" = "soccer_logos/Premier League/chelsea.svg",
   "Crystal Palace" = "soccer_logos/Premier League/crystal_palace.svg",
   "Everton" = "soccer_logos/Premier League/everton.svg",
   "Fulham" = "soccer_logos/Premier League/fulham.svg",
   "Ipswich Town" = "soccer_logos/Premier League/ipswich_town.svg",
+  "Leeds United" = "soccer_logos/Premier League/leeds.svg",
   "Leicester City" = "soccer_logos/Premier League/leicester_city.svg",
   "Liverpool" = "soccer_logos/Premier League/liverpool.svg",
-  "Manchester United" = "soccer_logos/Premier League/manchester_united.svg",
-  "Manchester City" = "soccer_logos/Premier League/manchester_city.svg",
+  "Manchester United" = "soccer_logos/Premier League/man_united.svg",
+  "Manchester City" = "soccer_logos/Premier League/man_city.svg",
   "Newcastle United" = "soccer_logos/Premier League/newcastle_united.svg",
   "Nottingham Forest" = "soccer_logos/Premier League/nottingham_forest.svg",
   "Southampton" = "soccer_logos/Premier League/southampton.svg",
-  "Tottenham" = "soccer_logos/Premier League/tottenham.svg",
+  "Sunderland" = "soccer_logos/Premier League/sunderland.svg",
+  "Tottenham" = "soccer_logos/Premier League/spurs.svg",
   "West Ham" = "soccer_logos/Premier League/west_ham.svg",
-  "Wolves" = "soccer_logos/Premier League/wolverhampton.svg"
+  "Wolves" = "soccer_logos/Premier League/wolves.svg"
 )
 
 # =============================================================================

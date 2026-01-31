@@ -55,12 +55,12 @@ soccer_betting_ui <- function(id) {
         uiOutput(ns("day_buttons"))
       ),
       
-      # Bottom row: Points display and heatmap column dropdowns
+      # Bottom row: Points display, heatmap, and diff filter dropdowns
       div(
-        style = "display: flex; gap: var(--space-lg); align-items: flex-end;",
+        style = "display: flex; gap: var(--space-lg); align-items: flex-end; flex-wrap: wrap;",
         div(
           class = "form-group",
-          style = "min-width: 150px;",
+          style = "min-width: 140px;",
           tags$label("Points Display", class = "control-label",
                      style = "font-weight: 600; font-size: 0.8rem;"),
           selectizeInput(
@@ -74,7 +74,7 @@ soccer_betting_ui <- function(id) {
         ),
         div(
           class = "form-group",
-          style = "min-width: 150px;",
+          style = "min-width: 140px;",
           tags$label("Heatmap Column", class = "control-label",
                      style = "font-weight: 600; font-size: 0.8rem;"),
           selectizeInput(
@@ -88,6 +88,43 @@ soccer_betting_ui <- function(id) {
             selected = "none",
             multiple = FALSE,
             width = "100%"
+          )
+        ),
+        # Diff filter - elegant paired dropdowns
+        div(
+          style = "display: flex; gap: var(--space-sm); align-items: flex-end; border-left: 1px solid var(--border); padding-left: var(--space-lg); margin-left: var(--space-sm);",
+          div(
+            class = "form-group",
+            style = "min-width: 120px;",
+            tags$label("Filter by Diff", class = "control-label",
+                       style = "font-weight: 600; font-size: 0.8rem;"),
+            selectizeInput(
+              ns("diff_filter_col"),
+              label = NULL,
+              choices = c("No Filter" = "none",
+                          "Season" = "season_diff",
+                          "Last 13" = "last13_diff",
+                          "Last 6" = "last6_diff"),
+              selected = "none",
+              multiple = FALSE,
+              width = "100%"
+            )
+          ),
+          div(
+            class = "form-group",
+            style = "min-width: 110px;",
+            tags$label("Show", class = "control-label",
+                       style = "font-weight: 600; font-size: 0.8rem;"),
+            selectizeInput(
+              ns("diff_filter_dir"),
+              label = NULL,
+              choices = c("All" = "all",
+                          "Positive +" = "positive",
+                          "Negative −" = "negative"),
+              selected = "all",
+              multiple = FALSE,
+              width = "100%"
+            )
           )
         )
       )
@@ -403,7 +440,23 @@ soccer_betting_server <- function(id) {
       ppg_mode <- input$ppg_mode %||% "total"
       
       # Prepare table with team name normalization and logos
-      prepare_betting_table_with_logos(odds, standings, ppg_mode)
+      result <- prepare_betting_table_with_logos(odds, standings, ppg_mode)
+      
+      # Apply diff filter if set
+      diff_col <- input$diff_filter_col %||% "none"
+      diff_dir <- input$diff_filter_dir %||% "all"
+      
+      if (diff_col != "none" && diff_dir != "all" && !is.null(result) && nrow(result) > 0) {
+        if (diff_col %in% names(result)) {
+          if (diff_dir == "positive") {
+            result <- result %>% filter(!is.na(.data[[diff_col]]) & .data[[diff_col]] > 0)
+          } else if (diff_dir == "negative") {
+            result <- result %>% filter(!is.na(.data[[diff_col]]) & .data[[diff_col]] < 0)
+          }
+        }
+      }
+      
+      result
     })
     
     # =========================================================================
@@ -494,7 +547,7 @@ soccer_betting_server <- function(id) {
         columns = list(
           League = colDef(
             name = "League",
-            width = 180,
+            width = 290,
             align = "left",
             cell = function(value, index) {
               logo <- table_df$league_logo[index]
@@ -510,7 +563,7 @@ soccer_betting_server <- function(id) {
           
           Team = colDef(
             name = "Team",
-            minWidth = 200,
+            minWidth = 175,
             align = "left",
             cell = function(value, index) {
               logo <- table_df$team_logo[index]
@@ -533,7 +586,7 @@ soccer_betting_server <- function(id) {
           
           Opponent = colDef(
             name = "Opponent",
-            minWidth = 180,
+            minWidth = 155,
             align = "left",
             cell = function(value, index) {
               logo <- table_df$opponent_logo[index]
@@ -553,31 +606,24 @@ soccer_betting_server <- function(id) {
             cell = function(value, index) {
               if (is.na(value)) return(span(style = list(color = APP_COLORS$muted), "-"))
               
-              # Color code favorites vs underdogs (text color)
-              text_color <- if (value < 1.8) {
-                APP_COLORS$sage_dark
-              } else if (value > 3.5) {
-                APP_COLORS$coral_dark
-              } else {
-                APP_COLORS$primary
-              }
-              
               span(
-                style = list(fontWeight = "700", fontSize = "17px", color = text_color),
+                style = list(fontWeight = "700", fontSize = "17px", color = APP_COLORS$primary),
                 sprintf("%.2f", value)
               )
             },
             style = function(value, index) {
               if (heatmap_col == "win_odds" && !is.na(value)) {
-                # For odds: lower = better for the team, so invert
-                # Use midpoint around 2.5
-                bg_style <- get_diverging_heatmap_style(
-                  value = -value,
-                  midpoint = -2.5,
-                  min_val = -odds_range[2],
-                  max_val = -odds_range[1]
-                )
-                list(background = gsub("background-color: |;", "", bg_style))
+                # Single direction: higher odds = more intense color (teal)
+                # Normalize value between min and max odds
+                t <- (value - odds_range[1]) / (odds_range[2] - odds_range[1])
+                t <- max(0, min(1, t))
+                
+                # Interpolate from white (#FFFFFF) to teal (#8FBCBB)
+                r <- round(255 + (143 - 255) * t)
+                g <- round(255 + (188 - 255) * t)
+                b <- round(255 + (187 - 255) * t)
+                
+                list(background = sprintf("rgb(%d, %d, %d)", r, g, b))
               } else {
                 list()
               }

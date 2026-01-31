@@ -1,0 +1,37 @@
+Tournament,PlayerID,Name,FName,Club,Lineup,Position,Price
+1075778,4352577,Johnson,D'Ernest,NE,unexpected,running_back,4.2
+1075778,4353141,Maye,Drake,NE,possible,quarterback,20.5
+1075778,4353142,Dobbs,Joshua,NE,unexpected,quarterback,18.1
+1075778,4353144,Stevenson,Rhamondre,NE,expected,running_back,17.5
+1075778,4353146,Henderson,TreVeyon,NE,expected,running_back,9.3
+1075778,4353147,Jennings,Terrell,NE,possible,running_back,5.1
+1075778,4353152,Chism III,Efton,NE,unexpected,wide_receiver,5.4
+1075778,4353155,Douglas,DeMario,NE,expected,wide_receiver,7.5
+1075778,4353156,Williams,Kyle,NE,expected,wide_receiver,5.5
+1075778,4353157,Boutte,Kayshon,NE,expected,wide_receiver,9.4
+1075778,4353159,Hollins,Mack,NE,possible,wide_receiver,8.6
+1075778,4353160,Diggs,Stefon,NE,expected,wide_receiver,13.5
+1075778,4353161,Hooper,Austin,NE,expected,tight_end,6
+1075778,4353164,DEF/ST Patriots,,NE,expected,defense_special,9.2
+1075778,4353167,Henry,Hunter,NE,expected,tight_end,11
+1075778,4353168,Westover,Jack,NE,unexpected,tight_end,4.1
+1075778,4353173,Jones Jr.,Velus,SEA,unexpected,running_back,4.2
+1075778,4353178,Akers,Cam,SEA,unexpected,running_back,4.4
+1075778,4353188,Shaheed,Rashid,SEA,expected,wide_receiver,8.1
+1075778,4353198,DeVito,Tommy,NE,unexpected,quarterback,18
+1075778,4353353,Lock,Drew,SEA,unexpected,quarterback,14.5
+1075778,4353354,Milroe,Jalen,SEA,unexpected,quarterback,14.4
+1075778,4353355,Darnold,Sam,SEA,possible,quarterback,17
+1075778,4353357,Russell,Brady,SEA,possible,running_back,4
+1075778,4353358,Holani,George,SEA,expected,running_back,5.1
+1075778,4353360,Ouzts,Robbie,SEA,possible,running_back,4
+1075778,4353364,Walker III,Kenneth,SEA,expected,running_back,18
+1075778,4353365,Smith-Njigba,Jaxon,SEA,expected,wide_receiver,22
+1075778,4353367,Kupp,Cooper,SEA,expected,wide_receiver,9.5
+1075778,4353371,Bobo,Jake,SEA,possible,wide_receiver,5
+1075778,4353374,Young,Dareke,SEA,unexpected,wide_receiver,4.3
+1075778,4353376, DEF/ST Seahawks,,SEA,expected,defense_special,8.5
+1075778,4353378,Saubert,Eric,SEA,possible,tight_end,4.5
+1075778,4353379,Kallerup,Nick,SEA,unexpected,tight_end,4
+1075778,4353380,Arroyo,Elijah,SEA,unexpected,tight_end,5.2
+1075778,4353381,Barner,AJ,SEA,expected,tight_end,10

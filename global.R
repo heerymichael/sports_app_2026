@@ -180,10 +180,14 @@ cat("[STARTUP]     mod_soccer_betting.R loaded\n")
 # source("R/soccer/mod_soccer_team_dashboard.R")    # Team dashboard module
 # source("R/soccer/mod_soccer_player_dashboard.R")  # Player dashboard module
 
-source("R/soccer/mod_soccer_fanteam_contests.R")  # FanTeam contests module
-cat("[STARTUP]     mod_soccer_fanteam_contests.R loaded\n")
-source("R/soccer/mod_soccer_player_stats.R")     # Player stats module
+# Soccer UI modules (order matches navigation)
+source("R/soccer/mod_soccer_player_stats.R")     # Player stats module (historical analysis)
 cat("[STARTUP]     mod_soccer_player_stats.R loaded\n")
+source("R/soccer/mod_soccer_matchups.R")         # Match Ups module (this week's fixtures)
+cat("[STARTUP]     mod_soccer_matchups.R loaded\n")
+source("R/soccer/mod_soccer_handbuild.R")        # Handbuild module (lineup builder)
+cat("[STARTUP]     mod_soccer_handbuild.R loaded\n")
+# Note: Shot share and Betting modules loaded above
 cat("[STARTUP]   Soccer modules loaded\n")
 
 # NHL (Ice Hockey)

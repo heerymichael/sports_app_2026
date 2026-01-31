@@ -23,9 +23,9 @@ get_sports_config <- function() {
       color = APP_COLORS$sage,
       color_light = "#C5D4B8",
       icon_scale = 1.2,
-      # Updated: added shot_share section
-      sections = c("fanteam_contests", "player_stats", "shot_share", "betting"),
-      default_section = "fanteam_contests"
+      # Order: Player Stats → Match Ups → Handbuild → Shot Share → Betting
+      sections = c("player_stats", "matchups", "handbuild", "shot_share", "betting"),
+      default_section = "player_stats"
     ),
     
     golf = list(
@@ -110,22 +110,22 @@ get_sections_config <- function() {
     ),
     
     # Soccer sections - ACTIVE
-    fanteam_contests = list(
-      id = "fanteam_contests",
-      name = "FanTeam",
-      icon = "trophy"
-    ),
-    
-    betting = list(
-      id = "betting",
-      name = "Betting",
-      icon = "trending-up"
-    ),
-    
     player_stats = list(
       id = "player_stats",
       name = "Player Stats",
       icon = "bar-chart-2"
+    ),
+    
+    matchups = list(
+      id = "matchups",
+      name = "Match Ups",
+      icon = "calendar"
+    ),
+    
+    handbuild = list(
+      id = "handbuild",
+      name = "Handbuild",
+      icon = "edit-3"
     ),
     
     shot_share = list(
@@ -134,7 +134,13 @@ get_sections_config <- function() {
       icon = "pie-chart"
     ),
     
-    # Soccer sections - ARCHIVED (FBref dependency)
+    betting = list(
+      id = "betting",
+      name = "Betting",
+      icon = "trending-up"
+    ),
+    
+    # Soccer sections - ARCHIVED (legacy)
     # Kept for reference but not included in soccer.sections
     team_dashboard = list(
       id = "team_dashboard",
