@@ -29,6 +29,7 @@ library(httr)          # For Odds API calls
 library(jsonlite)      # For JSON parsing
 library(rvest)         # For BBC scraping
 library(glue)          # For URL construction
+library(shinyjs)       # For dynamic UI toggling (soccer handbuild filters)
 cat("[STARTUP] Packages loaded successfully\n\n")
 
 # Load fonts for ggplot
@@ -161,6 +162,8 @@ source("R/soccer/soccer_fanteam_loader.R") # FanTeam data loading
 cat("[STARTUP]     soccer_fanteam_loader.R loaded\n")
 source("R/soccer/soccer_fanteam_matching.R") # Player name matching
 cat("[STARTUP]     soccer_fanteam_matching.R loaded\n")
+source("R/soccer/soccer_ratings.R")        # Ownership estimation + player ratings engine
+cat("[STARTUP]     soccer_ratings.R loaded\n")
 
 # Shot share analysis module
 source("R/soccer/soccer_shot_share.R")       # Shot share analysis functions
@@ -185,7 +188,7 @@ source("R/soccer/mod_soccer_player_stats.R")     # Player stats module (historic
 cat("[STARTUP]     mod_soccer_player_stats.R loaded\n")
 source("R/soccer/mod_soccer_matchups.R")         # Match Ups module (this week's fixtures)
 cat("[STARTUP]     mod_soccer_matchups.R loaded\n")
-source("R/soccer/mod_soccer_handbuild.R")        # Handbuild module (lineup builder)
+source("R/soccer/mod_soccer_handbuild.R")        # Handbuild module (lineup builder + ratings UI)
 cat("[STARTUP]     mod_soccer_handbuild.R loaded\n")
 # Note: Shot share and Betting modules loaded above
 cat("[STARTUP]   Soccer modules loaded\n")

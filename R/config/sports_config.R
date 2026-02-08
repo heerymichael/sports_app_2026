@@ -23,7 +23,7 @@ get_sports_config <- function() {
       color = APP_COLORS$sage,
       color_light = "#C5D4B8",
       icon_scale = 1.2,
-      # Order: Player Stats → Match Ups → Handbuild → Shot Share → Betting
+      # Order: Player Stats â†’ Match Ups â†’ Handbuild â†’ Shot Share â†’ Betting
       sections = c("player_stats", "matchups", "handbuild", "shot_share", "betting"),
       default_section = "player_stats"
     ),
@@ -46,8 +46,8 @@ get_sports_config <- function() {
       color = APP_COLORS$coral,
       color_light = "#E8B8A8",
       icon_scale = 1.2,
-      sections = c("fanteam_playoffs", "ffpc_bestball", "handbuild", "showdown", "projections"),
-      default_section = "fanteam_playoffs"
+      sections = c("ffpc_bestball", "handbuild", "showdown", "projections", "fanteam_playoffs"),
+      default_section = "ffpc_bestball"
     ),
     
     nhl = list(
@@ -79,10 +79,10 @@ get_sports_config <- function() {
 get_sections_config <- function() {
   list(
     # NFL sections
-    projections = list(
-      id = "projections",
-      name = "Projections",
-      icon = "table"
+    ffpc_bestball = list(
+      id = "ffpc_bestball",
+      name = "FFPC Bestball",
+      icon = "trophy"
     ),
     
     handbuild = list(
@@ -97,10 +97,10 @@ get_sections_config <- function() {
       icon = "zap"
     ),
     
-    ffpc_bestball = list(
-      id = "ffpc_bestball",
-      name = "FFPC Bestball",
-      icon = "trophy"
+    projections = list(
+      id = "projections",
+      name = "Projections",
+      icon = "table"
     ),
     
     fanteam_playoffs = list(

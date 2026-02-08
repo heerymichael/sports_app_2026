@@ -50,8 +50,8 @@ get_available_showdown_slates <- function(season, week) {
     return(character(0))
   }
   
-  # Pattern: week_X_showdown_TEAM1_TEAM2.csv or wild_card_showdown_TEAM1_TEAM2.csv
-  pattern <- sprintf("^%s_showdown_.+\\.csv$", week_prefix)
+  # Pattern: week_X_showdown_TEAM1_TEAM2.csv or super_bowl_showdown.csv (no team suffix)
+  pattern <- sprintf("^%s_showdown(_.+)?\\.csv$", week_prefix)
   files <- list.files(salary_dir, pattern = pattern)
   
   if (length(files) == 0) {
@@ -71,6 +71,11 @@ get_available_showdown_slates <- function(season, week) {
 #' @param slate Slate identifier (e.g., "showdown_sf_sea")
 #' @return Display label
 get_showdown_slate_label <- function(slate) {
+  # Handle bare "showdown" (no team suffix, e.g., super_bowl_showdown.csv)
+  if (slate == "showdown") {
+    return("Showdown")
+  }
+  
   # Extract team names from slate ID
   # Format: showdown_team1_team2
   parts <- strsplit(gsub("^showdown_", "", slate), "_")[[1]]
@@ -1867,7 +1872,7 @@ nfl_showdown_server <- function(id) {
       # Helper for sort indicator
       sort_indicator <- function(col) {
         if (sort_col == col) {
-          if (sort_dir == "desc") " Ã¢â€“Â¼" else " Ã¢â€“Â²"
+          if (sort_dir == "desc") " ▼" else " ▲"
         } else {
           ""
         }
@@ -1966,7 +1971,7 @@ nfl_showdown_server <- function(id) {
           div(
             style = sprintf("display: grid; grid-template-columns: 1fr 65px 65px 55px 50px 90px; gap: 0.25rem; padding: 0.4rem 0.75rem; align-items: center; border-bottom: 1px solid var(--bg-secondary); %s", row_style),
             
-            # Player cell with headshot - Name on top, Position Ã‚Â· Team below
+            # Player cell with headshot - Name on top, Position · Team below
             div(
               style = "display: flex; align-items: center; gap: 0.5rem; min-width: 0;",
               create_headshot_html(p$headshot_url, p$team_bg_color, "tiny", p$position, p$team),
@@ -2539,7 +2544,7 @@ nfl_showdown_server <- function(id) {
                       }
                     ),
                     
-                    # Player name Ã‚Â· Team Ã‚Â· Position (position slightly heavier)
+                    # Player name · Team · Position (position slightly heavier)
                     div(
                       style = "flex: 1; min-width: 0; overflow: hidden;",
                       tags$span(

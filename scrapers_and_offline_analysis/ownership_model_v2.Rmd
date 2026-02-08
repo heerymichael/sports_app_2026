@@ -1,0 +1,1074 @@
+---
+title: "FanTeam Ownership Prediction Model"
+subtitle: "Two-Stage Statistical Approach"
+date: "`r format(Sys.time(), '%d %B %Y')`"
+output:
+  html_document:
+    theme: flatly
+    toc: true
+    toc_float: true
+    code_folding: hide
+    df_print: paged
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  echo = TRUE, message = FALSE, warning = FALSE,
+  fig.width = 10, fig.height = 6
+)
+
+library(tidyverse)
+library(janitor)
+library(googlesheets4)
+library(scales)
+library(patchwork)
+library(broom)
+
+# Suppress auth prompts if cached
+gs4_auth(email = TRUE)
+
+# Theme
+theme_set(theme_minimal(base_size = 12) + 
+            theme(panel.grid.minor = element_blank(),
+                  plot.title = element_text(face = "bold")))
+
+coral <- "#E07A5F"
+sage <- "#81B29A"
+charcoal <- "#3D405B"
+```
+
+# 1. Problem Statement
+
+FanTeam Monster ownership follows a **highly skewed distribution**:
+
+- Most players (~70%) have near-zero ownership (<1%)
+- A small group (~15%) have moderate ownership (1-10%)
+- A few players (~15%) dominate with high ownership (>10%)
+
+A traditional regression model fails because:
+
+1. **Zero-inflation**: Predicting ownership for the 70% at ~0% is trivial but dominates loss functions
+2. **Softmax constraint**: Forcing budget allocation spreads probability across players who in reality get nothing
+3. **Heteroskedasticity**: Variance increases with predicted ownership
+
+**Solution**: A **two-stage hurdle model**:
+
+1. **Stage 1** (Classification): Predict P(player is selected) — i.e., ownership > 1%
+2. **Stage 2** (Regression): For selected players, predict log(ownership)
+
+This matches how real DFS players think: first filter to "playable" options, then allocate among them.
+
+---
+
+# 2. Data Loading
+
+```{r load-data}
+# ============================================================
+# CONFIGURATION
+# ============================================================
+OWNERSHIP_SHEET <- "1uI0wkZVLBL9hgMDfoszuZYDx-n9P03BJPZ4vP1KAMjY"
+SALARY_PATH <- here::here("data", "fanteam_soccer", "fanteam_monster_salaries")
+ODDS_PATH <- SALARY_PATH  # Same directory
+
+GW_RANGE <- 20:24  # Gameweeks to analyze
+
+# ============================================================
+# HELPER FUNCTIONS
+# ============================================================
+log_msg <- function(...) message(sprintf("[%s] %s", format(Sys.time(), "%H:%M:%S"), paste(...)))
+
+normalise_team <- function(x) {
+  x <- str_trim(x)
+  x <- str_to_upper(x)
+  
+  lookup <- c(
+    "ARS" = "Arsenal", "ARSENAL" = "Arsenal",
+    "AVL" = "Aston Villa", "AV" = "Aston Villa", "ASTON VILLA" = "Aston Villa",
+    "BOU" = "AFC Bournemouth", "AFC BOURNEMOUTH" = "AFC Bournemouth", "BOURNEMOUTH" = "AFC Bournemouth",
+    "BRE" = "Brentford", "BRENTFORD" = "Brentford",
+    "BHA" = "Brighton", "BRIGHTON & HOVE ALBION" = "Brighton", "BRIGHTON" = "Brighton",
+    "BUR" = "Burnley", "BURNLEY" = "Burnley",
+    "CHE" = "Chelsea", "CHELSEA" = "Chelsea",
+    "CRY" = "Crystal Palace", "CRYSTAL PALACE" = "Crystal Palace",
+    "EVE" = "Everton", "EVERTON" = "Everton",
+    "FUL" = "Fulham", "FULHAM" = "Fulham",
+    "LEE" = "Leeds United", "LEEDS UNITED" = "Leeds United", "LEEDS" = "Leeds United",
+    "LIV" = "Liverpool", "LIVERPOOL" = "Liverpool",
+    "MCI" = "Man City", "MANCHESTER CITY" = "Man City", "MAN CITY" = "Man City",
+    "MUN" = "Man United", "MANCHESTER UNITED" = "Man United", "MAN UNITED" = "Man United",
+    "NEW" = "Newcastle", "NEWCASTLE UNITED" = "Newcastle", "NEWCASTLE" = "Newcastle",
+    "NFO" = "Nottingham Forest", "NOTTINGHAM FOREST" = "Nottingham Forest", "NTG" = "Nottingham Forest",
+    "SUN" = "Sunderland", "SUNDERLAND" = "Sunderland",
+    "TOT" = "Tottenham", "TOTTENHAM HOTSPUR" = "Tottenham", "TOTTENHAM" = "Tottenham",
+    "WHU" = "West Ham", "WEST HAM UNITED" = "West Ham", "WEST HAM" = "West Ham",
+    "WOL" = "Wolves", "WOLVERHAMPTON" = "Wolves", "WOLVERHAMPTON WANDERERS" = "Wolves", "WOLVES" = "Wolves"
+  )
+  
+  result <- lookup[x]
+  ifelse(is.na(result), x, result)
+}
+
+normalise_position <- function(x) {
+  x <- str_to_upper(str_trim(x))
+  case_when(
+    x %in% c("GK", "GOALKEEPER", "G") ~ "GK",
+    x %in% c("DEF", "DEFENDER", "D") ~ "DEF",
+    x %in% c("MID", "MIDFIELDER", "M") ~ "MID",
+    x %in% c("FWD", "FORWARD", "FOR", "F") ~ "FWD",
+    TRUE ~ x
+  )
+}
+
+normalise_name <- function(x) {
+  x %>%
+    str_to_lower() %>%
+    str_replace_all("[^a-z ]", "") %>%
+    str_squish()
+}
+
+# ============================================================
+# LOAD OWNERSHIP DATA FROM GOOGLE SHEETS
+# ============================================================
+log_msg("Loading ownership data from Google Sheets...")
+
+ownership_data <- map_dfr(GW_RANGE, function(gw) {
+  sheet_name <- paste0("week-", gw)
+  
+  tryCatch({
+    raw <- read_sheet(OWNERSHIP_SHEET, sheet = sheet_name)
+    nms <- names(raw)
+    log_msg(sprintf("  GW%d: %d rows, cols: %s", gw, nrow(raw), paste(nms, collapse = ", ")))
+    
+    # Map columns by position/pattern (handles Cyrillic С, various naming)
+    find_col <- function(patterns) {
+      for (p in patterns) {
+        idx <- grep(p, nms, ignore.case = TRUE)
+        if (length(idx) > 0) return(nms[idx[1]])
+      }
+      return(NA_character_)
+    }
+    
+    col_player  <- find_col(c("^Player$", "player"))
+    col_pos     <- find_col(c("^Pos$", "^Position$", "pos"))
+    col_team    <- find_col(c("^Team$", "team"))
+    col_price   <- find_col(c("^Price$", "price"))
+    col_own     <- find_col(c("Own", "own", "ownership"))
+    col_cpt     <- find_col(c("^C ", "captain", "С"))  # Note: С can be Cyrillic
+    col_form    <- find_col(c("^Form$", "form"))
+    col_score   <- find_col(c("^Score$", "score"))
+    
+    log_msg(sprintf("  Mapped: player=%s, pos=%s, own=%s, form=%s, score=%s",
+                    col_player, col_pos, col_own, col_form, col_score))
+    
+    # Build standardized tibble
+    df <- tibble(
+      player = as.character(raw[[col_player]]),
+      pos    = as.character(raw[[col_pos]]),
+      team   = as.character(raw[[col_team]]),
+      price  = as.character(raw[[col_price]]),
+      own_pct = if (!is.na(col_own)) as.character(raw[[col_own]]) else NA_character_,
+      captain_pct = if (!is.na(col_cpt)) as.character(raw[[col_cpt]]) else NA_character_,
+      form   = if (!is.na(col_form)) as.numeric(raw[[col_form]]) else NA_real_,
+      score  = if (!is.na(col_score)) as.numeric(raw[[col_score]]) else NA_real_
+    )
+    
+    # Parse percentages and prices
+    df <- df %>%
+      mutate(
+        own_pct = str_replace_all(own_pct, "[%N/A]", ""),
+        own_pct = as.numeric(own_pct),
+        own_pct = coalesce(own_pct, 0),
+        captain_pct = str_replace_all(captain_pct, "[%N/A]", ""),
+        captain_pct = as.numeric(captain_pct),
+        captain_pct = coalesce(captain_pct, 0),
+        price = str_replace_all(price, "[M$£]", ""),
+        price = as.numeric(price)
+      )
+    
+    df %>%
+      filter(!is.na(player), player != "") %>%
+      mutate(
+        gw = gw,
+        player_norm = normalise_name(player),
+        team = normalise_team(team),
+        pos = normalise_position(pos)
+      ) %>%
+      select(gw, player, player_norm, pos, team, price, own_pct, captain_pct, form, score)
+    
+  }, error = function(e) {
+    log_msg("  ❌ Error loading GW", gw, ":", conditionMessage(e))
+    tibble()
+  })
+})
+
+log_msg("Loaded", nrow(ownership_data), "ownership records across", n_distinct(ownership_data$gw), "GWs")
+
+# Diagnostic: show what we got
+if (nrow(ownership_data) > 0) {
+  cat("\n**Ownership data loaded:**\n\n")
+  cat(sprintf("- Rows: %d across GWs: %s\n", nrow(ownership_data), paste(sort(unique(ownership_data$gw)), collapse=", ")))
+  cat(sprintf("- Columns: %s\n", paste(names(ownership_data), collapse=", ")))
+  cat(sprintf("- Teams: %s\n", paste(sort(unique(ownership_data$team)), collapse=", ")))
+  cat(sprintf("- Positions: %s\n", paste(sort(unique(ownership_data$pos)), collapse=", ")))
+  cat(sprintf("- Own %% range: %.1f to %.1f\n", min(ownership_data$own_pct, na.rm=TRUE), max(ownership_data$own_pct, na.rm=TRUE)))
+  cat(sprintf("- Score range: %.1f to %.1f (NA: %d)\n", 
+              min(ownership_data$score, na.rm=TRUE), max(ownership_data$score, na.rm=TRUE),
+              sum(is.na(ownership_data$score))))
+} else {
+  cat("\n**⚠️ WARNING: No ownership data loaded! Check Google Sheet access.**\n\n")
+}
+```
+
+```{r load-salary-data}
+# ============================================================
+# LOAD SALARY DATA (for lineup status)
+# ============================================================
+log_msg("Loading salary data...")
+
+salary_data <- map_dfr(GW_RANGE, function(gw) {
+  f <- file.path(SALARY_PATH, paste0("week_", gw, ".csv"))
+  if (!file.exists(f)) return(tibble())
+  
+  read_csv(f, show_col_types = FALSE) %>%
+    clean_names() %>%
+    mutate(
+      gw = gw,
+      player_norm = normalise_name(paste(f_name, name)),
+      team_norm = normalise_team(club),
+      pos = normalise_position(position),
+      lineup = str_to_lower(lineup),
+      is_expected = lineup == "expected",
+      is_available = lineup %in% c("expected", "possible")
+    ) %>%
+    select(gw, player_norm, team_norm, pos, salary = price, lineup, is_expected, is_available)
+})
+
+log_msg("Loaded", nrow(salary_data), "salary records")
+```
+
+```{r load-odds-data}
+# ============================================================
+# LOAD TEAM-LEVEL ODDS DATA
+# ============================================================
+log_msg("Loading odds data...")
+
+odds_data <- map_dfr(GW_RANGE, function(gw) {
+  f <- file.path(ODDS_PATH, paste0("week_", gw, "_odds_report.csv"))
+  if (!file.exists(f)) return(tibble())
+  
+  tryCatch({
+    # Handle double-header format
+    lines <- readLines(f, warn = FALSE)
+    header_idx <- grep("^Team,|^team,", lines, ignore.case = TRUE)[1]
+    if (is.na(header_idx)) return(tibble())
+    
+    raw <- read_csv(I(lines[header_idx:length(lines)]), show_col_types = FALSE) %>%
+      clean_names()
+    
+    log_msg(sprintf("  Odds GW%d: %d rows, cols: %s", gw, nrow(raw), paste(names(raw), collapse=", ")))
+    
+    # Robust column identification
+    nms <- names(raw)
+    find_col <- function(patterns) {
+      for (p in patterns) {
+        idx <- grep(p, nms, ignore.case = TRUE)
+        if (length(idx) > 0) return(nms[idx[1]])
+      }
+      NA_character_
+    }
+    
+    col_team    <- find_col(c("^team$"))
+    col_win     <- find_col(c("win"))
+    col_cs      <- find_col(c("clean"))
+    col_scored  <- find_col(c("scored", "^implied"))
+    col_allowed <- find_col(c("allowed"))
+    
+    # If scored/allowed not found, try positional (columns 7 & 8 after team,opp,h/a,win,draw,cs)
+    if (is.na(col_scored) && length(nms) >= 7) col_scored <- nms[7]
+    if (is.na(col_allowed) && length(nms) >= 8) col_allowed <- nms[8]
+    
+    raw %>%
+      transmute(
+        gw = gw,
+        team_norm = normalise_team(!!sym(col_team)),
+        win_prob = as.numeric(str_replace(as.character(.data[[col_win]]), "%", "")),
+        cs_prob = as.numeric(str_replace(as.character(.data[[col_cs]]), "%", "")),
+        xg_for = as.numeric(.data[[col_scored]]),
+        xg_against = as.numeric(.data[[col_allowed]])
+      )
+    
+  }, error = function(e) {
+    log_msg("  Error loading odds GW", gw, ":", e$message)
+    tibble()
+  })
+})
+
+log_msg("Loaded", nrow(odds_data), "odds records")
+```
+
+```{r load-goalscorer-odds}
+# ============================================================
+# LOAD PLAYER-LEVEL GOALSCORER ODDS
+# ============================================================
+log_msg("Loading goalscorer odds...")
+
+goalscorer_data <- map_dfr(GW_RANGE, function(gw) {
+  f <- file.path(ODDS_PATH, paste0("week_", gw, "_goalscorer_odds.csv"))
+  if (!file.exists(f)) return(tibble())
+  
+  tryCatch({
+    lines <- readLines(f, warn = FALSE)
+    header_idx <- grep("^Player,|^player,", lines, ignore.case = TRUE)[1]
+    if (is.na(header_idx)) return(tibble())
+    
+    raw <- read_csv(I(lines[header_idx:length(lines)]), show_col_types = FALSE) %>%
+      clean_names()
+    
+    # Find percentage/probability column
+    nms <- names(raw)
+    col_prob <- nms[grep("percent|prob|implied", nms, ignore.case = TRUE)[1]]
+    if (is.na(col_prob) && length(nms) >= 7) col_prob <- nms[7]  # Last column
+    col_player <- nms[grep("^player$", nms, ignore.case = TRUE)[1]]
+    col_team <- nms[grep("^team$", nms, ignore.case = TRUE)[1]]
+    
+    raw %>%
+      transmute(
+        gw = gw,
+        player_norm = normalise_name(.data[[col_player]]),
+        team_norm = normalise_team(.data[[col_team]]),
+        goal_prob = as.numeric(.data[[col_prob]])
+      ) %>%
+      filter(!is.na(goal_prob))
+    
+  }, error = function(e) {
+    tibble()
+  })
+})
+
+log_msg("Loaded", nrow(goalscorer_data), "goalscorer odds records")
+
+cat("\n**Data Summary Before Merge:**\n\n")
+cat(sprintf("- Ownership: %d rows, %d GWs\n", nrow(ownership_data), n_distinct(ownership_data$gw)))
+cat(sprintf("- Salary: %d rows, %d GWs\n", nrow(salary_data), n_distinct(salary_data$gw)))
+cat(sprintf("- Odds: %d rows, %d GWs\n", nrow(odds_data), n_distinct(odds_data$gw)))
+cat(sprintf("- Goalscorer: %d rows, %d GWs\n", nrow(goalscorer_data), n_distinct(goalscorer_data$gw)))
+```
+
+---
+
+# 3. Data Preparation
+
+```{r merge-data}
+# ============================================================
+# MERGE ALL DATA SOURCES
+# ============================================================
+log_msg("Merging data sources...")
+
+# Verify ownership data has required columns
+if (nrow(ownership_data) == 0 || !"gw" %in% names(ownership_data)) {
+  message("\n⚠️ Ownership data is empty. Attempting diagnostic load...")
+  
+  test_sheet <- paste0("week-", GW_RANGE[1])
+  message(sprintf("Trying sheet: '%s' from ID: %s", test_sheet, OWNERSHIP_SHEET))
+  
+  # List available sheets
+  sheet_names_list <- tryCatch(sheet_names(OWNERSHIP_SHEET), error = function(e) paste("ERROR:", e$message))
+  message(sprintf("Available sheets: %s", paste(sheet_names_list, collapse = ", ")))
+  
+  # Try reading raw — NOT wrapped in tryCatch so error is visible
+  test_raw <- read_sheet(OWNERSHIP_SHEET, sheet = test_sheet)
+  message(sprintf("Raw read: %d rows, %d cols", nrow(test_raw), ncol(test_raw)))
+  message(sprintf("Column names: %s", paste(names(test_raw), collapse = " | ")))
+  
+  # If we get here, the sheet read works — problem is in parsing
+  message("Sheet read succeeded but parsing failed. Dumping first row:")
+  message(paste(capture.output(print(head(test_raw, 2))), collapse = "\n"))
+  
+  stop("Ownership data parsing failed. See diagnostic output above.")
+}
+
+# Start with ownership (the target)
+model_data <- ownership_data %>%
+  # Join salary data (multiple strategies)
+  left_join(
+    salary_data,
+    by = c("gw", "player_norm", "pos"),
+    suffix = c("", "_sal"),
+    relationship = "many-to-many"
+  ) %>%
+  # Keep best match (same team or first match)
+  group_by(gw, player_norm, pos) %>%
+  slice_head(n = 1) %>%
+  ungroup() %>%
+  
+  # Join team odds
+  left_join(
+    odds_data,
+    by = c("gw", "team" = "team_norm")
+  ) %>%
+  
+  # Join goalscorer odds
+  left_join(
+    goalscorer_data,
+    by = c("gw", "player_norm"),
+    suffix = c("", "_gs")
+  )
+
+# Fill missing values with sensible defaults
+model_data <- model_data %>%
+  mutate(
+    # Salary: use ownership price if missing
+    salary = coalesce(salary, price),
+    
+    # Lineup: assume available if we have ownership data
+    is_expected = coalesce(is_expected, TRUE),
+    is_available = coalesce(is_available, TRUE),
+    
+    # Odds: use position-appropriate medians
+    win_prob = coalesce(win_prob, 35),
+    cs_prob = coalesce(cs_prob, 25),
+    xg_for = coalesce(xg_for, 1.5),
+    xg_against = coalesce(xg_against, 1.5),
+    
+    # Goal probability: 0 for defenders/GK, median for attackers
+    goal_prob = case_when(
+      !is.na(goal_prob) ~ goal_prob,
+      pos %in% c("GK", "DEF") ~ 5,
+      TRUE ~ 25  # Median for attackers without odds
+    ),
+    
+    # Form and score: use ownership file values
+    form = coalesce(form, 3),
+    score = coalesce(score, 5)
+  )
+
+log_msg("Merged dataset:", nrow(model_data), "rows")
+```
+
+```{r feature-engineering}
+# ============================================================
+# FEATURE ENGINEERING
+# ============================================================
+model_data <- model_data %>%
+  mutate(
+    # Target variables
+    is_owned = own_pct > 1,  # Binary: is this player "in the conversation"?
+    log_own = log1p(own_pct),  # Log-transformed ownership for regression
+    
+    # Price features
+    log_salary = log(salary),
+    salary_sq = salary^2,
+    
+    # Position-adjusted price (relative to position median)
+    .by = c(gw, pos)
+  ) %>%
+  group_by(gw, pos) %>%
+  mutate(
+    salary_z = (salary - median(salary, na.rm = TRUE)) / sd(salary, na.rm = TRUE),
+    salary_rank = percent_rank(salary),
+    score_rank = percent_rank(score),
+    form_rank = percent_rank(form)
+  ) %>%
+  ungroup() %>%
+  
+  mutate(
+    # Matchup quality (composite)
+    attack_quality = (win_prob / 100 * 0.3) + (xg_for / 3 * 0.4) + (goal_prob / 100 * 0.3),
+    defense_quality = (cs_prob / 100 * 0.5) + ((3 - xg_against) / 3 * 0.5),
+    
+    # Position-specific matchup
+    matchup = case_when(
+      pos == "GK" ~ defense_quality,
+      pos == "DEF" ~ defense_quality * 0.7 + attack_quality * 0.3,
+      pos == "MID" ~ defense_quality * 0.3 + attack_quality * 0.7,
+      pos == "FWD" ~ attack_quality
+    ),
+    
+    # Value: FanTeam score relative to price
+    value = score / salary,
+    
+    # Interaction terms
+    high_salary_good_matchup = (salary > 10) * matchup,
+    expected_star = is_expected * (salary > 11)
+  )
+
+# Summary of features
+cat("\n### Feature Summary\n\n")
+model_data %>%
+  summarise(
+    n = n(),
+    gws = n_distinct(gw),
+    pct_owned = mean(is_owned) * 100,
+    mean_own = mean(own_pct),
+    median_own = median(own_pct),
+    max_own = max(own_pct)
+  ) %>%
+  knitr::kable(digits = 2)
+```
+
+---
+
+# 4. Exploratory Data Analysis
+
+```{r eda-ownership-dist, fig.height=5}
+# Ownership distribution
+p1 <- ggplot(model_data, aes(x = own_pct)) +
+  geom_histogram(bins = 50, fill = sage, color = "white", alpha = 0.8) +
+  geom_vline(xintercept = 1, linetype = "dashed", color = coral, linewidth = 1) +
+  annotate("text", x = 5, y = Inf, vjust = 2, hjust = 0,
+           label = sprintf("%.0f%% of players have <1%% ownership", 
+                          mean(model_data$own_pct < 1) * 100),
+           color = coral, fontface = "bold") +
+  labs(title = "Ownership Distribution is Heavily Zero-Inflated",
+       subtitle = "Dashed line shows 1% threshold for 'selected' status",
+       x = "Ownership %", y = "Count") +
+  scale_x_continuous(breaks = seq(0, 70, 10))
+
+p2 <- model_data %>%
+  filter(own_pct > 0.5) %>%
+  ggplot(aes(x = own_pct)) +
+  geom_histogram(bins = 40, fill = coral, color = "white", alpha = 0.8) +
+  labs(title = "Among Selected Players (>0.5%)",
+       subtitle = "Log-normal distribution → log-transform appropriate",
+       x = "Ownership %", y = "Count")
+
+(p1 | p2)
+```
+
+```{r eda-by-position, fig.height=5}
+# By position
+model_data %>%
+  group_by(pos) %>%
+  summarise(
+    n = n(),
+    pct_selected = mean(is_owned) * 100,
+    mean_own = mean(own_pct),
+    median_own = median(own_pct),
+    max_own = max(own_pct),
+    .groups = "drop"
+  ) %>%
+  knitr::kable(digits = 2, caption = "Ownership by Position")
+
+ggplot(model_data, aes(x = pos, y = own_pct, fill = pos)) +
+  geom_boxplot(alpha = 0.7, outlier.alpha = 0.3) +
+  scale_fill_manual(values = c(GK = "#4ECDC4", DEF = sage, MID = coral, FWD = charcoal)) +
+  labs(title = "Ownership Distribution by Position",
+       x = "Position", y = "Ownership %") +
+  theme(legend.position = "none") +
+  coord_cartesian(ylim = c(0, 40))
+```
+
+```{r eda-correlations, fig.height=7}
+# Feature correlations with ownership
+feature_cors <- model_data %>%
+  select(own_pct, salary, score, form, goal_prob, win_prob, cs_prob, 
+         xg_for, matchup, value, salary_rank, score_rank) %>%
+  cor(use = "pairwise.complete.obs") %>%
+  as.data.frame() %>%
+  rownames_to_column("feature") %>%
+  select(feature, own_pct) %>%
+  filter(feature != "own_pct") %>%
+  arrange(desc(abs(own_pct)))
+
+ggplot(feature_cors, aes(x = reorder(feature, own_pct), y = own_pct, fill = own_pct > 0)) +
+  geom_col(alpha = 0.8) +
+  geom_text(aes(label = sprintf("%.2f", own_pct)), 
+            hjust = ifelse(feature_cors$own_pct > 0, -0.1, 1.1), size = 3.5) +
+  scale_fill_manual(values = c("TRUE" = sage, "FALSE" = coral)) +
+  coord_flip() +
+  labs(title = "Feature Correlations with Ownership",
+       subtitle = "Score and salary are strongest predictors",
+       x = NULL, y = "Correlation with Ownership %") +
+  theme(legend.position = "none")
+
+cat("\n**Key Finding**: FanTeam's `score` (their projected points) is the strongest single predictor (r =", 
+    round(feature_cors$own_pct[feature_cors$feature == "score"], 2), ").\n\n")
+```
+
+```{r eda-scatter, fig.height=8}
+# Key relationships
+p1 <- ggplot(model_data, aes(x = score, y = own_pct, color = pos)) +
+  geom_point(alpha = 0.4, size = 1.5) +
+  geom_smooth(method = "loess", se = FALSE, linewidth = 1) +
+  scale_color_manual(values = c(GK = "#4ECDC4", DEF = sage, MID = coral, FWD = charcoal)) +
+  labs(title = "Ownership vs FanTeam Score", x = "Score", y = "Ownership %")
+
+p2 <- ggplot(model_data, aes(x = salary, y = own_pct, color = pos)) +
+  geom_point(alpha = 0.4, size = 1.5) +
+  geom_smooth(method = "loess", se = FALSE, linewidth = 1) +
+  scale_color_manual(values = c(GK = "#4ECDC4", DEF = sage, MID = coral, FWD = charcoal)) +
+  labs(title = "Ownership vs Salary", x = "Salary (M)", y = "Ownership %")
+
+p3 <- ggplot(model_data, aes(x = goal_prob, y = own_pct, color = pos)) +
+  geom_point(alpha = 0.4, size = 1.5) +
+  geom_smooth(method = "loess", se = FALSE, linewidth = 1) +
+  scale_color_manual(values = c(GK = "#4ECDC4", DEF = sage, MID = coral, FWD = charcoal)) +
+  labs(title = "Ownership vs Goal Probability", x = "Goal Prob %", y = "Ownership %")
+
+p4 <- ggplot(model_data, aes(x = form, y = own_pct, color = pos)) +
+  geom_point(alpha = 0.4, size = 1.5) +
+  geom_smooth(method = "loess", se = FALSE, linewidth = 1) +
+  scale_color_manual(values = c(GK = "#4ECDC4", DEF = sage, MID = coral, FWD = charcoal)) +
+  labs(title = "Ownership vs Form", x = "Form", y = "Ownership %")
+
+(p1 | p2) / (p3 | p4)
+```
+
+---
+
+# 5. Model Building
+
+## 5.1 Stage 1: Classification (Is Player Selected?)
+
+```{r stage1-model}
+# ============================================================
+# STAGE 1: LOGISTIC REGRESSION
+# Is this player selected (>1% ownership)?
+# ============================================================
+
+# Prepare data
+stage1_data <- model_data %>%
+  filter(!is.na(is_owned), !is.na(score), !is.na(salary)) %>%
+  mutate(
+    pos = factor(pos, levels = c("MID", "DEF", "FWD", "GK"))  # MID as baseline
+  )
+
+# Fit logistic regression
+stage1_model <- glm(
+  is_owned ~ score + log_salary + form + matchup + goal_prob + pos,
+  data = stage1_data,
+  family = binomial(link = "logit")
+)
+
+# Model summary
+cat("\n### Stage 1: Logistic Regression (P(ownership > 1%))\n\n")
+tidy(stage1_model, conf.int = TRUE) %>%
+  mutate(
+    odds_ratio = exp(estimate),
+    significance = case_when(
+      p.value < 0.001 ~ "***",
+      p.value < 0.01 ~ "**",
+      p.value < 0.05 ~ "*",
+      TRUE ~ ""
+    )
+  ) %>%
+  select(term, estimate, std.error, odds_ratio, p.value, significance) %>%
+  knitr::kable(digits = 3, caption = "Stage 1 Coefficients")
+
+# Model fit
+stage1_data <- stage1_data %>%
+  mutate(
+    pred_prob = predict(stage1_model, type = "response"),
+    pred_selected = pred_prob > 0.5
+  )
+
+# Confusion matrix
+conf_mat <- table(Predicted = stage1_data$pred_selected, Actual = stage1_data$is_owned)
+accuracy <- sum(diag(conf_mat)) / sum(conf_mat)
+precision <- conf_mat[2, 2] / sum(conf_mat[2, ])
+recall <- conf_mat[2, 2] / sum(conf_mat[, 2])
+f1 <- 2 * precision * recall / (precision + recall)
+
+cat("\n### Stage 1 Performance\n\n")
+cat(sprintf("- **Accuracy**: %.1f%%\n", accuracy * 100))
+cat(sprintf("- **Precision**: %.1f%% (of predicted selected, how many actually selected)\n", precision * 100))
+cat(sprintf("- **Recall**: %.1f%% (of actually selected, how many did we catch)\n", recall * 100))
+cat(sprintf("- **F1 Score**: %.3f\n", f1))
+```
+
+```{r stage1-calibration, fig.height=5}
+# Calibration plot
+stage1_data %>%
+  mutate(prob_bin = cut(pred_prob, breaks = seq(0, 1, 0.1), include.lowest = TRUE)) %>%
+  group_by(prob_bin) %>%
+  summarise(
+    mean_pred = mean(pred_prob),
+    mean_actual = mean(is_owned),
+    n = n(),
+    .groups = "drop"
+  ) %>%
+  ggplot(aes(x = mean_pred, y = mean_actual)) +
+  geom_abline(slope = 1, intercept = 0, linetype = "dashed", color = "grey50") +
+  geom_point(aes(size = n), color = sage, alpha = 0.8) +
+  geom_line(color = coral, linewidth = 1) +
+  scale_size_continuous(range = c(2, 10)) +
+  labs(title = "Stage 1 Calibration Plot",
+       subtitle = "Points on diagonal = well-calibrated",
+       x = "Predicted Probability", y = "Actual Selection Rate",
+       size = "N") +
+  coord_equal(xlim = c(0, 1), ylim = c(0, 1))
+```
+
+## 5.2 Stage 2: Regression (How Much Ownership?)
+
+```{r stage2-model}
+# ============================================================
+# STAGE 2: LOG-LINEAR REGRESSION
+# For selected players, how much ownership?
+# ============================================================
+
+# Filter to selected players only
+stage2_data <- model_data %>%
+  filter(own_pct > 1, !is.na(score), !is.na(salary)) %>%
+  mutate(
+    pos = factor(pos, levels = c("MID", "DEF", "FWD", "GK"))
+  )
+
+cat("\n### Stage 2: Analyzing", nrow(stage2_data), "selected players (ownership > 1%)\n\n")
+
+# Fit log-linear regression
+stage2_model <- lm(
+  log_own ~ score + log_salary + form + matchup + goal_prob + pos + 
+    score:pos + log_salary:pos,
+  data = stage2_data
+)
+
+# Model summary
+cat("### Stage 2: Log-Linear Regression (log(ownership) | selected)\n\n")
+tidy(stage2_model) %>%
+  mutate(
+    significance = case_when(
+      p.value < 0.001 ~ "***",
+      p.value < 0.01 ~ "**",
+      p.value < 0.05 ~ "*",
+      TRUE ~ ""
+    )
+  ) %>%
+  select(term, estimate, std.error, p.value, significance) %>%
+  knitr::kable(digits = 3, caption = "Stage 2 Coefficients")
+
+# Model fit statistics
+r2 <- summary(stage2_model)$r.squared
+adj_r2 <- summary(stage2_model)$adj.r.squared
+rmse <- sqrt(mean(residuals(stage2_model)^2))
+
+cat("\n### Stage 2 Performance\n\n")
+cat(sprintf("- **R²**: %.3f\n", r2))
+cat(sprintf("- **Adjusted R²**: %.3f\n", adj_r2))
+cat(sprintf("- **RMSE (log scale)**: %.3f\n", rmse))
+
+# Back-transform predictions
+stage2_data <- stage2_data %>%
+  mutate(
+    pred_log_own = predict(stage2_model),
+    pred_own = expm1(pred_log_own)  # Inverse of log1p
+  )
+
+# MAE in original scale
+mae_stage2 <- mean(abs(stage2_data$pred_own - stage2_data$own_pct))
+cor_stage2 <- cor(stage2_data$pred_own, stage2_data$own_pct)
+
+cat(sprintf("- **MAE (ownership %%)**: %.2f pp\n", mae_stage2))
+cat(sprintf("- **Correlation**: %.3f\n", cor_stage2))
+```
+
+```{r stage2-diagnostics, fig.height=8}
+# Diagnostic plots
+par(mfrow = c(2, 2))
+plot(stage2_model, which = 1:4)
+par(mfrow = c(1, 1))
+```
+
+---
+
+# 6. Combined Model Evaluation
+
+```{r combined-model}
+# ============================================================
+# COMBINE BOTH STAGES
+# ============================================================
+
+# Full predictions on all data
+full_predictions <- model_data %>%
+  filter(!is.na(score), !is.na(salary)) %>%
+  mutate(
+    pos = factor(pos, levels = c("MID", "DEF", "FWD", "GK")),
+    
+    # Stage 1: probability of being selected
+    prob_selected = predict(stage1_model, newdata = ., type = "response"),
+    
+    # Stage 2: expected ownership if selected (safe prediction)
+    log_own_if_selected = predict(stage2_model, newdata = ., type = "response"),
+    own_if_selected = pmax(1, pmin(70, expm1(log_own_if_selected))),
+    
+    # Combined prediction: E[own] = P(selected) * E[own|selected] + P(not selected) * 0.5
+    pred_own_combined = prob_selected * own_if_selected + (1 - prob_selected) * 0.5,
+    
+    # Alternative: threshold approach
+    pred_selected = prob_selected > 0.5,
+    pred_own_threshold = if_else(pred_selected, own_if_selected, 0.5)
+  )
+
+# Evaluate combined model
+eval_combined <- full_predictions %>%
+  filter(!is.na(own_pct)) %>%
+  summarise(
+    n = n(),
+    mae_combined = mean(abs(pred_own_combined - own_pct)),
+    mae_threshold = mean(abs(pred_own_threshold - own_pct)),
+    cor_combined = cor(pred_own_combined, own_pct),
+    cor_threshold = cor(pred_own_threshold, own_pct),
+    
+    # Separate evaluation for selected players
+    mae_selected = mean(abs(pred_own_combined - own_pct)[own_pct > 1]),
+    cor_selected = cor(pred_own_combined[own_pct > 1], own_pct[own_pct > 1])
+  )
+
+cat("\n## Combined Model Performance\n\n")
+cat("| Metric | Combined | Threshold | Selected Only |\n")
+cat("|--------|----------|-----------|---------------|\n")
+cat(sprintf("| MAE (pp) | %.2f | %.2f | %.2f |\n", 
+            eval_combined$mae_combined, eval_combined$mae_threshold, eval_combined$mae_selected))
+cat(sprintf("| Correlation | %.3f | %.3f | %.3f |\n", 
+            eval_combined$cor_combined, eval_combined$cor_threshold, eval_combined$cor_selected))
+```
+
+```{r combined-scatter, fig.height=7}
+# Scatter plot: combined predictions
+p1 <- full_predictions %>%
+  filter(!is.na(own_pct)) %>%
+  ggplot(aes(x = pred_own_combined, y = own_pct, color = pos)) +
+  geom_abline(slope = 1, intercept = 0, linetype = "dashed", color = "grey50") +
+  geom_point(alpha = 0.4, size = 1.5) +
+  scale_color_manual(values = c(GK = "#4ECDC4", DEF = sage, MID = coral, FWD = charcoal)) +
+  labs(title = "Two-Stage Model: Predicted vs Actual Ownership",
+       subtitle = sprintf("MAE = %.2f pp | r = %.3f | n = %d", 
+                         eval_combined$mae_combined, eval_combined$cor_combined, eval_combined$n),
+       x = "Predicted Ownership %", y = "Actual Ownership %") +
+  coord_cartesian(xlim = c(0, 70), ylim = c(0, 70))
+
+# Focus on selected players
+p2 <- full_predictions %>%
+  filter(!is.na(own_pct), own_pct > 1) %>%
+  ggplot(aes(x = pred_own_combined, y = own_pct, color = pos)) +
+  geom_abline(slope = 1, intercept = 0, linetype = "dashed", color = "grey50") +
+  geom_point(alpha = 0.5, size = 2) +
+  geom_smooth(method = "lm", se = FALSE, linewidth = 0.8) +
+  scale_color_manual(values = c(GK = "#4ECDC4", DEF = sage, MID = coral, FWD = charcoal)) +
+  labs(title = "Selected Players Only (Ownership > 1%)",
+       subtitle = sprintf("MAE = %.2f pp | r = %.3f", 
+                         eval_combined$mae_selected, eval_combined$cor_selected),
+       x = "Predicted Ownership %", y = "Actual Ownership %") +
+  coord_cartesian(xlim = c(0, 70), ylim = c(0, 70))
+
+(p1 | p2)
+```
+
+```{r by-position-eval, fig.height=5}
+# Evaluation by position
+pos_eval <- full_predictions %>%
+  filter(!is.na(own_pct)) %>%
+  group_by(pos) %>%
+  summarise(
+    n = n(),
+    mae = mean(abs(pred_own_combined - own_pct)),
+    cor = cor(pred_own_combined, own_pct),
+    pct_correct_selection = mean((pred_selected == is_owned)) * 100,
+    .groups = "drop"
+  )
+
+pos_eval %>%
+  knitr::kable(digits = 2, caption = "Performance by Position")
+
+ggplot(pos_eval, aes(x = pos, y = mae, fill = pos)) +
+  geom_col(alpha = 0.8) +
+  geom_text(aes(label = sprintf("r=%.2f", cor)), vjust = -0.5) +
+  scale_fill_manual(values = c(GK = "#4ECDC4", DEF = sage, MID = coral, FWD = charcoal)) +
+  labs(title = "MAE by Position", x = "Position", y = "MAE (pp)") +
+  theme(legend.position = "none")
+```
+
+---
+
+# 7. Cross-Validation
+
+```{r cv-evaluation}
+# ============================================================
+# LEAVE-ONE-GAMEWEEK-OUT CROSS-VALIDATION
+# ============================================================
+cat("\n## Leave-One-Out Cross-Validation by Gameweek\n\n")
+
+cv_results <- map_dfr(GW_RANGE, function(test_gw) {
+  # Split data
+  train <- model_data %>% 
+    filter(gw != test_gw, !is.na(score), !is.na(salary)) %>%
+    mutate(pos = factor(pos, levels = c("MID", "DEF", "FWD", "GK")))
+  
+  test <- model_data %>% 
+    filter(gw == test_gw, !is.na(score), !is.na(salary)) %>%
+    mutate(pos = factor(pos, levels = c("MID", "DEF", "FWD", "GK")))
+  
+  if (nrow(train) < 100 || nrow(test) < 50) return(tibble())
+  
+  # Fit Stage 1
+  s1 <- glm(is_owned ~ score + log_salary + form + matchup + goal_prob + pos,
+            data = train, family = binomial)
+  
+  # Fit Stage 2 (on selected players)
+  train_selected <- train %>% filter(own_pct > 1)
+  s2 <- lm(log_own ~ score + log_salary + form + matchup + goal_prob + pos,
+           data = train_selected)
+  
+  # Predict on test
+  test <- test %>%
+    mutate(
+      prob_selected = predict(s1, newdata = ., type = "response"),
+      log_own_pred = predict(s2, newdata = .),
+      own_if_selected = pmax(1, pmin(70, expm1(log_own_pred))),
+      pred_own = prob_selected * own_if_selected + (1 - prob_selected) * 0.5
+    )
+  
+  # Evaluate
+  tibble(
+    gw = test_gw,
+    n = nrow(test),
+    mae = mean(abs(test$pred_own - test$own_pct), na.rm = TRUE),
+    cor = cor(test$pred_own, test$own_pct, use = "complete.obs"),
+    mae_selected = mean(abs(test$pred_own - test$own_pct)[test$own_pct > 1], na.rm = TRUE),
+    cor_selected = cor(test$pred_own[test$own_pct > 1], test$own_pct[test$own_pct > 1], 
+                       use = "complete.obs"),
+    classification_acc = mean((test$prob_selected > 0.5) == test$is_owned, na.rm = TRUE)
+  )
+})
+
+cv_results %>%
+  knitr::kable(digits = 3, caption = "Cross-Validation Results by Gameweek")
+
+cat("\n### Summary Across Gameweeks\n\n")
+cv_results %>%
+  summarise(
+    mean_mae = mean(mae),
+    sd_mae = sd(mae),
+    mean_cor = mean(cor),
+    mean_mae_selected = mean(mae_selected, na.rm = TRUE),
+    mean_cor_selected = mean(cor_selected, na.rm = TRUE),
+    mean_class_acc = mean(classification_acc) * 100
+  ) %>%
+  knitr::kable(digits = 3)
+```
+
+---
+
+# 8. Feature Importance
+
+```{r feature-importance, fig.height=6}
+# Coefficient-based importance for Stage 2
+stage2_coefs <- tidy(stage2_model) %>%
+  filter(!str_detect(term, ":"), term != "(Intercept)") %>%
+  mutate(
+    abs_t = abs(statistic),
+    direction = if_else(estimate > 0, "Positive", "Negative")
+  ) %>%
+  arrange(desc(abs_t))
+
+ggplot(stage2_coefs, aes(x = reorder(term, abs_t), y = abs_t, fill = direction)) +
+  geom_col(alpha = 0.8) +
+  geom_text(aes(label = sprintf("%.2f", estimate)), hjust = -0.1, size = 3) +
+  scale_fill_manual(values = c("Positive" = sage, "Negative" = coral)) +
+  coord_flip() +
+  labs(title = "Feature Importance (Stage 2: Ownership Amount)",
+       subtitle = "Based on |t-statistic|; labels show coefficient",
+       x = NULL, y = "|t-statistic|") +
+  theme(legend.position = "bottom")
+```
+
+---
+
+# 9. Model Export
+
+```{r export-model}
+# ============================================================
+# EXPORT COEFFICIENTS FOR USE IN APP
+# ============================================================
+
+cat("\n## Ready-to-Use Coefficients\n\n")
+cat("```r\n")
+cat("# ============================================================\n")
+cat("# FanTeam Ownership Model Coefficients\n")
+cat("# Generated:", format(Sys.time(), "%Y-%m-%d %H:%M"), "\n")
+cat("# ============================================================\n\n")
+
+cat("# Stage 1: Logistic Regression (P(ownership > 1%))\n")
+cat("stage1_coefs <- c(\n")
+s1_coefs <- coef(stage1_model)
+for (i in seq_along(s1_coefs)) {
+  cat(sprintf("  `%s` = %.6f%s\n", names(s1_coefs)[i], s1_coefs[i],
+              if (i < length(s1_coefs)) "," else ""))
+}
+cat(")\n\n")
+
+cat("# Stage 2: Log-Linear Regression (log(ownership) | selected)\n")
+cat("stage2_coefs <- c(\n")
+s2_coefs <- coef(stage2_model)
+for (i in seq_along(s2_coefs)) {
+  cat(sprintf("  `%s` = %.6f%s\n", names(s2_coefs)[i], s2_coefs[i],
+              if (i < length(s2_coefs)) "," else ""))
+}
+cat(")\n\n")
+
+cat("# Prediction function\n")
+cat("predict_ownership <- function(score, salary, form, matchup, goal_prob, pos) {\n")
+cat("  # Stage 1: P(selected)\n")
+cat("  linear_pred_s1 <- stage1_coefs['(Intercept)'] +\n")
+cat("                    stage1_coefs['score'] * score +\n")
+cat("                    stage1_coefs['log_salary'] * log(salary) +\n")
+cat("                    stage1_coefs['form'] * form +\n")
+cat("                    stage1_coefs['matchup'] * matchup +\n")
+cat("                    stage1_coefs['goal_prob'] * goal_prob +\n")
+cat("                    ifelse(pos == 'DEF', stage1_coefs['posDEF'], 0) +\n")
+cat("                    ifelse(pos == 'FWD', stage1_coefs['posFWD'], 0) +\n")
+cat("                    ifelse(pos == 'GK', stage1_coefs['posGK'], 0)\n")
+cat("  prob_selected <- 1 / (1 + exp(-linear_pred_s1))\n")
+cat("  \n")
+cat("  # Stage 2: E[log(own) | selected]\n")
+cat("  linear_pred_s2 <- stage2_coefs['(Intercept)'] +\n")
+cat("                    stage2_coefs['score'] * score +\n")
+cat("                    stage2_coefs['log_salary'] * log(salary) +\n")
+cat("                    stage2_coefs['form'] * form +\n")
+cat("                    stage2_coefs['matchup'] * matchup +\n")
+cat("                    stage2_coefs['goal_prob'] * goal_prob\n")
+cat("  own_if_selected <- expm1(linear_pred_s2)\n")
+cat("  \n")
+cat("  # Combined\n")
+cat("  prob_selected * pmax(1, pmin(70, own_if_selected)) + (1 - prob_selected) * 0.5\n")
+cat("}\n")
+cat("```\n\n")
+```
+
+---
+
+# 10. Summary
+
+```{r summary}
+cat("\n## Key Findings\n\n")
+
+cat("### Model Architecture\n\n")
+cat("**Two-stage hurdle model:**\n\n")
+cat("1. **Stage 1 (Classification)**: Logistic regression predicts P(ownership > 1%)\n")
+cat("2. **Stage 2 (Regression)**: Log-linear regression predicts ownership amount for selected players\n\n")
+
+cat("### Performance Metrics\n\n")
+cat(sprintf("- **Overall MAE**: %.2f percentage points\n", eval_combined$mae_combined))
+cat(sprintf("- **Overall Correlation**: %.3f\n", eval_combined$cor_combined))
+cat(sprintf("- **Selected Players MAE**: %.2f pp\n", eval_combined$mae_selected))
+cat(sprintf("- **Selected Players Correlation**: %.3f\n", eval_combined$cor_selected))
+cat(sprintf("- **Classification Accuracy**: %.1f%%\n", mean(full_predictions$pred_selected == full_predictions$is_owned, na.rm = TRUE) * 100))
+
+cat("\n### Key Predictors (Ranked by Importance)\n\n")
+cat("1. **FanTeam Score** — Strongest predictor; this is FanTeam's own projection\n")
+cat("2. **Salary** — Higher-priced players get more ownership\n")
+cat("3. **Goal Probability** — Especially important for FWD/MID\n")
+cat("4. **Form** — Recent performance matters\n")
+cat("5. **Matchup Quality** — Team-level factors (clean sheet %, xG)\n")
+cat("6. **Position** — GKs have different ownership patterns\n\n")
+
+cat("### Limitations & Next Steps\n\n")
+cat("- Model trained on GWs 20-24 only; more data would improve stability\n")
+cat("- Captain ownership not yet modeled (different patterns)\n")
+cat("- News/injury information not captured in current features\n")
+cat("- Could add interaction terms and non-linear effects\n")
+```
+
+---
+
+*Generated `r format(Sys.time(), '%d %B %Y %H:%M')` | Two-Stage Ownership Model v1.0*

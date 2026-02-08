@@ -120,7 +120,7 @@ soccer_betting_ui <- function(id) {
               label = NULL,
               choices = c("All" = "all",
                           "Positive +" = "positive",
-                          "Negative −" = "negative"),
+                          "Negative âˆ’" = "negative"),
               selected = "all",
               multiple = FALSE,
               width = "100%"
@@ -210,11 +210,11 @@ soccer_betting_server <- function(id) {
           id = ns(paste0("league_", gsub(" ", "_", league_name))),
           style = paste0(
             "display: inline-flex; align-items: center; justify-content: center; gap: 8px; ",
-            "padding: 10px 14px; margin: 4px; border-radius: var(--radius-md); ",
+            "padding: 10px 14px; border-radius: var(--radius-md); ",
             "border: 2px solid ", if (is_selected) "var(--outline)" else "#E0E0E0", "; ",
             "cursor: pointer; font-family: var(--font-primary); ",
             "font-weight: ", if (is_selected) "700" else "500", "; ",
-            "font-size: 0.85rem; width: 180px; ",
+            "font-size: 0.85rem; width: calc(25% - 6px); box-sizing: border-box; ",
             "background-color: var(--bg-white); ",
             "color: ", if (is_selected) "var(--text-primary)" else "var(--text-secondary)", "; ",
             "transition: all var(--transition-fast); ",
@@ -227,7 +227,7 @@ soccer_betting_server <- function(id) {
           ),
           if (!is.null(logo_path)) {
             tags$img(src = logo_path, style = paste0(
-              "width: 22px; height: 22px; object-fit: contain; ",
+              "width: 25px; height: 25px; object-fit: contain; ",
               "opacity: ", if (is_selected) "1" else "0.6", ";"
             ))
           },
@@ -237,7 +237,7 @@ soccer_betting_server <- function(id) {
       
       tagList(
         select_all_btn,
-        div(style = "display: flex; flex-wrap: wrap; gap: 4px;", buttons)
+        div(style = "display: flex; flex-wrap: wrap; gap: 8px;", buttons)
       )
     })
     
@@ -830,6 +830,35 @@ prepare_betting_table_with_logos <- function(odds_data, standings_data, ppg_mode
           ),
         by = c("away_team_norm" = "team_norm", "league_name" = "league_name")
       )
+    
+    # Diagnostic: log unmatched teams
+    unmatched_home <- full_joined %>% 
+      filter(is.na(home_season_ppg)) %>% 
+      distinct(league_name, home_team_norm) %>%
+      mutate(side = "home")
+    unmatched_away <- full_joined %>% 
+      filter(is.na(away_season_ppg)) %>% 
+      distinct(league_name, away_team_norm) %>%
+      mutate(side = "away")
+    
+    if (nrow(unmatched_home) > 0 || nrow(unmatched_away) > 0) {
+      all_unmatched <- unique(c(
+        paste0(unmatched_home$league_name, ": ", unmatched_home$home_team_norm),
+        paste0(unmatched_away$league_name, ": ", unmatched_away$away_team_norm)
+      ))
+      standings_teams <- standings_norm %>% distinct(league_name, team_norm)
+      
+      # Log unmatched and what standings has for those leagues
+      for (um in all_unmatched) {
+        league <- sub(":.*", "", um)
+        avail <- standings_teams %>% filter(league_name == league) %>% pull(team_norm)
+        if (length(avail) == 0) {
+          log_debug(sprintf("Betting UNMATCHED: %s (BBC returned NO standings for this league)", um))
+        } else {
+          log_debug(sprintf("Betting UNMATCHED: %s (BBC has: %s)", um, paste(head(avail, 20), collapse = ", ")))
+        }
+      }
+    }
   } else {
     full_joined <- odds_norm %>%
       mutate(

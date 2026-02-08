@@ -1,0 +1,1361 @@
+---
+title: "Ownership Weight Optimizer"
+subtitle: "Finding optimal appeal-score weights for FanTeam Monster"
+date: "`r format(Sys.time(), '%d %B %Y')`"
+output:
+  html_document:
+    theme: flatly
+    toc: true
+    toc_float: true
+    toc_depth: 3
+    code_folding: hide
+    self_contained: true
+---
+
+```{css, echo=FALSE}
+:root { --sage: #7A8B6F; --coral: #E07A5F; --charcoal: #3D405B; --cream: #F4F1DE; }
+
+body { font-family: 'Inter', -apple-system, sans-serif; color: var(--charcoal); }
+h1, h2, h3 { color: var(--charcoal); font-weight: 700; }
+h1 { border-bottom: 3px solid var(--sage); padding-bottom: 0.3em; }
+
+.metric-card {
+  display: inline-block; background: white; border: 2px solid #e0e0e0;
+  border-radius: 12px; padding: 16px 24px; margin: 8px; text-align: center;
+  min-width: 150px; box-shadow: 0 2px 6px rgba(0,0,0,0.06);
+}
+.metric-card .value { font-size: 2em; font-weight: 800; color: var(--sage); }
+.metric-card .label { font-size: 0.85em; color: #666; margin-top: 4px; }
+
+.winner-card {
+  background: linear-gradient(135deg, var(--cream), white);
+  border: 3px solid var(--sage); border-radius: 16px;
+  padding: 24px; margin: 16px 0;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+}
+.winner-card h3 { color: var(--sage); margin-top: 0; }
+
+.interp-box {
+  background: var(--cream); border-left: 4px solid var(--sage);
+  padding: 12px 16px; margin: 16px 0; border-radius: 0 8px 8px 0;
+  font-style: italic;
+}
+
+.warn-box {
+  background: #FFF3CD; border-left: 4px solid #FFC107;
+  padding: 12px 16px; margin: 16px 0; border-radius: 0 8px 8px 0;
+}
+
+.debug-box {
+  background: #f0f0f0; border-left: 4px solid #999;
+  padding: 12px 16px; margin: 16px 0; border-radius: 0 8px 8px 0;
+  font-family: 'Consolas', 'Courier New', monospace; font-size: 0.85em;
+}
+
+table { width: 100%; border-collapse: collapse; margin: 12px 0; }
+th { background: var(--charcoal); color: white; padding: 10px 12px; text-align: left; }
+td { padding: 8px 12px; border-bottom: 1px solid #eee; }
+tr:hover { background: var(--cream); }
+.top-row { background: rgba(122, 139, 111, 0.15); font-weight: bold; }
+```
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  echo = TRUE, warning = FALSE, message = FALSE,
+  fig.width = 10, fig.height = 6, dpi = 120
+)
+
+suppressPackageStartupMessages({
+  library(dplyr)
+  library(tidyr)
+  library(ggplot2)
+  library(stringr)
+  library(here)
+  library(readr)
+  library(janitor)
+  library(googlesheets4)
+})
+
+gs4_deauth()
+
+theme_sage <- theme_minimal(base_size = 13) +
+  theme(
+    plot.title    = element_text(face = "bold", color = "#3D405B"),
+    plot.subtitle = element_text(color = "#666"),
+    panel.grid.minor = element_blank(),
+    legend.position = "bottom"
+  )
+theme_set(theme_sage)
+
+sage  <- "#7A8B6F"
+coral <- "#E07A5F"
+charcoal <- "#3D405B"
+cream <- "#F4F1DE"
+```
+
+# Overview
+
+This report systematically tests different **appeal-score weight combinations**
+for the ownership estimation model and identifies which weighting best predicts
+actual FanTeam Monster contest ownership.
+
+**Approach:**
+
+1. Load historical gameweek data (salaries, odds, stats) + actual ownership
+2. For each weight combination, compute appeal scores → exponential concentration → position budgets
+3. Compare predicted vs actual ownership (MAE, correlation, top-player accuracy)
+4. Report the winning weights and how much improvement is possible
+
+**Position structure:** 1 GK, 3+ DEF, 3+ MID, 1+ FWD, 2 flex = 11 players.
+We also test different position budget allocations reflecting flex slot usage.
+
+```{r helpers}
+# ============================================================
+# SHARED HELPERS
+# ============================================================
+
+log_msg <- function(..., level = "INFO") {
+  msg <- paste(...)
+  message(sprintf("## [%s] [%s] %s", format(Sys.time(), "%H:%M:%S"), level, msg))
+}
+
+# ============================================================
+# TEAM NORMALISATION — UNIFIED APPROACH
+# Mirrors the app's FANTEAM_CLUB_MAPPING + TEAM_NAME_MAPPING
+# so that BOTH 3-letter codes AND full names → same canonical form
+# ============================================================
+
+# FanTeam 3-letter code → Canonical name (from soccer_fanteam_loader.R)
+CLUB_CODE_TO_CANONICAL <- c(
+  "ARS" = "Arsenal", "AV" = "Aston Villa", "AVL" = "Aston Villa",
+  "BOU" = "Bournemouth", "BRE" = "Brentford", "BHA" = "Brighton",
+  "BUR" = "Burnley", "CHE" = "Chelsea", "CRY" = "Crystal Palace",
+  "EVE" = "Everton", "FUL" = "Fulham", "IPS" = "Ipswich Town",
+  "LEE" = "Leeds United", "LEI" = "Leicester City", "LIV" = "Liverpool",
+  "MCI" = "Manchester City", "MUN" = "Manchester United",
+  "NEW" = "Newcastle United", "NFO" = "Nottingham Forest",
+  "NTG" = "Nottingham Forest", "SOU" = "Southampton",
+  "SUN" = "Sunderland", "TOT" = "Tottenham",
+  "WHU" = "West Ham", "WOL" = "Wolves",
+  # Championship
+  "BIR" = "Birmingham City", "BLK" = "Blackburn Rovers",
+  "BRC" = "Bristol City", "CAR" = "Cardiff City",
+  "COV" = "Coventry City", "DER" = "Derby County",
+  "HUL" = "Hull City", "LUT" = "Luton Town",
+  "MID" = "Middlesbrough", "MIL" = "Millwall",
+  "NOR" = "Norwich City", "PLY" = "Plymouth Argyle",
+  "PNE" = "Preston North End", "QPR" = "Queens Park Rangers",
+  "SHU" = "Sheffield United", "SHW" = "Sheffield Wednesday",
+  "STK" = "Stoke City", "SWA" = "Swansea City",
+  "WAT" = "Watford", "WBA" = "West Brom"
+)
+
+# Full/variant name → Canonical name (from soccer_config.R TEAM_NAME_MAPPING)
+FULL_NAME_TO_CANONICAL <- c(
+  "Arsenal" = "Arsenal", "Aston Villa" = "Aston Villa",
+  "Bournemouth" = "Bournemouth", "AFC Bournemouth" = "Bournemouth",
+  "Brentford" = "Brentford", "Brighton" = "Brighton",
+  "Brighton & Hove Albion" = "Brighton", "Brighton and Hove Albion" = "Brighton",
+  "Chelsea" = "Chelsea", "Crystal Palace" = "Crystal Palace",
+  "Everton" = "Everton", "Fulham" = "Fulham",
+  "Ipswich" = "Ipswich Town", "Ipswich Town" = "Ipswich Town",
+  "Leicester" = "Leicester City", "Leicester City" = "Leicester City",
+  "Liverpool" = "Liverpool",
+  "Manchester Utd" = "Manchester United", "Manchester United" = "Manchester United",
+  "Man Utd" = "Manchester United", "Man United" = "Manchester United",
+  "Newcastle Utd" = "Newcastle United", "Newcastle United" = "Newcastle United",
+  "Nott'ham Forest" = "Nottingham Forest", "Nottingham Forest" = "Nottingham Forest",
+  "Nottm Forest" = "Nottingham Forest",
+  "Southampton" = "Southampton", "Tottenham" = "Tottenham",
+  "Tottenham Hotspur" = "Tottenham", "Spurs" = "Tottenham",
+  "West Ham" = "West Ham", "West Ham United" = "West Ham",
+  "Wolves" = "Wolves", "Wolverhampton Wanderers" = "Wolves",
+  "Wolverhampton" = "Wolves",
+  "Manchester City" = "Manchester City", "Man City" = "Manchester City",
+  # Championship extras
+  "Birmingham City" = "Birmingham City", "Birmingham" = "Birmingham City",
+  "Blackburn Rovers" = "Blackburn Rovers", "Blackburn" = "Blackburn Rovers",
+  "Bristol City" = "Bristol City", "Bristol" = "Bristol City",
+  "Burnley" = "Burnley",
+  "Cardiff City" = "Cardiff City", "Cardiff" = "Cardiff City",
+  "Coventry City" = "Coventry City", "Coventry" = "Coventry City",
+  "Derby County" = "Derby County", "Derby" = "Derby County",
+  "Hull City" = "Hull City", "Hull" = "Hull City",
+  "Leeds United" = "Leeds United", "Leeds" = "Leeds United",
+  "Luton Town" = "Luton Town", "Luton" = "Luton Town",
+  "Middlesbrough" = "Middlesbrough", "Boro" = "Middlesbrough",
+  "Millwall" = "Millwall",
+  "Norwich City" = "Norwich City", "Norwich" = "Norwich City",
+  "Plymouth Argyle" = "Plymouth Argyle", "Plymouth" = "Plymouth Argyle",
+  "Preston North End" = "Preston North End", "Preston" = "Preston North End",
+  "Queens Park Rangers" = "Queens Park Rangers",
+  "Sheffield United" = "Sheffield United", "Sheff Utd" = "Sheffield United",
+  "Sheffield Wednesday" = "Sheffield Wednesday", "Sheff Wed" = "Sheffield Wednesday",
+  "Stoke City" = "Stoke City", "Stoke" = "Stoke City",
+  "Sunderland" = "Sunderland",
+  "Swansea City" = "Swansea City", "Swansea" = "Swansea City",
+  "Watford" = "Watford",
+  "West Brom" = "West Brom", "West Bromwich Albion" = "West Brom"
+)
+
+#' Normalise team to canonical name
+#' Handles: 3-letter FanTeam codes, full names, common variants
+normalise_team <- function(x) {
+  sapply(as.character(x), function(val) {
+    if (is.na(val) || val == "") return(NA_character_)
+    val <- str_trim(val)
+    
+    # Strategy 1: Exact match as uppercase code (MCI, ARS, etc.)
+    val_upper <- toupper(val)
+    if (val_upper %in% names(CLUB_CODE_TO_CANONICAL)) {
+      return(unname(CLUB_CODE_TO_CANONICAL[val_upper]))
+    }
+    
+    # Strategy 2: Exact match on full/variant name (case-sensitive first)
+    if (val %in% names(FULL_NAME_TO_CANONICAL)) {
+      return(unname(FULL_NAME_TO_CANONICAL[val]))
+    }
+    
+    # Strategy 3: Case-insensitive match on full name
+    val_lower <- tolower(val)
+    names_lower <- tolower(names(FULL_NAME_TO_CANONICAL))
+    idx <- match(val_lower, names_lower)
+    if (!is.na(idx)) {
+      return(unname(FULL_NAME_TO_CANONICAL[idx]))
+    }
+    
+    # Strategy 4: Partial matching for common patterns
+    val_lower <- gsub("\\s+fc$|\\s+afc$", "", val_lower)  # Strip trailing FC/AFC
+    idx <- match(val_lower, names_lower)
+    if (!is.na(idx)) {
+      return(unname(FULL_NAME_TO_CANONICAL[idx]))
+    }
+    
+    # Fallback: return trimmed input (lowercased for consistency)
+    return(val)
+  }, USE.NAMES = FALSE)
+}
+
+# ============================================================
+# POSITION NORMALISER
+# ============================================================
+
+normalise_pos <- function(x) {
+  x <- toupper(str_trim(as.character(x)))
+  case_when(
+    x %in% c("GK", "GOALKEEPER", "G", "GOALIE")        ~ "GK",
+    x %in% c("DEF", "DEFENDER", "D", "CB", "LB", "RB") ~ "DEF",
+    x %in% c("MID", "MIDFIELDER", "M", "CM", "AM",
+             "LM", "RM", "CAM", "CDM")                  ~ "MID",
+    x %in% c("FWD", "FORWARD", "FOR", "F", "ST",
+             "STRIKER", "CF", "ATT", "ATTACKER")         ~ "FWD",
+    grepl("^[0-9]", x)   ~ NA_character_,
+    grepl("^\\xc2", x)   ~ NA_character_,
+    TRUE                  ~ NA_character_
+  )
+}
+
+# ============================================================
+# NAME NORMALISER
+# ============================================================
+
+normalise_name <- function(x) {
+  x <- tolower(str_trim(as.character(x)))
+  x <- iconv(x, from = "UTF-8", to = "ASCII//TRANSLIT")
+  x <- gsub("[^a-z ]", "", x)
+  x <- gsub("\\s+", " ", x)
+  str_trim(x)
+}
+
+# Extract last name (or single name for mononyms)
+extract_last_name <- function(norm_name) {
+  parts <- strsplit(norm_name, " ")
+  sapply(parts, function(p) if (length(p) >= 2) tail(p, 1) else p[1])
+}
+
+# Extract first initial + last name (e.g. "erling haaland" → "e haaland")
+extract_initial_last <- function(norm_name) {
+  parts <- strsplit(norm_name, " ")
+  sapply(parts, function(p) {
+    if (length(p) >= 2) paste0(substr(p[1], 1, 1), " ", tail(p, 1))
+    else p[1]
+  })
+}
+
+# Numeric parser
+parse_num <- function(x) {
+  x <- as.character(x)
+  x <- gsub("N/A|n/a|NA|\u2013|\u2014|NULL", "", x)
+  x <- gsub("[%M\u00a3$,]", "", x)
+  suppressWarnings(as.numeric(str_trim(x)))
+}
+```
+
+```{r load-data}
+# ============================================================
+# DATA LOADING
+# ============================================================
+
+salary_dir <- here("data", "fanteam_soccer", "fanteam_monster_salaries")
+
+# ---- Load salary files ----
+load_salary_file <- function(gw) {
+  f <- file.path(salary_dir, paste0("week_", gw, ".csv"))
+  if (!file.exists(f)) return(NULL)
+  
+  raw <- read_csv(f, show_col_types = FALSE) %>% clean_names()
+  # Flatten list columns from Google Sheets export
+  raw <- raw %>% mutate(across(where(is.list), ~sapply(., function(v) as.character(v[1]))))
+  
+  log_msg(sprintf("  GW%d salary file columns: %s", gw, paste(names(raw), collapse = ", ")))
+  
+  if ("name" %in% names(raw) && "f_name" %in% names(raw)) {
+    # FanTeam export format: f_name + name = full player name, club = 3-letter code
+    # MONONYM FIX: When FName == Name (e.g. "Casemiro"/"Casemiro"), use just one copy
+    # Also collapse double spaces (e.g. "David  Wolfe" → "David Wolfe")
+    result <- raw %>%
+      mutate(
+        f_name_clean = str_trim(as.character(f_name)),
+        name_clean   = str_trim(as.character(name))
+      ) %>%
+      transmute(
+        player   = gsub("\\s+", " ", if_else(
+          tolower(f_name_clean) == tolower(name_clean),
+          name_clean,                          # Mononym: just use one copy
+          paste(f_name_clean, name_clean)       # Normal: "John Stones"
+        )),
+        team_raw = club,
+        team     = normalise_team(club),
+        position = position,
+        salary   = as.numeric(price)
+      )
+    
+    n_mono <- sum(tolower(str_trim(raw$f_name)) == tolower(str_trim(raw$name)))
+    log_msg(sprintf("  GW%d: FanTeam format, %d rows (%d mononyms fixed). Sample: %s→%s",
+                    gw, nrow(result), n_mono,
+                    result$team_raw[1], result$team[1]))
+    return(result)
+  } else if ("player" %in% names(raw) || "nickname" %in% names(raw)) {
+    pname <- if ("nickname" %in% names(raw)) "nickname" else "player"
+    team_col <- if ("team" %in% names(raw)) "team" else if ("club" %in% names(raw)) "club" else NA_character_
+    sal_col  <- if ("salary" %in% names(raw)) "salary" else if ("price" %in% names(raw)) "price" else NA_character_
+    
+    result <- raw %>%
+      transmute(
+        player   = .data[[pname]],
+        team_raw = if (!is.na(team_col)) .data[[team_col]] else NA_character_,
+        team     = normalise_team(if (!is.na(team_col)) .data[[team_col]] else NA_character_),
+        position = position,
+        salary   = if (!is.na(sal_col)) as.numeric(.data[[sal_col]]) else NA_real_
+      )
+    log_msg(sprintf("  GW%d: Generic format (%s col), %d rows", gw, pname, nrow(result)))
+    return(result)
+  } else {
+    log_msg(sprintf("GW%d: unrecognised salary columns: %s", gw, paste(names(raw), collapse = ", ")), level = "WARN")
+    return(NULL)
+  }
+}
+
+# ---- Load odds files ----
+load_odds_file <- function(gw) {
+  for (try_gw in c(gw, gw - 1)) {
+    f <- file.path(salary_dir, paste0("week_", try_gw, "_odds_report.csv"))
+    if (file.exists(f)) {
+      # Odds files have a decorative header row (BOM + ",,,,,,Implied Goals,,")
+      # followed by the real header. Read lines, find the real header, parse from there.
+      lines <- readLines(f, warn = FALSE)
+      header_idx <- grep("^Team,|^team,", lines, ignore.case = TRUE)[1]
+      
+      if (!is.na(header_idx)) {
+        # Skip everything before the real header
+        raw <- read_csv(I(lines[header_idx:length(lines)]), show_col_types = FALSE) %>% clean_names()
+      } else {
+        # No "Team" header found — fall back to standard read
+        raw <- read_csv(f, show_col_types = FALSE) %>% clean_names()
+        # Remove any header-like rows in data
+        if (nrow(raw) > 0 && any(grepl("^Team$|^team$", raw[[1]]))) raw <- raw[-1, ]
+      }
+      
+      # Standardise column names
+      name_map <- c(
+        team = "odds_team", opponent = "odds_opponent", h_a = "home_away",
+        win_percent = "win_pct", win = "win_pct",
+        draw_percent = "draw_pct", draw = "draw_pct",
+        clean_sheet_percent = "clean_sheet_pct", clean_sheet = "clean_sheet_pct",
+        scored = "implied_team_goals", allowed = "implied_opp_goals",
+        total = "implied_total"
+      )
+      for (old in names(name_map)) {
+        if (old %in% names(raw)) names(raw)[names(raw) == old] <- name_map[old]
+      }
+      
+      raw <- raw %>%
+        mutate(across(any_of(c("win_pct","draw_pct","clean_sheet_pct",
+                                "implied_team_goals","implied_opp_goals","implied_total")),
+                      ~as.numeric(gsub("[^0-9.]", "", as.character(.)))))
+      
+      log_msg(sprintf("  Odds GW%d: %d rows, cols: %s", try_gw, nrow(raw), paste(names(raw), collapse=", ")))
+      return(raw)
+    }
+  }
+  NULL
+}
+
+# ---- Load stats from Google Sheets ----
+stats_sheet_id <- "1EM_Xiqy5Kyvc-AlvpfLT7yjLl_7vcVbBgmj3GwNuIKg"
+
+log_msg("Loading stats overview...")
+stats_overview <- tryCatch(
+  read_sheet(stats_sheet_id, sheet = "stats_overview") %>% clean_names(),
+  error = function(e) { log_msg("Failed:", e$message, level = "ERROR"); NULL }
+)
+if (!is.null(stats_overview)) {
+  stats_overview <- stats_overview %>%
+    mutate(across(where(is.list), ~sapply(., function(x) as.character(x[1]))))
+  log_msg("Stats overview:", nrow(stats_overview), "rows")
+}
+
+# ---- Load ownership actuals ----
+own_sheet_id <- "1uI0wkZVLBL9hgMDfoszuZYDx-n9P03BJPZ4vP1KAMjY"
+
+log_msg("Loading ownership actuals...")
+own_sheets <- tryCatch(sheet_names(own_sheet_id), error = function(e) character(0))
+own_week_sheets <- own_sheets[grepl("^week[-_]\\d+$", own_sheets, ignore.case = TRUE)]
+log_msg("Found ownership sheets:", paste(own_week_sheets, collapse = ", "))
+
+ownership_actuals <- bind_rows(lapply(own_week_sheets, function(sh) {
+  gw <- as.integer(gsub("\\D", "", sh))
+  raw <- tryCatch(read_sheet(own_sheet_id, sheet = sh), error = function(e) NULL)
+  if (is.null(raw) || nrow(raw) == 0) return(NULL)
+  
+  # Log raw columns for diagnostics
+  log_msg(sprintf("  GW%d ownership raw columns: %s", gw, paste(names(raw), collapse = ", ")))
+  
+  # Pre-clean: Cyrillic С → Latin C, captain column variants
+  raw_names <- names(raw)
+  raw_names <- gsub("\u0421", "C", raw_names)
+  cpt_patterns <- c("^C ?%$", "^CPT ?%$", "^CAPTAIN ?%$", "^C$")
+  for (i in seq_along(raw_names)) {
+    if (any(grepl(paste(cpt_patterns, collapse="|"), raw_names[i], ignore.case = TRUE))) {
+      raw_names[i] <- "captain_pct"
+    }
+  }
+  names(raw) <- raw_names
+  
+  df <- raw %>% clean_names()
+  df <- df %>% mutate(across(where(is.list), ~sapply(., function(x) as.character(x[1]))))
+  
+  log_msg(sprintf("  GW%d ownership cleaned columns: %s", gw, paste(names(df), collapse = ", ")))
+  
+  # Flexible column mapping
+  col_map <- list(
+    own_pct     = c("own_percent", "own", "ownership", "ownership_percent", "o", "percent"),
+    captain_pct = c("captain_pct", "c_percent", "captain", "cap", "cap_percent"),
+    player      = c("player", "name", "player_name", "nickname"),
+    pos         = c("pos", "position"),
+    price       = c("price", "salary", "cost"),
+    score       = c("score", "pts", "points", "total_pts", "fpts"),
+    team        = c("team", "club")
+  )
+  for (target in names(col_map)) {
+    if (!target %in% names(df)) {
+      for (src in col_map[[target]]) {
+        if (src %in% names(df) && src != target) {
+          log_msg(sprintf("  GW%d: mapping column '%s' → '%s'", gw, src, target))
+          names(df)[names(df) == src] <- target
+          break
+        }
+      }
+    }
+  }
+  
+  if (!"player" %in% names(df) || !"own_pct" %in% names(df)) {
+    log_msg(sprintf("GW%d: missing player/own_pct. Cols: %s", gw, paste(names(df), collapse=", ")), level = "WARN")
+    return(NULL)
+  }
+  
+  out <- df %>%
+    transmute(
+      gw          = gw,
+      player      = str_trim(as.character(player)),
+      pos         = if ("pos" %in% names(.)) normalise_pos(pos) else NA_character_,
+      team_raw    = if ("team" %in% names(.)) str_trim(as.character(team)) else NA_character_,
+      team        = normalise_team(if ("team" %in% names(.)) str_trim(as.character(team)) else NA_character_),
+      price       = if ("price" %in% names(.)) parse_num(price) else NA_real_,
+      own_pct     = parse_num(own_pct),
+      captain_pct = if ("captain_pct" %in% names(.)) parse_num(captain_pct) else NA_real_,
+      form        = if ("form" %in% names(.)) parse_num(form) else NA_real_,
+      score       = if ("score" %in% names(.)) parse_num(score) else NA_real_
+    ) %>%
+    # JUNK ROW FILTER: Remove rows where Player is a known FanTeam club code.
+    # The ownership export contains ~300+ artifact rows where the Player column
+    # holds a team code (ARS, MCI, etc.) and the other columns are shifted data.
+    # From Google Sheets, Team column may contain "N/A", decimals, or % strings.
+    filter(!(toupper(str_trim(player)) %in% names(CLUB_CODE_TO_CANONICAL))) %>%
+    # ZERO OWNERSHIP = REAL DATA: Players with N/A or 0% were in the pool but
+    # nobody picked them. This is critical training signal — most players get ~0%.
+    # Previously filtered with own_pct > 0, which dropped ~65% of players!
+    mutate(own_pct = coalesce(own_pct, 0)) %>%
+    filter(!is.na(player), player != "")
+  
+  # Count junk rows removed (for diagnostics)
+  n_junk <- nrow(df %>%
+    mutate(p = str_trim(as.character(player))) %>%
+    filter(toupper(p) %in% names(CLUB_CODE_TO_CANONICAL)))
+  
+  out$player_norm  <- normalise_name(out$player)
+  out$last_name    <- extract_last_name(out$player_norm)
+  out$initial_last <- extract_initial_last(out$player_norm)
+  
+  n_valid_pos <- sum(!is.na(out$pos))
+  log_msg(sprintf("  GW%d: %d ownership rows (%d junk team-code rows removed, %d valid pos)",
+                  gw, nrow(out), n_junk, n_valid_pos))
+  out
+}))
+
+log_msg("Ownership actuals:", nrow(ownership_actuals), "rows across",
+        n_distinct(ownership_actuals$gw), "gameweeks")
+```
+
+```{r build-gw-data}
+# ============================================================
+# BUILD PER-GAMEWEEK DATASETS
+# ============================================================
+
+own_gws <- sort(unique(ownership_actuals$gw))
+salary_gws <- {
+  files <- list.files(salary_dir, pattern = "^week_\\d+\\.csv$")
+  as.integer(gsub("\\D", "", files))
+}
+test_gws <- intersect(own_gws, salary_gws)
+log_msg("Test gameweeks:", paste(test_gws, collapse = ", "))
+
+build_gw_data <- function(gw) {
+  sal <- load_salary_file(gw)
+  if (is.null(sal)) return(NULL)
+  
+  # Position normalisation
+  sal <- sal %>%
+    mutate(
+      pos          = normalise_pos(position),
+      player_norm  = normalise_name(player),
+      last_name    = extract_last_name(player_norm),
+      initial_last = extract_initial_last(player_norm)
+    )
+  
+  n_before <- nrow(sal)
+  sal <- sal %>% filter(!is.na(pos))
+  if (nrow(sal) < n_before)
+    log_msg(sprintf("  GW%d: dropped %d unrecognised positions", gw, n_before - nrow(sal)), level = "WARN")
+  
+  # ---- Join stats ----
+  if (!is.null(stats_overview)) {
+    so <- stats_overview
+    player_col <- intersect(names(so), c("player", "name", "player_name", "nickname"))[1]
+    pb_col     <- intersect(names(so), c("picked_by", "picked_by_percent", "selected_by", "ownership"))[1]
+    ppg_col    <- intersect(names(so), c("avg_pts", "ppg", "avg_points", "points_per_game"))[1]
+    form_col   <- intersect(names(so), c("form", "recent_form"))[1]
+    
+    if (!is.na(player_col)) {
+      stats_join <- so %>%
+        transmute(
+          player_norm   = normalise_name(.data[[player_col]]),
+          picked_by_num = if (!is.na(pb_col)) suppressWarnings(as.numeric(gsub("[^0-9.]", "", as.character(.data[[pb_col]])))) else NA_real_,
+          ppg_num       = if (!is.na(ppg_col)) suppressWarnings(as.numeric(gsub("[^0-9.]", "", as.character(.data[[ppg_col]])))) else NA_real_,
+          form_num      = if (!is.na(form_col)) suppressWarnings(as.numeric(gsub("[^0-9.]", "", as.character(.data[[form_col]])))) else NA_real_
+        ) %>%
+        distinct(player_norm, .keep_all = TRUE)
+      sal <- sal %>% left_join(stats_join, by = "player_norm")
+    } else {
+      sal <- sal %>% mutate(picked_by_num = NA_real_, ppg_num = NA_real_, form_num = NA_real_)
+    }
+  } else {
+    sal <- sal %>% mutate(picked_by_num = NA_real_, ppg_num = NA_real_, form_num = NA_real_)
+  }
+  
+  # ---- Join odds (using canonical team names) ----
+  odds <- load_odds_file(gw)
+  if (!is.null(odds)) {
+    team_col <- intersect(names(odds), c("odds_team", "team"))[1]
+    if (is.na(team_col)) team_col <- names(odds)[1]
+    
+    # Normalise odds team names to canonical
+    odds <- odds %>% mutate(team = normalise_team(as.character(.data[[team_col]])))
+    
+    wp_col <- intersect(names(odds), c("win_pct", "win_percent", "win"))[1]
+    cs_col <- intersect(names(odds), c("clean_sheet_pct", "clean_sheet_percent", "cs_pct", "cs"))[1]
+    tg_col <- intersect(names(odds), c("implied_team_goals", "scored", "team_goals"))[1]
+    og_col <- intersect(names(odds), c("implied_opp_goals", "allowed", "opp_goals"))[1]
+    
+    odds_slim <- odds %>%
+      transmute(
+        team,
+        win_pct    = if (!is.na(wp_col)) as.numeric(gsub("[^0-9.]", "", as.character(.data[[wp_col]]))) else NA_real_,
+        clean_sheet_pct = if (!is.na(cs_col)) as.numeric(gsub("[^0-9.]", "", as.character(.data[[cs_col]]))) else NA_real_,
+        implied_team_goals = if (!is.na(tg_col)) as.numeric(gsub("[^0-9.]", "", as.character(.data[[tg_col]]))) else NA_real_,
+        implied_opp_goals  = if (!is.na(og_col)) as.numeric(gsub("[^0-9.]", "", as.character(.data[[og_col]]))) else NA_real_
+      ) %>%
+      distinct(team, .keep_all = TRUE)
+    
+    sal <- sal %>%
+      left_join(odds_slim, by = "team") %>%
+      mutate(
+        mq_raw = case_when(
+          pos == "GK"  ~ coalesce(clean_sheet_pct, 30) * 0.6 + coalesce(win_pct, 33) * 0.4,
+          pos == "DEF" ~ coalesce(clean_sheet_pct, 30) * 0.5 + coalesce(win_pct, 33) * 0.3 +
+                         (1 - coalesce(implied_opp_goals, 1.3) / 3) * 100 * 0.2,
+          pos %in% c("MID","FWD") ~ coalesce(implied_team_goals, 1.3) / 3 * 100 * 0.5 +
+                                     coalesce(win_pct, 33) * 0.3 +
+                                     (coalesce(implied_team_goals, 1.3) + coalesce(implied_opp_goals, 1.3)) / 5 * 100 * 0.2,
+          TRUE ~ 50
+        ),
+        matchup_quality = pmin(100, pmax(0, mq_raw))
+      )
+    
+    odds_match <- sum(!is.na(sal$win_pct))
+    log_msg(sprintf("  GW%d: odds matched %d of %d players", gw, odds_match, nrow(sal)))
+  } else {
+    sal <- sal %>% mutate(matchup_quality = 50)
+  }
+  
+  # ============================================================
+  # OWNERSHIP JOIN — 4-STRATEGY MATCHING
+  # ============================================================
+  own_gw <- ownership_actuals %>% filter(gw == !!gw)
+  
+  if (nrow(own_gw) == 0) {
+    sal <- sal %>% mutate(actual_own = NA_real_, actual_cpt = NA_real_,
+                          own_form = NA_real_, own_score = NA_real_, gw = gw)
+    return(sal)
+  }
+  
+  # Strategy 1: Exact normalised name
+  sal <- sal %>%
+    left_join(
+      own_gw %>% select(player_norm, actual_own = own_pct, actual_cpt = captain_pct,
+                         own_form = form, own_score = score) %>%
+        distinct(player_norm, .keep_all = TRUE),
+      by = "player_norm"
+    )
+  n_s1 <- sum(!is.na(sal$actual_own))
+  
+  # Strategy 2: Last name + canonical team
+  unmatched_idx <- which(is.na(sal$actual_own))
+  if (length(unmatched_idx) > 0) {
+    own_ln_team <- own_gw %>%
+      select(last_name, team, own2 = own_pct, cpt2 = captain_pct,
+             form2 = form, score2 = score) %>%
+      distinct(last_name, team, .keep_all = TRUE)
+    
+    patch <- sal[unmatched_idx, ] %>%
+      left_join(own_ln_team, by = c("last_name", "team"))
+    
+    hit <- which(!is.na(patch$own2))
+    if (length(hit) > 0) {
+      sal$actual_own[unmatched_idx[hit]] <- patch$own2[hit]
+      sal$actual_cpt[unmatched_idx[hit]] <- patch$cpt2[hit]
+      sal$own_form[unmatched_idx[hit]]   <- patch$form2[hit]
+      sal$own_score[unmatched_idx[hit]]  <- patch$score2[hit]
+    }
+  }
+  n_s2 <- sum(!is.na(sal$actual_own))
+  
+  # Strategy 3: First initial + last name (handles "M. Salah" vs "Mohamed Salah")
+  still_unmatched <- which(is.na(sal$actual_own))
+  if (length(still_unmatched) > 0) {
+    own_il <- own_gw %>%
+      select(initial_last, own3 = own_pct, cpt3 = captain_pct,
+             form3 = form, score3 = score) %>%
+      group_by(initial_last) %>%
+      filter(n() == 1) %>%
+      ungroup()
+    
+    patch3 <- sal[still_unmatched, ] %>%
+      left_join(own_il, by = "initial_last")
+    
+    hit3 <- which(!is.na(patch3$own3))
+    if (length(hit3) > 0) {
+      sal$actual_own[still_unmatched[hit3]] <- patch3$own3[hit3]
+      sal$actual_cpt[still_unmatched[hit3]] <- patch3$cpt3[hit3]
+      sal$own_form[still_unmatched[hit3]]   <- patch3$form3[hit3]
+      sal$own_score[still_unmatched[hit3]]  <- patch3$score3[hit3]
+    }
+  }
+  n_s3 <- sum(!is.na(sal$actual_own))
+  
+  # Strategy 4: Unique last name (no team constraint)
+  still_unmatched <- which(is.na(sal$actual_own))
+  if (length(still_unmatched) > 0) {
+    own_ln_unique <- own_gw %>%
+      select(last_name, own4 = own_pct, cpt4 = captain_pct,
+             form4 = form, score4 = score) %>%
+      group_by(last_name) %>%
+      filter(n() == 1) %>%
+      ungroup()
+    
+    patch4 <- sal[still_unmatched, ] %>%
+      left_join(own_ln_unique, by = "last_name")
+    
+    hit4 <- which(!is.na(patch4$own4))
+    if (length(hit4) > 0) {
+      sal$actual_own[still_unmatched[hit4]] <- patch4$own4[hit4]
+      sal$actual_cpt[still_unmatched[hit4]] <- patch4$cpt4[hit4]
+      sal$own_form[still_unmatched[hit4]]   <- patch4$form4[hit4]
+      sal$own_score[still_unmatched[hit4]]  <- patch4$score4[hit4]
+    }
+  }
+  n_s4 <- sum(!is.na(sal$actual_own))
+  
+  sal <- sal %>% mutate(gw = gw)
+  
+  log_msg(sprintf("  GW%d: %d sal / %d own → S1 exact=%d + S2 name+team=%d + S3 initial+ln=%d + S4 ln-only=%d = %d total (%.0f%%)",
+                  gw, nrow(sal), nrow(own_gw),
+                  n_s1, n_s2 - n_s1, n_s3 - n_s2, n_s4 - n_s3,
+                  n_s4, 100 * n_s4 / max(nrow(sal), 1)))
+  sal
+}
+
+gw_datasets <- lapply(test_gws, build_gw_data)
+gw_datasets <- gw_datasets[!sapply(gw_datasets, is.null)]
+all_data <- bind_rows(gw_datasets)
+
+log_msg("Total records:", nrow(all_data))
+log_msg("With actual ownership:", sum(!is.na(all_data$actual_own)))
+log_msg("Position distribution:")
+all_data %>% count(pos) %>% { for (i in 1:nrow(.)) log_msg(sprintf("  %s: %d", .$pos[i], .$n[i])) }
+```
+
+```{r data-quality, results='asis'}
+# ============================================================
+# DATA QUALITY REPORT
+# ============================================================
+
+cat("\n\n## Data Quality Report\n\n")
+
+pos_check <- all_data %>% count(pos, name = "n") %>% arrange(pos)
+cat("<div class='interp-box'>\n")
+cat("**Salary data positions:** ", paste(sprintf("%s=%d", pos_check$pos, pos_check$n), collapse=", "), "\n\n")
+
+own_pos_check <- ownership_actuals %>%
+  mutate(ps = coalesce(pos, "MISSING")) %>%
+  count(ps, name = "n") %>% arrange(ps)
+cat("**Ownership positions:** ", paste(sprintf("%s=%d", own_pos_check$ps, own_pos_check$n), collapse=", "), "\n\n")
+
+matched <- sum(!is.na(all_data$actual_own))
+total_rows <- nrow(all_data)
+cat(sprintf("**Match rate:** %d of %d salary players matched (%.0f%%).\n\n", matched, total_rows, 100 * matched / max(total_rows, 1)))
+
+# Per-position match rates
+pos_match <- all_data %>%
+  group_by(pos) %>%
+  summarise(total = n(), matched = sum(!is.na(actual_own)), pct = 100 * matched / total, .groups = "drop")
+cat("**Per-position:**\n\n")
+cat("<table><tr><th>Pos</th><th>Total</th><th>Matched</th><th>Rate</th></tr>\n")
+for (i in 1:nrow(pos_match)) {
+  r <- pos_match[i,]
+  cat(sprintf("<tr><td>%s</td><td>%d</td><td>%d</td><td>%.0f%%</td></tr>\n", r$pos, r$total, r$matched, r$pct))
+}
+cat("</table>\n\n")
+
+# Per-GW
+gw_match <- all_data %>%
+  group_by(gw) %>%
+  summarise(total = n(), matched = sum(!is.na(actual_own)), pct = 100 * matched / total, .groups = "drop")
+cat("**Per-GW:**\n\n<table><tr><th>GW</th><th>Salary</th><th>Matched</th><th>Rate</th></tr>\n")
+for (i in 1:nrow(gw_match)) {
+  r <- gw_match[i,]
+  cat(sprintf("<tr><td>%d</td><td>%d</td><td>%d</td><td>%.0f%%</td></tr>\n", r$gw, r$total, r$matched, r$pct))
+}
+cat("</table>\n")
+
+if (matched / max(total_rows, 1) < 0.50) {
+  cat("\n<div class='warn-box'>\n")
+  cat(sprintf("\u26a0\ufe0f **Low match rate (%.0f%%).** Results are based on matched players only.\n",
+              100 * matched / max(total_rows, 1)))
+  cat("</div>\n")
+}
+
+# ---- Feature Diagnostics ----
+cat("\n\n### Feature Population\n\n")
+cat("These features drive the ownership prediction model. Features with no variation (all NA/constant) cannot differentiate players and are effectively ignored.\n\n")
+
+feat_diag <- data.frame(
+  Feature = c("salary", "matchup_quality", "own_form (ownership Form)", 
+              "own_score (ownership Score)", "form_num (stats_overview)", 
+              "ppg_num (stats_overview)", "picked_by_num (stats_overview)"),
+  non_na = c(
+    sum(!is.na(all_data$salary)),
+    sum(!is.na(all_data$matchup_quality) & all_data$matchup_quality != 50),
+    sum(!is.na(all_data$own_form)),
+    sum(!is.na(all_data$own_score)),
+    sum(!is.na(all_data$form_num)),
+    sum(!is.na(all_data$ppg_num)),
+    sum(!is.na(all_data$picked_by_num))
+  ),
+  total = nrow(all_data)
+) %>% mutate(
+  pct = sprintf("%.0f%%", 100 * non_na / total),
+  status = case_when(
+    non_na / total > 0.5 ~ "\u2705 Active",
+    non_na / total > 0.1 ~ "\u26a0\ufe0f Partial",
+    TRUE                  ~ "\u274c Empty"
+  )
+)
+
+cat("<table><tr><th>Feature</th><th>Populated</th><th>Rate</th><th>Status</th></tr>\n")
+for (i in 1:nrow(feat_diag)) {
+  r <- feat_diag[i,]
+  cat(sprintf("<tr><td>%s</td><td>%d / %d</td><td>%s</td><td>%s</td></tr>\n",
+              r$Feature, r$non_na, r$total, r$pct, r$status))
+}
+cat("</table>\n\n")
+
+n_active <- sum(feat_diag$non_na / feat_diag$total > 0.5)
+if (n_active < 2) {
+  cat("<div class='warn-box'>\u26a0\ufe0f Only ", n_active, " feature(s) have real data. ",
+      "Weight optimization needs 2+ varying features to be meaningful.</div>\n")
+} else {
+  cat(sprintf("<div class='interp-box'>\u2705 %d features active — weight optimization should produce meaningful differentiation.</div>\n", n_active))
+}
+
+cat("</div>\n")
+```
+
+```{r name-diagnostics, results='asis'}
+# ============================================================
+# NAME MATCHING DIAGNOSTICS
+# ============================================================
+
+cat("\n\n## Name Matching Diagnostics\n\n")
+
+# Show sample names from both sides for a single GW
+diag_gw <- test_gws[1]
+sal_sample <- all_data %>%
+  filter(gw == diag_gw, is.na(actual_own)) %>%
+  arrange(desc(salary)) %>%
+  head(20) %>%
+  select(player, player_norm, last_name, initial_last, team, pos, salary)
+
+own_sample <- ownership_actuals %>%
+  filter(gw == diag_gw) %>%
+  arrange(desc(own_pct)) %>%
+  head(20) %>%
+  select(player, player_norm, last_name, initial_last, team, pos, own_pct)
+
+cat(sprintf("<div class='debug-box'>\n**GW %d — Top 20 UNMATCHED salary players (by salary):**\n\n", diag_gw))
+cat("<table><tr><th>Player (raw)</th><th>Normalised</th><th>Last</th><th>Init+Last</th><th>Team (canonical)</th><th>Pos</th><th>Salary</th></tr>\n")
+for (i in 1:nrow(sal_sample)) {
+  r <- sal_sample[i,]
+  cat(sprintf("<tr><td>%s</td><td>%s</td><td>%s</td><td>%s</td><td>%s</td><td>%s</td><td>%.1f</td></tr>\n",
+              r$player, r$player_norm, r$last_name, r$initial_last,
+              coalesce(r$team, "?"), coalesce(r$pos, "?"), coalesce(r$salary, 0)))
+}
+cat("</table>\n\n")
+
+cat(sprintf("**GW %d — Top 20 ownership actuals (by own%%):**\n\n", diag_gw))
+cat("<table><tr><th>Player (raw)</th><th>Normalised</th><th>Last</th><th>Init+Last</th><th>Team (canonical)</th><th>Pos</th><th>Own%%</th></tr>\n")
+for (i in 1:nrow(own_sample)) {
+  r <- own_sample[i,]
+  cat(sprintf("<tr><td>%s</td><td>%s</td><td>%s</td><td>%s</td><td>%s</td><td>%s</td><td>%.1f</td></tr>\n",
+              r$player, r$player_norm, r$last_name, r$initial_last,
+              coalesce(r$team, "?"), coalesce(r$pos, "?"), coalesce(r$own_pct, 0)))
+}
+cat("</table>\n\n")
+
+# Team canonical coverage
+sal_teams <- all_data %>% filter(gw == diag_gw) %>% distinct(team) %>% arrange(team)
+own_teams <- ownership_actuals %>% filter(gw == diag_gw) %>% distinct(team) %>% arrange(team)
+
+sal_only <- setdiff(sal_teams$team, own_teams$team)
+own_only <- setdiff(own_teams$team, sal_teams$team)
+
+if (length(sal_only) > 0 || length(own_only) > 0) {
+  cat("**Team mismatches:**\n\n")
+  if (length(sal_only) > 0)
+    cat(sprintf("- In salary but NOT ownership: %s\n", paste(sal_only, collapse = ", ")))
+  if (length(own_only) > 0)
+    cat(sprintf("- In ownership but NOT salary: %s\n", paste(own_only, collapse = ", ")))
+  cat("\n")
+} else {
+  cat("**All teams match between salary and ownership data.**\n\n")
+}
+
+cat("</div>\n")
+```
+
+```{r define-optimizer}
+# ============================================================
+# OWNERSHIP ESTIMATION ENGINE
+# ============================================================
+
+predict_ownership <- function(data, weights, k_vals, budgets) {
+  w_mq     <- weights["mq"]
+  w_form   <- weights["form"]
+  w_value  <- weights["value"]
+  w_salary <- weights["salary"]
+  w_pb     <- weights["pb"]
+  
+  # Use ownership file form/score as primary features, falling back to stats_overview
+  result <- data %>%
+    mutate(
+      # Form: prefer ownership file's form, fall back to stats_overview form_num
+      form_feat   = coalesce(own_form, form_num, 0),
+      # Value/Score: prefer ownership file's score, fall back to ppg/salary ratio
+      ppg_safe    = coalesce(ppg_num, 0),
+      score_feat  = coalesce(own_score, if_else(salary > 0, ppg_safe / salary * 10, 0), 0),
+      # Matchup quality: from odds files
+      mq_feat     = coalesce(matchup_quality, 50),
+      # Picked-by: from stats_overview (often unavailable)
+      pb_feat     = coalesce(picked_by_num, 0)
+    )
+  
+  has_form  <- sd(result$form_feat, na.rm = TRUE) > 0.01
+  has_score <- sd(result$score_feat, na.rm = TRUE) > 0.01
+  has_mq    <- sd(result$mq_feat, na.rm = TRUE) > 0.01
+  has_pb    <- sd(result$pb_feat, na.rm = TRUE) > 0.01
+  
+  result <- result %>%
+    group_by(pos, gw) %>%
+    mutate(
+      n_grp       = n(),
+      mq_pctl     = if_else(n_grp > 1 & has_mq,    percent_rank(mq_feat),    0.5),
+      form_pctl   = if_else(n_grp > 1 & has_form,   percent_rank(form_feat),  0.5),
+      value_pctl  = if_else(n_grp > 1 & has_score,  percent_rank(score_feat), 0.5),
+      salary_pctl = if_else(n_grp > 1,              percent_rank(salary),     0.5),
+      pb_pctl     = if_else(n_grp > 1 & has_pb,     percent_rank(pb_feat),    0.5),
+      
+      appeal = w_mq * mq_pctl + w_form * form_pctl + w_value * value_pctl +
+               w_salary * salary_pctl + w_pb * pb_pctl,
+      
+      k = k_vals[first(pos)],
+      appeal_exp = exp(appeal * k),
+      budget = budgets[first(pos)],
+      total_exp = sum(appeal_exp, na.rm = TRUE),
+      share = if_else(total_exp > 0, appeal_exp / total_exp, 1 / n_grp),
+      pred_own = pmin(65, pmax(0.1, share * budget))
+    ) %>%
+    ungroup()
+  
+  result
+}
+
+score_prediction <- function(data) {
+  matched <- data %>% filter(!is.na(actual_own), !is.na(pred_own))
+  if (nrow(matched) < 20) return(list(mae = NA_real_, cor = NA_real_, top10_mae = NA_real_, rank_cor = NA_real_, n = 0L))
+  
+  mae <- mean(abs(matched$pred_own - matched$actual_own), na.rm = TRUE)
+  cor_val <- tryCatch(cor(matched$pred_own, matched$actual_own, use = "complete.obs"), error = function(e) NA_real_)
+  if (length(cor_val) == 0 || is.na(cor_val)) cor_val <- NA_real_
+  
+  top10_mae <- tryCatch({
+    v <- matched %>% group_by(gw) %>% slice_max(actual_own, n = 10, with_ties = FALSE) %>%
+      ungroup() %>% summarise(m = mean(abs(pred_own - actual_own), na.rm = TRUE)) %>% pull(m)
+    if (length(v) == 0) NA_real_ else v
+  }, error = function(e) NA_real_)
+  
+  rank_cor <- tryCatch({
+    rc <- matched %>% group_by(gw) %>%
+      summarise(rc = tryCatch(cor(rank(-pred_own), rank(-actual_own), method = "spearman"), error = function(e) NA_real_), .groups = "drop") %>%
+      summarise(avg = mean(rc, na.rm = TRUE)) %>% pull(avg)
+    if (length(rc) == 0 || is.nan(rc)) NA_real_ else rc
+  }, error = function(e) NA_real_)
+  
+  list(mae = mae, cor = cor_val, top10_mae = top10_mae, rank_cor = rank_cor, n = nrow(matched))
+}
+```
+
+```{r generate-grids}
+# ============================================================
+# SEARCH GRIDS
+# ============================================================
+
+weight_grid <- expand.grid(
+  mq     = seq(0.05, 0.50, by = 0.05),
+  form   = seq(0.05, 0.50, by = 0.05),
+  value  = seq(0.05, 0.50, by = 0.05),
+  salary = seq(0.05, 0.50, by = 0.05)
+) %>%
+  mutate(pb = round(1.0 - mq - form - value - salary, 3)) %>%
+  filter(pb >= 0.05, pb <= 0.50, abs(mq + form + value + salary + pb - 1.0) < 0.001) %>%
+  distinct()
+
+log_msg("Weight combinations:", nrow(weight_grid))
+
+k_options <- list(
+  low       = c(GK = 4, DEF = 4, MID = 4, FWD = 4),
+  medium    = c(GK = 6, DEF = 6, MID = 6, FWD = 6),
+  high      = c(GK = 8, DEF = 8, MID = 8, FWD = 8),
+  vhigh     = c(GK = 10, DEF = 10, MID = 10, FWD = 10),
+  pos_aware = c(GK = 7, DEF = 5, MID = 5, FWD = 8)
+)
+
+budget_options <- list(
+  balanced  = c(GK = 100, DEF = 400, MID = 400, FWD = 200),
+  def_heavy = c(GK = 100, DEF = 450, MID = 350, FWD = 200),
+  mid_heavy = c(GK = 100, DEF = 350, MID = 450, FWD = 200),
+  fwd_flex  = c(GK = 100, DEF = 350, MID = 350, FWD = 300),
+  classic   = c(GK = 100, DEF = 400, MID = 300, FWD = 300)
+)
+for (nm in names(budget_options)) stopifnot(sum(budget_options[[nm]]) == 1100)
+```
+
+```{r phase1-run, cache=FALSE}
+# ============================================================
+# PHASE 1: WEIGHT OPTIMISATION
+# ============================================================
+
+log_msg("PHASE 1:", nrow(weight_grid), "weight combos × medium k × balanced budgets")
+
+default_k <- k_options[["medium"]]
+default_budgets <- budget_options[["balanced"]]
+
+weight_results <- lapply(1:nrow(weight_grid), function(i) {
+  tryCatch({
+    w <- as.numeric(weight_grid[i, ])
+    names(w) <- c("mq", "form", "value", "salary", "pb")
+    preds <- predict_ownership(all_data, w, default_k, default_budgets)
+    scores <- score_prediction(preds)
+    data.frame(mq = w["mq"], form = w["form"], value = w["value"],
+               salary = w["salary"], pb = w["pb"],
+               mae = scores$mae, cor = scores$cor,
+               top10_mae = scores$top10_mae, rank_cor = scores$rank_cor, n = scores$n)
+  }, error = function(e) {
+    data.frame(mq=NA_real_, form=NA_real_, value=NA_real_, salary=NA_real_, pb=NA_real_,
+               mae=NA_real_, cor=NA_real_, top10_mae=NA_real_, rank_cor=NA_real_, n=0L)
+  })
+})
+
+safe_norm <- function(x, invert = FALSE) {
+  rng <- diff(range(x, na.rm = TRUE))
+  if (is.na(rng) || rng < 0.001) return(rep(0.5, length(x)))
+  n <- (x - min(x, na.rm = TRUE)) / rng
+  if (invert) 1 - n else n
+}
+
+weight_results_df <- bind_rows(weight_results) %>%
+  filter(!is.na(mae)) %>%
+  mutate(
+    mae_norm   = safe_norm(mae, invert = TRUE),
+    cor_norm   = safe_norm(cor),
+    top10_norm = safe_norm(top10_mae, invert = TRUE),
+    rank_norm  = safe_norm(rank_cor),
+    composite  = 0.30 * mae_norm + 0.25 * cor_norm + 0.25 * top10_norm + 0.20 * rank_norm
+  ) %>%
+  arrange(desc(composite))
+
+mae_spread <- diff(range(weight_results_df$mae))
+log_msg(sprintf("Phase 1 done. %d results. MAE: %.3f to %.3f (spread: %.3f)",
+                nrow(weight_results_df),
+                min(weight_results_df$mae), max(weight_results_df$mae), mae_spread))
+```
+
+```{r phase1-results, results='asis'}
+cat("\n\n## Phase 1: Weight Optimization\n\n")
+
+cat(sprintf("<div class='metric-card'><div class='value'>%s</div><div class='label'>Combos Tested</div></div>",
+            format(nrow(weight_results_df), big.mark=",")))
+
+best <- weight_results_df[1, ]
+cat(sprintf("<div class='metric-card'><div class='value'>%.2f</div><div class='label'>Best MAE</div></div>", best$mae))
+cat(sprintf("<div class='metric-card'><div class='value'>%.3f</div><div class='label'>Correlation</div></div>", best$cor))
+cat(sprintf("<div class='metric-card'><div class='value'>%.2f</div><div class='label'>Top-10 MAE</div></div>", best$top10_mae))
+
+if (mae_spread < 0.1) {
+  cat("\n<div class='warn-box'>\n")
+  cat(sprintf("\u26a0\ufe0f **Low signal:** MAE varies only %.3f across all combos. ", mae_spread))
+  cat("Weights have limited differentiation power — the model structure matters more than exact weights.\n")
+  cat("</div>\n")
+}
+
+cat("\n<div class='winner-card'>\n<h3>\U0001f3c6 Phase 1 Winner</h3>\n\n")
+cat("| Factor | Weight |\n|--------|--------|\n")
+cat(sprintf("| Matchup Quality | **%.0f%%** |\n", best$mq * 100))
+cat(sprintf("| Form | **%.0f%%** |\n", best$form * 100))
+cat(sprintf("| Value | **%.0f%%** |\n", best$value * 100))
+cat(sprintf("| Salary | **%.0f%%** |\n", best$salary * 100))
+cat(sprintf("| Picked By | **%.0f%%** |\n", best$pb * 100))
+cat(sprintf("\nMAE: **%.2f** | Cor: **%.3f** | Top-10: **%.2f** | Rank: **%.3f**\n",
+            best$mae, best$cor, best$top10_mae, coalesce(best$rank_cor, 0)))
+cat("</div>\n\n")
+
+top20 <- head(weight_results_df, 20)
+cat("### Top 20\n\n<table><tr><th>#</th><th>MQ</th><th>Form</th><th>Val</th><th>Sal</th><th>PB</th><th>MAE</th><th>Cor</th><th>Top10</th><th>Rank</th></tr>\n")
+for (i in 1:nrow(top20)) {
+  r <- top20[i,]; cls <- if (i == 1) " class='top-row'" else ""
+  cat(sprintf("<tr%s><td>%d</td><td>%.0f%%</td><td>%.0f%%</td><td>%.0f%%</td><td>%.0f%%</td><td>%.0f%%</td><td>%.2f</td><td>%.3f</td><td>%.2f</td><td>%.3f</td></tr>\n",
+              cls, i, r$mq*100, r$form*100, r$value*100, r$salary*100, r$pb*100,
+              r$mae, r$cor, r$top10_mae, coalesce(r$rank_cor,0)))
+}
+cat("</table>\n")
+```
+
+```{r phase2-run}
+# ============================================================
+# PHASE 2: K + BUDGET OPTIMISATION
+# ============================================================
+
+best_weights <- c(mq = best$mq, form = best$form, value = best$value,
+                  salary = best$salary, pb = best$pb)
+
+kb_results <- list(); idx <- 1
+for (k_name in names(k_options)) {
+  for (b_name in names(budget_options)) {
+    tryCatch({
+      preds <- predict_ownership(all_data, best_weights, k_options[[k_name]], budget_options[[b_name]])
+      scores <- score_prediction(preds)
+      kb_results[[idx]] <- data.frame(
+        k_config = k_name, budget_config = b_name,
+        mae = scores$mae, cor = scores$cor, top10_mae = scores$top10_mae,
+        rank_cor = scores$rank_cor, n = scores$n, stringsAsFactors = FALSE)
+      idx <- idx + 1
+    }, error = function(e) log_msg(sprintf("P2 error [%s/%s]: %s", k_name, b_name, e$message), level="WARN"))
+  }
+}
+
+kb_results_df <- bind_rows(kb_results) %>%
+  filter(!is.na(mae)) %>%
+  mutate(
+    mae_norm   = safe_norm(mae, invert = TRUE),
+    cor_norm   = safe_norm(cor),
+    top10_norm = safe_norm(top10_mae, invert = TRUE),
+    rank_norm  = safe_norm(rank_cor),
+    composite  = 0.30 * mae_norm + 0.25 * cor_norm + 0.25 * top10_norm + 0.20 * rank_norm
+  ) %>%
+  arrange(desc(composite))
+
+kb_mae_spread <- diff(range(kb_results_df$mae))
+log_msg(sprintf("Phase 2 done. %d combos. MAE spread: %.4f", nrow(kb_results_df), kb_mae_spread))
+```
+
+```{r phase2-results, results='asis'}
+cat("\n\n## Phase 2: k & Budgets\n\n")
+
+best_kb <- kb_results_df[1,]
+cat(sprintf("<div class='metric-card'><div class='value'>%s</div><div class='label'>Best k</div></div>", best_kb$k_config))
+cat(sprintf("<div class='metric-card'><div class='value'>%s</div><div class='label'>Best Budget</div></div>", best_kb$budget_config))
+cat(sprintf("<div class='metric-card'><div class='value'>%.2f</div><div class='label'>MAE</div></div>", best_kb$mae))
+cat(sprintf("<div class='metric-card'><div class='value'>%.3f</div><div class='label'>Cor</div></div>", best_kb$cor))
+
+if (kb_mae_spread < 0.01) {
+  cat("\n<div class='warn-box'>\u26a0\ufe0f k/budget configs show near-zero MAE variation — check position grouping.</div>\n")
+}
+
+cat("\n\n<table><tr><th>#</th><th>k</th><th>Budget</th><th>MAE</th><th>Cor</th><th>Top10</th><th>Rank</th></tr>\n")
+for (i in 1:nrow(kb_results_df)) {
+  r <- kb_results_df[i,]; cls <- if (i == 1) " class='top-row'" else ""
+  cat(sprintf("<tr%s><td>%d</td><td>%s</td><td>%s</td><td>%.2f</td><td>%.3f</td><td>%.2f</td><td>%.3f</td></tr>\n",
+              cls, i, r$k_config, r$budget_config, r$mae, r$cor, r$top10_mae, coalesce(r$rank_cor,0)))
+}
+cat("</table>\n\n")
+
+best_budget <- budget_options[[best_kb$budget_config]]
+best_k_vals <- k_options[[best_kb$k_config]]
+
+cat("<div class='winner-card'>\n<h3>\U0001f3c6 Best Configuration</h3>\n\n")
+cat("**Weights:**\n\n| Factor | Weight |\n|--------|--------|\n")
+for (nm in c("mq","form","value","salary","pb"))
+  cat(sprintf("| %s | **%.0f%%** |\n", nm, best_weights[nm]*100))
+cat("\n**Position Config:**\n\n| Pos | Budget (slots×100) | k |\n|-----|-------------------|---|\n")
+for (p in c("GK","DEF","MID","FWD"))
+  cat(sprintf("| %s | %d | %d |\n", p, best_budget[p], best_k_vals[p]))
+cat(sprintf("\nMAE: **%.2f** | Cor: **%.3f**\n", best_kb$mae, best_kb$cor))
+cat("</div>\n")
+```
+
+```{r phase3-run}
+# ============================================================
+# PHASE 3: FINE-TUNE (step=0.025)
+# ============================================================
+
+fine_grid <- expand.grid(
+  mq     = seq(max(0.05, best$mq - 0.10), min(0.50, best$mq + 0.10), by = 0.025),
+  form   = seq(max(0.05, best$form - 0.10), min(0.50, best$form + 0.10), by = 0.025),
+  value  = seq(max(0.05, best$value - 0.10), min(0.50, best$value + 0.10), by = 0.025),
+  salary = seq(max(0.05, best$salary - 0.10), min(0.50, best$salary + 0.10), by = 0.025)
+) %>%
+  mutate(pb = round(1.0 - mq - form - value - salary, 4)) %>%
+  filter(pb >= 0.05, pb <= 0.50, abs(mq + form + value + salary + pb - 1.0) < 0.001) %>%
+  distinct()
+
+log_msg("Phase 3:", nrow(fine_grid), "fine-tune combos")
+
+fine_results <- lapply(1:nrow(fine_grid), function(i) {
+  tryCatch({
+    w <- as.numeric(fine_grid[i,]); names(w) <- c("mq","form","value","salary","pb")
+    preds <- predict_ownership(all_data, w, best_k_vals, best_budget)
+    scores <- score_prediction(preds)
+    data.frame(mq=w["mq"], form=w["form"], value=w["value"], salary=w["salary"], pb=w["pb"],
+               mae=scores$mae, cor=scores$cor, top10_mae=scores$top10_mae, rank_cor=scores$rank_cor, n=scores$n)
+  }, error = function(e) {
+    data.frame(mq=NA_real_, form=NA_real_, value=NA_real_, salary=NA_real_, pb=NA_real_,
+               mae=NA_real_, cor=NA_real_, top10_mae=NA_real_, rank_cor=NA_real_, n=0L)
+  })
+})
+
+fine_results_df <- bind_rows(fine_results) %>%
+  filter(!is.na(mae)) %>%
+  mutate(
+    mae_norm = safe_norm(mae, invert=TRUE), cor_norm = safe_norm(cor),
+    top10_norm = safe_norm(top10_mae, invert=TRUE), rank_norm = safe_norm(rank_cor),
+    composite = 0.30*mae_norm + 0.25*cor_norm + 0.25*top10_norm + 0.20*rank_norm
+  ) %>%
+  arrange(desc(composite))
+
+log_msg("Phase 3 done. Best MAE:", round(fine_results_df$mae[1], 3))
+```
+
+```{r phase3-results, results='asis'}
+cat("\n\n## Phase 3: Fine-Tuned\n\n")
+final <- fine_results_df[1,]
+
+cat("<div class='winner-card'>\n<h3>\U0001f3c6 Final Configuration</h3>\n\n")
+cat("| Factor | Weight |\n|--------|--------|\n")
+cat(sprintf("| Matchup Quality | **%.1f%%** |\n", final$mq * 100))
+cat(sprintf("| Form | **%.1f%%** |\n", final$form * 100))
+cat(sprintf("| Value | **%.1f%%** |\n", final$value * 100))
+cat(sprintf("| Salary | **%.1f%%** |\n", final$salary * 100))
+cat(sprintf("| Picked By | **%.1f%%** |\n", final$pb * 100))
+cat(sprintf("\nBudgets: GK=%d, DEF=%d, MID=%d, FWD=%d | k: GK=%d, DEF=%d, MID=%d, FWD=%d\n",
+            best_budget["GK"], best_budget["DEF"], best_budget["MID"], best_budget["FWD"],
+            best_k_vals["GK"], best_k_vals["DEF"], best_k_vals["MID"], best_k_vals["FWD"]))
+cat("\n| Metric | Value |\n|--------|-------|\n")
+cat(sprintf("| MAE | **%.2f %%pts** |\n", final$mae))
+cat(sprintf("| Correlation | **%.3f** |\n", final$cor))
+cat(sprintf("| Top-10 MAE | **%.2f %%pts** |\n", final$top10_mae))
+cat(sprintf("| Rank Cor | **%.3f** |\n", coalesce(final$rank_cor, 0)))
+cat(sprintf("| N matched | %d |\n", final$n))
+cat("</div>\n")
+```
+
+```{r visualise, fig.width=12, fig.height=8}
+# ============================================================
+# SCATTER PLOTS
+# ============================================================
+
+final_weights <- c(mq = final$mq, form = final$form, value = final$value,
+                   salary = final$salary, pb = final$pb)
+
+final_preds <- predict_ownership(all_data, final_weights, best_k_vals, best_budget) %>%
+  filter(!is.na(actual_own))
+
+ggplot(final_preds, aes(x = pred_own, y = actual_own, color = pos)) +
+  geom_abline(slope=1, intercept=0, linetype="dashed", color="grey50") +
+  geom_point(alpha=0.5, size=2) +
+  scale_color_manual(values = c(GK="#4ECDC4", DEF=sage, MID=coral, FWD=charcoal)) +
+  labs(title = "Predicted vs Actual Ownership",
+       subtitle = sprintf("MAE=%.2f | r=%.3f | n=%d", final$mae, final$cor, nrow(final_preds)),
+       x = "Predicted %", y = "Actual %", color = "Position") +
+  coord_cartesian(xlim = c(0,70), ylim = c(0,70))
+```
+
+```{r scatter-pos, fig.width=12, fig.height=10}
+ggplot(final_preds, aes(x = pred_own, y = actual_own)) +
+  geom_abline(slope=1, intercept=0, linetype="dashed", color="grey50") +
+  geom_point(alpha=0.5, size=2, color=sage) +
+  geom_smooth(method="lm", se=TRUE, color=coral, linewidth=0.8) +
+  facet_wrap(~pos, scales="free") +
+  labs(title="By Position", x="Predicted %", y="Actual %")
+```
+
+```{r per-gw, fig.width=12, fig.height=6}
+gw_acc <- final_preds %>%
+  group_by(gw) %>%
+  summarise(mae = mean(abs(pred_own - actual_own), na.rm=TRUE),
+            cor = tryCatch(cor(pred_own, actual_own, use="complete.obs"), error=function(e) NA_real_),
+            n = n(), .groups="drop")
+
+ggplot(gw_acc, aes(x=factor(gw))) +
+  geom_col(aes(y=mae), fill=sage, alpha=0.7) +
+  geom_text(aes(y=mae+0.3, label=sprintf("r=%.2f", coalesce(cor,0))), size=3.5) +
+  labs(title="MAE by Gameweek", x="GW", y="MAE (pp)") +
+  geom_hline(yintercept=mean(gw_acc$mae, na.rm=TRUE), linetype="dashed", color=coral)
+```
+
+```{r worst-misses, results='asis'}
+cat("\n\n## Worst Misses\n\n")
+worst <- final_preds %>%
+  mutate(error = abs(pred_own - actual_own), dir = if_else(pred_own > actual_own, "Over", "Under")) %>%
+  arrange(desc(error)) %>% head(20)
+
+cat("<table><tr><th>GW</th><th>Player</th><th>Pos</th><th>Team</th><th>Pred</th><th>Actual</th><th>Error</th><th>Dir</th></tr>\n")
+for (i in 1:nrow(worst)) {
+  r <- worst[i,]
+  cat(sprintf("<tr><td>%d</td><td>%s</td><td>%s</td><td>%s</td><td>%.1f</td><td>%.1f</td><td style='color:%s;font-weight:bold'>%.1f</td><td>%s</td></tr>\n",
+              r$gw, r$player, r$pos, coalesce(r$team,""), r$pred_own, r$actual_own,
+              if_else(r$error > 15, "#c0392b", coral), r$error, r$dir))
+}
+cat("</table>\n")
+```
+
+```{r sensitivity, fig.width=14, fig.height=10}
+# ============================================================
+# SENSITIVITY ANALYSIS
+# ============================================================
+
+sensitivity_data <- list()
+for (fn in c("mq","form","value","salary","pb")) {
+  base <- final_weights
+  for (tv in seq(0.05, 0.50, by = 0.025)) {
+    rem <- 1.0 - tv
+    others <- base[names(base) != fn]
+    if (sum(others) > 0 && rem > 0) {
+      scaled <- others * (rem / sum(others))
+      if (all(scaled >= 0.04)) {
+        tw <- c(scaled, tv); names(tw)[length(tw)] <- fn
+        tw <- tw[c("mq","form","value","salary","pb")]
+        tryCatch({
+          s <- score_prediction(predict_ownership(all_data, tw, best_k_vals, best_budget))
+          sensitivity_data[[length(sensitivity_data)+1]] <- data.frame(factor=fn, weight=tv, mae=s$mae, cor=s$cor)
+        }, error = function(e) NULL)
+      }
+    }
+  }
+}
+
+sens_df <- bind_rows(sensitivity_data)
+fl <- c(mq="Matchup", form="Form", value="Value", salary="Salary", pb="Picked By")
+
+ggplot(sens_df, aes(x=weight*100, y=mae, color=factor)) +
+  geom_line(linewidth=1.2) + geom_point(size=2) +
+  scale_color_manual(values=c(mq=sage, form=coral, value=charcoal, salary="#4ECDC4", pb="#F2CC8F"), labels=fl) +
+  geom_vline(data=data.frame(factor=names(final_weights), opt=as.numeric(final_weights)*100),
+             aes(xintercept=opt, color=factor), linetype="dashed", alpha=0.5) +
+  labs(title="Sensitivity: MAE vs Weight", x="Weight %", y="MAE (pp)", color="Factor")
+```
+
+```{r factor-importance, results='asis'}
+cat("\n\n## Factor Importance\n\n")
+fi <- sens_df %>% group_by(factor) %>%
+  summarise(mae_range = max(mae)-min(mae), best_wt = weight[which.min(mae)]*100, best_mae = min(mae), .groups="drop") %>%
+  arrange(desc(mae_range)) %>% mutate(label = fl[factor])
+
+cat("<table><tr><th>#</th><th>Factor</th><th>Best Wt</th><th>MAE Range</th></tr>\n")
+for (i in 1:nrow(fi)) {
+  r <- fi[i,]
+  cat(sprintf("<tr><td>%d</td><td>%s</td><td>%.0f%%</td><td>%.3f</td></tr>\n", i, r$label, r$best_wt, r$mae_range))
+}
+cat("</table>\n")
+```
+
+```{r code-output, results='asis'}
+cat("\n\n## Ready-to-Use Code\n\n")
+cat("```r\n")
+cat("# ---- Optimized weights (", format(Sys.Date(), "%Y-%m-%d"), ") ----\n")
+cat(sprintf("w_mq     <- %.3f\n", final$mq))
+cat(sprintf("w_form   <- %.3f\n", final$form))
+cat(sprintf("w_value  <- %.3f\n", final$value))
+cat(sprintf("w_salary <- %.3f\n", final$salary))
+cat(sprintf("w_pb     <- %.3f\n", final$pb))
+cat(sprintf("\npos_budgets <- c(GK = %d, DEF = %d, MID = %d, FWD = %d)\n",
+            best_budget["GK"], best_budget["DEF"], best_budget["MID"], best_budget["FWD"]))
+cat(sprintf("pos_k <- c(GK = %d, DEF = %d, MID = %d, FWD = %d)\n",
+            best_k_vals["GK"], best_k_vals["DEF"], best_k_vals["MID"], best_k_vals["FWD"]))
+cat("```\n\n")
+
+cat(sprintf("<div class='interp-box'>MAE = %.2f, Cor = %.3f, %d matched across %d GWs.</div>\n",
+            final$mae, final$cor, final$n, n_distinct(all_data$gw)))
+```
+
+```{r session}
+cat(sprintf("\n\n---\nGenerated %s | Optimizer v3.0\n", format(Sys.time(), "%d %b %Y %H:%M")))
+```

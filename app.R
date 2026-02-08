@@ -25,6 +25,9 @@ ui <- fluidPage(
     tags$title("Sports Analytics")
   ),
   
+  # Enable shinyjs (needed by soccer handbuild position filter toggles)
+  shinyjs::useShinyjs(),
+  
   # Custom JS
   tags$script(src = "js/app.js"),
   

@@ -467,7 +467,7 @@ nfl_projections_server <- function(id) {
       # Sort indicator helper
       sort_indicator <- function(col_name) {
         if (sort_col() == col_name) {
-          if (sort_dir() == "desc") " ÃƒÂ¢Ã¢â‚¬â€œÃ‚Â¼" else " ÃƒÂ¢Ã¢â‚¬â€œÃ‚Â²"
+          if (sort_dir() == "desc") " ▼" else " ▲"
         } else {
           ""
         }

@@ -64,7 +64,7 @@ create_adjustment_badge <- function(adj_pct, size = "normal") {
 create_value_indicator <- function(value, optimal = NULL, show_sign = TRUE) {
   
   if (is.null(optimal) || optimal == 0) {
-    return(tags$span(style = "color: var(--text-muted);", "â€”"))
+    return(tags$span(style = "color: var(--text-muted);", "—"))
   }
   
   diff <- value - optimal
@@ -354,7 +354,7 @@ create_stat_box <- function(label, value, format_str = "%.1f",
     ),
     div(
       style = sprintf("font-size: 1.25rem; font-weight: 700; color: %s;", value_color),
-      if (is.na(value) || is.null(value)) "â€”" else sprintf(format_str, value)
+      if (is.na(value) || is.null(value)) "—" else sprintf(format_str, value)
     )
   )
 }

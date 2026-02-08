@@ -1,0 +1,952 @@
+---
+title: "Soccer Ratings Backtest"
+subtitle: "Predictions vs Actuals — FanTeam Monster"
+date: "`r format(Sys.time(), '%d %B %Y')`"
+output:
+  html_document:
+    theme: flatly
+    toc: true
+    toc_float:
+      collapsed: false
+    toc_depth: 3
+    number_sections: false
+    code_folding: hide
+    fig_width: 10
+    fig_height: 6
+    df_print: kable
+params:
+  gameweeks: NULL
+  force_refresh: false
+---
+
+```{css, echo=FALSE}
+/* ---- Custom Theme ---- */
+:root {
+  --sage: #A3BE8C;
+  --sage-dark: #8FAF78;
+  --coral: #D08770;
+  --coral-dark: #BF7460;
+  --primary: #3B3226;
+  --bg: #FAF8F5;
+  --muted: #8C8278;
+}
+
+body {
+  background-color: var(--bg);
+  color: var(--primary);
+  font-family: 'Source Sans Pro', 'Segoe UI', sans-serif;
+}
+
+h1, h2, h3, h4 { color: var(--primary); font-weight: 700; }
+
+h1.title {
+  font-size: 2.2em;
+  border-bottom: 4px solid var(--sage);
+  padding-bottom: 0.3em;
+}
+
+h3 { border-left: 4px solid var(--sage); padding-left: 0.6em; }
+
+/* Metric cards */
+.metric-row { display: flex; gap: 1em; flex-wrap: wrap; margin: 1em 0; }
+.metric-card {
+  background: white;
+  border: 2px solid #e8e4df;
+  border-radius: 8px;
+  padding: 1em 1.5em;
+  flex: 1;
+  min-width: 150px;
+  text-align: center;
+}
+.metric-card .value {
+  font-size: 2em;
+  font-weight: 800;
+  color: var(--primary);
+  line-height: 1.2;
+}
+.metric-card .label {
+  font-size: 0.85em;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+.metric-card.good .value { color: var(--sage-dark); }
+.metric-card.bad .value { color: var(--coral-dark); }
+.metric-card.neutral .value { color: var(--primary); }
+
+/* Rating badges */
+.badge-chalk   { background: #D08770; color: white; padding: 2px 8px; border-radius: 4px; font-weight: 600; font-size: 0.85em; }
+.badge-popular { background: #EBCB8B; color: #3B3226; padding: 2px 8px; border-radius: 4px; font-weight: 600; font-size: 0.85em; }
+.badge-mod     { background: #A3BE8C; color: white; padding: 2px 8px; border-radius: 4px; font-weight: 600; font-size: 0.85em; }
+.badge-low     { background: #B8C9A3; color: white; padding: 2px 8px; border-radius: 4px; font-weight: 600; font-size: 0.85em; }
+.badge-ghost   { background: #D8D8D8; color: #666; padding: 2px 8px; border-radius: 4px; font-weight: 600; font-size: 0.85em; }
+
+/* Table styling */
+table { width: 100%; border-collapse: collapse; }
+th { background: var(--primary); color: white; padding: 8px 12px; text-align: left; font-size: 0.85em; }
+td { padding: 6px 12px; border-bottom: 1px solid #e8e4df; font-size: 0.9em; }
+tr:hover td { background: #f0ede8; }
+
+/* Interpretation boxes */
+.interpretation {
+  background: white;
+  border-left: 4px solid var(--sage);
+  padding: 0.8em 1.2em;
+  margin: 1em 0;
+  font-size: 0.95em;
+  color: #555;
+}
+.interpretation strong { color: var(--primary); }
+.interpretation.warning { border-left-color: var(--coral); }
+
+/* Section breaks */
+hr { border: none; border-top: 2px solid #e8e4df; margin: 2em 0; }
+```
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  echo = FALSE,
+  message = FALSE,
+  warning = FALSE,
+  fig.align = "center",
+  out.width = "100%"
+)
+
+# ---- Load app infrastructure ----
+# Source from project root (assumes knit directory is project root)
+suppressPackageStartupMessages({
+  source("global.R", local = TRUE)
+  source("R/soccer/soccer_ratings.R", local = TRUE)
+})
+
+library(knitr)
+library(scales)
+
+# ---- Colour palette matching app ----
+pal <- list(
+  sage      = "#A3BE8C",
+  sage_dark = "#8FAF78",
+  sage_light = "#C5D9B2",
+  coral      = "#D08770",
+  coral_dark = "#BF7460",
+  coral_light = "#E8B4A2",
+  primary    = "#3B3226",
+  muted      = "#8C8278",
+  bg         = "#FAF8F5",
+  yellow     = "#EBCB8B",
+  blue       = "#5E81AC",
+  grid       = "#E8E4DF"
+)
+
+# Rating tier colour maps
+cash_colors <- c(
+  "Cash Lock"    = pal$sage_dark,
+  "Strong Play"  = pal$sage,
+  "Decent"       = pal$yellow,
+  "Risky"        = pal$coral_light,
+  "Hard Pass"    = pal$coral_dark
+)
+
+gpp_colors <- c(
+  "Smash Play"   = pal$sage_dark,
+  "Strong GPP"   = pal$sage,
+  "Playable"     = pal$yellow,
+  "Meh"          = pal$coral_light,
+  "Fade"         = pal$coral_dark
+)
+
+pos_colors <- c(
+  GK  = pal$yellow,
+  DEF = pal$blue,
+  MID = pal$sage,
+  FWD = pal$coral
+)
+
+# ---- ggplot theme ----
+theme_backtest <- function(base_size = 12) {
+  theme_minimal(base_size = base_size) +
+    theme(
+      text = element_text(color = pal$primary),
+      plot.title = element_text(face = "bold", size = base_size * 1.2, margin = margin(b = 8)),
+      plot.subtitle = element_text(color = pal$muted, size = base_size * 0.9, margin = margin(b = 12)),
+      panel.grid.minor = element_blank(),
+      panel.grid.major = element_line(color = pal$grid, linewidth = 0.4),
+      axis.title = element_text(color = pal$muted, size = base_size * 0.9),
+      axis.text = element_text(color = pal$primary),
+      legend.position = "top",
+      legend.text = element_text(size = base_size * 0.85),
+      strip.text = element_text(face = "bold", size = base_size * 0.95),
+      plot.background = element_rect(fill = pal$bg, color = NA),
+      panel.background = element_rect(fill = "white", color = NA)
+    )
+}
+
+# ---- Helper: styled kable ----
+styled_table <- function(df, caption = NULL, digits = 2) {
+  kable(df, digits = digits, format = "html", caption = caption, escape = FALSE,
+        table.attr = 'class="table table-striped table-hover table-condensed"')
+}
+
+# ---- Helper: metric card HTML ----
+metric_card <- function(value, label, class = "neutral", fmt = NULL) {
+  if (!is.null(fmt)) value <- sprintf(fmt, value)
+  sprintf('<div class="metric-card %s"><div class="value">%s</div><div class="label">%s</div></div>',
+          class, value, label)
+}
+```
+
+```{r load-data, cache=FALSE}
+# ---- Discover available gameweeks ----
+available_gws <- get_fanteam_soccer_gameweeks()
+test_gws <- if (!is.null(params$gameweeks)) {
+  intersect(params$gameweeks, available_gws)
+} else {
+  available_gws
+}
+
+# ---- Load shared data ----
+stats_overview <- tryCatch(load_fanteam_stats_overview(force_refresh = params$force_refresh),
+                           error = function(e) NULL)
+stats_detail   <- tryCatch(load_fanteam_stats_detail(force_refresh = params$force_refresh),
+                           error = function(e) NULL)
+own_history    <- tryCatch(load_ownership_history(),
+                           error = function(e) NULL)
+
+# Identify columns in detail data
+pts_col <- NULL; gw_col <- NULL
+if (!is.null(stats_detail) && nrow(stats_detail) > 0) {
+  pts_col <- intersect(c("pts", "total_pts"), names(stats_detail))[1]
+  gw_col  <- intersect(c("gw", "gameweek"), names(stats_detail))[1]
+  if (!is.null(pts_col)) stats_detail[[pts_col]] <- as.numeric(stats_detail[[pts_col]])
+  if (!is.null(gw_col))  stats_detail[[gw_col]]  <- as.integer(stats_detail[[gw_col]])
+}
+
+# Available GWs in detail (for actual points)
+detail_gws <- if (!is.null(gw_col)) sort(unique(stats_detail[[gw_col]])) else integer(0)
+```
+
+```{r process-gameweeks, cache=FALSE}
+# ---- Process each gameweek through the ratings pipeline ----
+process_gw <- function(gw) {
+  salaries <- tryCatch(load_fanteam_soccer_with_logos(gw), error = function(e) NULL)
+  if (is.null(salaries) || nrow(salaries) == 0) return(NULL)
+  
+  odds <- tryCatch(load_fanteam_odds(gw), error = function(e) NULL)
+  
+  # Build matchup context
+  matchup_ctx <- NULL
+  if (!is.null(odds) && nrow(odds) > 0) {
+    slate_teams <- unique(salaries$team_normalized[!is.na(salaries$team_normalized)])
+    matchup_ctx <- tryCatch({
+      odds %>%
+        filter(odds_team_normalized %in% slate_teams) %>%
+        transmute(
+          team_normalized = odds_team_normalized,
+          opponent = odds_opponent_normalized,
+          home_away = home_away,
+          win_pct = as.numeric(win_pct),
+          implied_goals = as.numeric(implied_team_goals),
+          implied_opp_goals = as.numeric(implied_opp_goals),
+          implied_total = implied_goals + implied_opp_goals,
+          cs_prob = round(exp(-implied_opp_goals) * 100, 1)
+        )
+    }, error = function(e) NULL)
+  }
+  
+  pool <- salaries %>% mutate(pos = position)
+  
+  # Merge stats
+  if (!is.null(stats_overview) && nrow(stats_overview) > 0) {
+    stats_cols <- stats_overview %>%
+      select(any_of(c("name", "team", "pos", "x1_mp", "total_pts", "avg_pts", "picked_by")))
+    
+    if (!is.null(stats_detail) && !is.null(pts_col) && nrow(stats_detail) > 0) {
+      player_perf <- stats_detail %>%
+        group_by(name) %>%
+        summarise(
+          n_games = n(),
+          ppg_hist = mean(.data[[pts_col]], na.rm = TRUE),
+          pts_floor = { p <- sort(.data[[pts_col]][!is.na(.data[[pts_col]])]); if (length(p) >= 4) p[2] else if (length(p) > 0) p[1] else NA_real_ },
+          pts_ceiling = { p <- sort(.data[[pts_col]][!is.na(.data[[pts_col]])], decreasing = TRUE); if (length(p) >= 4) p[2] else if (length(p) > 0) p[1] else NA_real_ },
+          downside_dev = { p <- .data[[pts_col]][!is.na(.data[[pts_col]])]; a <- mean(p, na.rm = TRUE); b <- p[p < a]; if (length(b) > 1) sqrt(mean((b - a)^2)) else NA_real_ },
+          .groups = "drop"
+        ) %>%
+        mutate(sortino_raw = if_else(!is.na(ppg_hist) & !is.na(downside_dev) & downside_dev > 0, ppg_hist / downside_dev, NA_real_))
+      
+      k_prior <- 10
+      pos_avgs <- player_perf %>%
+        left_join(stats_cols %>% select(name, pos) %>% distinct(), by = "name") %>%
+        filter(n_games >= 6, !is.na(sortino_raw)) %>%
+        group_by(pos) %>%
+        summarise(pos_avg_sort = mean(sortino_raw, na.rm = TRUE), .groups = "drop")
+      
+      player_perf <- player_perf %>%
+        left_join(stats_cols %>% select(name, pos) %>% distinct(), by = "name") %>%
+        left_join(pos_avgs, by = "pos") %>%
+        mutate(
+          pos_avg_sort = coalesce(pos_avg_sort, mean(sortino_raw, na.rm = TRUE)),
+          sortino = if_else(!is.na(sortino_raw) & !is.na(n_games),
+                             (n_games * sortino_raw + k_prior * pos_avg_sort) / (n_games + k_prior), NA_real_)
+        ) %>%
+        select(name, n_games, ppg_hist, pts_floor, pts_ceiling, sortino)
+      
+      stats_cols <- stats_cols %>% left_join(player_perf, by = "name")
+    }
+    
+    pool <- pool %>%
+      mutate(match_name = tolower(trimws(player))) %>%
+      left_join(stats_cols %>% mutate(match_name = tolower(trimws(name))),
+                by = "match_name", suffix = c("", "_stats")) %>%
+      select(-match_name) %>%
+      mutate(
+        pos = coalesce(pos_stats, pos),
+        ppg = coalesce(as.numeric(ppg_hist), as.numeric(avg_pts), 0),
+        pts_floor = coalesce(pts_floor, 0),
+        pts_ceiling = coalesce(pts_ceiling, 0),
+        sortino = coalesce(sortino, 0),
+        n_games = coalesce(n_games, 0L),
+        form = ppg
+      ) %>%
+      select(-any_of(c("pos_stats", "name_stats", "team_stats")))
+  } else {
+    pool <- pool %>% mutate(ppg = 0, pts_floor = 0, pts_ceiling = 0, sortino = 0,
+                             n_games = 0L, form = 0, picked_by = NA_real_)
+  }
+  
+  if (!is.null(matchup_ctx)) {
+    pool <- pool %>% left_join(matchup_ctx %>% select(team_normalized, opponent, home_away), by = "team_normalized")
+  } else {
+    pool <- pool %>% mutate(opponent = NA_character_, home_away = NA_character_)
+  }
+  
+  pool <- calculate_matchup_quality(pool, matchup_ctx)
+  pool <- estimate_ownership(pool, historical = own_history)
+  pool <- rate_players(pool)
+  pool <- pool %>% mutate(value = round(ppg / pmax(salary, 3), 2))
+  
+  # Join actual points
+  pool$actual_pts <- NA_real_
+  if (!is.null(stats_detail) && !is.null(pts_col) && !is.null(gw_col) && gw %in% detail_gws) {
+    gw_actuals <- stats_detail %>%
+      filter(.data[[gw_col]] == gw) %>%
+      transmute(match_name = tolower(trimws(name)), actual_pts = as.numeric(.data[[pts_col]]))
+    if (nrow(gw_actuals) > 0) {
+      pool <- pool %>%
+        mutate(match_name = tolower(trimws(player))) %>%
+        left_join(gw_actuals, by = "match_name") %>%
+        mutate(actual_pts = coalesce(actual_pts.y, actual_pts.x)) %>%
+        select(-any_of(c("actual_pts.x", "actual_pts.y", "match_name")))
+    }
+  }
+  
+  # Join actual ownership
+  pool$actual_own_pct <- NA_real_; pool$actual_captain_pct <- NA_real_
+  if (!is.null(own_history) && nrow(own_history) > 0) {
+    gw_own <- own_history %>%
+      filter(gameweek == gw, !is.na(own_pct)) %>%
+      transmute(match_name = tolower(trimws(player)), actual_own_pct = own_pct,
+                actual_captain_pct = coalesce(captain_pct, NA_real_))
+    if (nrow(gw_own) > 0) {
+      pool <- pool %>%
+        mutate(match_name = tolower(trimws(player))) %>%
+        left_join(gw_own, by = "match_name") %>%
+        mutate(actual_own_pct = coalesce(actual_own_pct.y, actual_own_pct.x),
+               actual_captain_pct = coalesce(actual_captain_pct.y, actual_captain_pct.x)) %>%
+        select(-any_of(c("actual_own_pct.x", "actual_own_pct.y",
+                          "actual_captain_pct.x", "actual_captain_pct.y", "match_name")))
+    }
+  }
+  
+  pool$gameweek <- gw
+  return(pool)
+}
+
+# Run all gameweeks
+all_results <- lapply(sort(test_gws, decreasing = TRUE), function(gw) {
+  tryCatch(process_gw(gw), error = function(e) NULL)
+})
+all_results <- Filter(Negate(is.null), all_results)
+data <- bind_rows(all_results)
+
+has_actuals <- sum(!is.na(data$actual_pts)) > 0
+has_own_actuals <- sum(!is.na(data$actual_own_pct)) > 0
+gws_with_pts <- sort(unique(data$gameweek[!is.na(data$actual_pts)]))
+n_player_gws <- sum(!is.na(data$actual_pts))
+```
+
+## Overview {.tabset}
+
+```{r overview-cards, results='asis'}
+cat('<div class="metric-row">')
+cat(metric_card(length(test_gws), "Gameweeks<br>with salaries", "neutral"))
+cat(metric_card(length(gws_with_pts), "Gameweeks<br>with actuals", if (length(gws_with_pts) > 0) "good" else "bad"))
+cat(metric_card(comma(nrow(data)), "Player-GW<br>records", "neutral"))
+cat(metric_card(comma(n_player_gws), "With actual<br>points", if (n_player_gws > 0) "good" else "bad"))
+cat('</div>')
+
+if (length(gws_with_pts) > 0) {
+  cat(sprintf('<div class="interpretation">Actuals available for GW: <strong>%s</strong>. Stats overview has <strong>%s</strong> players. Detail data covers <strong>%d</strong> gameweeks.</div>',
+              paste(gws_with_pts, collapse = ", "),
+              comma(nrow(stats_overview)),
+              length(detail_gws)))
+} else {
+  cat('<div class="interpretation warning">No actual points data matched. Check that salary player names match stats detail names.</div>')
+}
+```
+
+```{r data-quality-check, results='asis'}
+# Check picked_by availability
+pb_count <- sum(!is.na(data$picked_by) & as.numeric(data$picked_by) > 0, na.rm = TRUE)
+cat(sprintf('<div class="interpretation">%s <strong>picked_by</strong> values detected (%.0f%% of records). %s</div>',
+            comma(pb_count),
+            pb_count / nrow(data) * 100,
+            if (pb_count > 100) "✅ Using as primary ownership signal." else "⚠️ Falling back to salary heuristic for ownership."))
+```
+
+---
+
+## PPG Prediction Accuracy {.tabset}
+
+How well does our projected PPG (season average) predict this week's actual points?
+
+```{r ppg-overall, results='asis'}
+if (has_actuals) {
+  ppg_data <- data %>% filter(!is.na(actual_pts), ppg > 0) %>% mutate(error = actual_pts - ppg)
+  
+  mae  <- round(mean(abs(ppg_data$error), na.rm = TRUE), 2)
+  rmse <- round(sqrt(mean(ppg_data$error^2, na.rm = TRUE)), 2)
+  bias <- round(mean(ppg_data$error, na.rm = TRUE), 2)
+  r    <- round(cor(ppg_data$ppg, ppg_data$actual_pts, use = "complete.obs"), 3)
+  
+  cat('<div class="metric-row">')
+  cat(metric_card(mae, "MAE", "neutral", "%.1f"))
+  cat(metric_card(rmse, "RMSE", "neutral", "%.1f"))
+  cat(metric_card(bias, "Mean Bias", if (abs(bias) < 1) "good" else "bad", "%+.1f"))
+  cat(metric_card(r, "Correlation", if (r > 0.25) "good" else if (r > 0.1) "neutral" else "bad", "%.3f"))
+  cat('</div>')
+  
+  cat(sprintf('<div class="interpretation">A PPG correlation of <strong>%.3f</strong> means our season averages explain about <strong>%.0f%%</strong> of the variance in weekly scores. Football is inherently noisy — correlations above 0.20 are useful, above 0.30 is strong.</div>', r, r^2 * 100))
+}
+```
+
+### Scatter: Predicted vs Actual
+
+```{r ppg-scatter, fig.height=7}
+if (has_actuals) {
+  ppg_plot <- data %>%
+    filter(!is.na(actual_pts), ppg > 0) %>%
+    mutate(pos = factor(pos, levels = c("GK", "DEF", "MID", "FWD")))
+  
+  ggplot(ppg_plot, aes(x = ppg, y = actual_pts, color = pos)) +
+    geom_point(alpha = 0.3, size = 1.5) +
+    geom_abline(slope = 1, intercept = 0, linetype = "dashed", color = pal$muted, linewidth = 0.8) +
+    geom_smooth(method = "lm", se = FALSE, linewidth = 0.8) +
+    scale_color_manual(values = pos_colors) +
+    facet_wrap(~pos, scales = "free") +
+    labs(title = "Predicted PPG vs Actual Points",
+         subtitle = "Dashed line = perfect prediction. Regression line per position.",
+         x = "Predicted PPG", y = "Actual Points", color = "Position") +
+    theme_backtest() +
+    theme(legend.position = "none")
+}
+```
+
+### By Position
+
+```{r ppg-by-position}
+if (has_actuals) {
+  data %>%
+    filter(!is.na(actual_pts), ppg > 0) %>%
+    mutate(error = actual_pts - ppg) %>%
+    group_by(Position = pos) %>%
+    summarise(
+      N = n(),
+      `Avg Predicted` = round(mean(ppg, na.rm = TRUE), 1),
+      `Avg Actual` = round(mean(actual_pts, na.rm = TRUE), 1),
+      MAE = round(mean(abs(error), na.rm = TRUE), 1),
+      Correlation = round(cor(ppg, actual_pts, use = "complete.obs"), 3),
+      .groups = "drop"
+    ) %>%
+    styled_table(caption = "PPG prediction accuracy by position")
+}
+```
+
+### By Gameweek
+
+```{r ppg-by-gw, fig.height=5}
+if (has_actuals && length(gws_with_pts) > 1) {
+  gw_acc <- data %>%
+    filter(!is.na(actual_pts), ppg > 0) %>%
+    mutate(error = actual_pts - ppg) %>%
+    group_by(gameweek) %>%
+    summarise(
+      mae = mean(abs(error), na.rm = TRUE),
+      correlation = cor(ppg, actual_pts, use = "complete.obs"),
+      .groups = "drop"
+    )
+  
+  ggplot(gw_acc, aes(x = factor(gameweek))) +
+    geom_col(aes(y = correlation), fill = pal$sage, alpha = 0.8) +
+    geom_hline(yintercept = mean(gw_acc$correlation, na.rm = TRUE),
+               linetype = "dashed", color = pal$coral, linewidth = 0.8) +
+    labs(title = "PPG vs Actual Correlation by Gameweek",
+         subtitle = sprintf("Dashed line = average (%.3f)", mean(gw_acc$correlation, na.rm = TRUE)),
+         x = "Gameweek", y = "Correlation (r)") +
+    theme_backtest()
+}
+```
+
+---
+
+## Cash Rating Analysis {.tabset}
+
+Do Cash Locks actually outscore Hard Passes?
+
+```{r cash-tiers, results='asis'}
+if (has_actuals && "cash_rating" %in% names(data)) {
+  cash_tiers <- data %>%
+    filter(!is.na(actual_pts), !is.na(cash_rating)) %>%
+    group_by(`Rating` = cash_rating) %>%
+    summarise(
+      N = n(),
+      `Avg Actual` = round(mean(actual_pts, na.rm = TRUE), 1),
+      `Median Actual` = round(median(actual_pts, na.rm = TRUE), 1),
+      `Avg Predicted` = round(mean(ppg, na.rm = TRUE), 1),
+      `Avg Cash Score` = round(mean(cash_score, na.rm = TRUE), 0),
+      .groups = "drop"
+    ) %>%
+    arrange(desc(`Avg Cash Score`))
+  
+  # Monotonicity check
+  actual_order <- cash_tiers$`Avg Actual`
+  is_monotonic <- all(diff(actual_order) <= 0)
+  
+  styled_table(cash_tiers, caption = "Actual performance by Cash rating tier")
+  
+  cat(sprintf('<div class="interpretation%s">Tier ordering is <strong>%s</strong>. %s</div>',
+              if (is_monotonic) "" else " warning",
+              if (is_monotonic) "monotonic ✅" else "NOT monotonic ⚠️",
+              if (is_monotonic) "Cash Locks outscore each lower tier on average — the signal works." 
+              else "Some tiers are out of order — the rating needs calibration."))
+}
+```
+
+### Distribution by Tier
+
+```{r cash-violin, fig.height=6}
+if (has_actuals && "cash_rating" %in% names(data)) {
+  tier_order <- c("Cash Lock", "Strong Play", "Decent", "Risky", "Hard Pass")
+  
+  plot_data <- data %>%
+    filter(!is.na(actual_pts), !is.na(cash_rating), cash_rating %in% tier_order) %>%
+    mutate(cash_rating = factor(cash_rating, levels = tier_order))
+  
+  ggplot(plot_data, aes(x = cash_rating, y = actual_pts, fill = cash_rating)) +
+    geom_violin(alpha = 0.6, color = NA) +
+    geom_boxplot(width = 0.15, fill = "white", alpha = 0.8, outlier.size = 0.8) +
+    scale_fill_manual(values = cash_colors) +
+    labs(title = "Actual Points Distribution by Cash Rating",
+         subtitle = "Box = median + IQR. Do higher tiers reliably score more?",
+         x = NULL, y = "Actual Points") +
+    theme_backtest() +
+    theme(legend.position = "none")
+}
+```
+
+### Cash Score Correlation
+
+```{r cash-correlation, results='asis'}
+if (has_actuals && "cash_score" %in% names(data)) {
+  valid <- data %>% filter(!is.na(actual_pts), !is.na(cash_score))
+  if (nrow(valid) > 10) {
+    r <- round(cor(valid$cash_score, valid$actual_pts, use = "complete.obs"), 3)
+    cat(sprintf('<div class="metric-row">'))
+    cat(metric_card(r, "Cash Score vs<br>Actual Points", if (r > 0.2) "good" else if (r > 0.1) "neutral" else "bad", "%.3f"))
+    cat('</div>')
+  }
+}
+```
+
+---
+
+## GPP Rating Analysis {.tabset}
+
+Do Smash Plays deliver tournament-winning ceilings?
+
+```{r gpp-tiers}
+if (has_actuals && "gpp_rating" %in% names(data)) {
+  data %>%
+    filter(!is.na(actual_pts), !is.na(gpp_rating)) %>%
+    group_by(`Rating` = gpp_rating) %>%
+    summarise(
+      N = n(),
+      `Avg Actual` = round(mean(actual_pts, na.rm = TRUE), 1),
+      `p90 Actual` = round(quantile(actual_pts, 0.90, na.rm = TRUE), 1),
+      `Max Actual` = round(max(actual_pts, na.rm = TRUE), 0),
+      `Avg GPP Score` = round(mean(gpp_score, na.rm = TRUE), 0),
+      .groups = "drop"
+    ) %>%
+    arrange(desc(`Avg GPP Score`)) %>%
+    styled_table(caption = "GPP tier performance — p90 and max matter most here")
+}
+```
+
+### Ceiling Outcomes by Tier
+
+```{r gpp-ceiling-chart, fig.height=5}
+if (has_actuals && "gpp_rating" %in% names(data)) {
+  tier_order <- c("Smash Play", "Strong GPP", "Playable", "Meh", "Fade")
+  
+  plot_data <- data %>%
+    filter(!is.na(actual_pts), !is.na(gpp_rating), gpp_rating %in% tier_order) %>%
+    mutate(gpp_rating = factor(gpp_rating, levels = tier_order))
+  
+  ggplot(plot_data, aes(x = gpp_rating, y = actual_pts, fill = gpp_rating)) +
+    geom_violin(alpha = 0.6, color = NA) +
+    geom_boxplot(width = 0.15, fill = "white", alpha = 0.8, outlier.size = 0.8) +
+    scale_fill_manual(values = gpp_colors) +
+    labs(title = "Actual Points Distribution by GPP Rating",
+         subtitle = "For GPP, the right tail matters — look at the upside of each tier",
+         x = NULL, y = "Actual Points") +
+    theme_backtest() +
+    theme(legend.position = "none")
+}
+```
+
+---
+
+## Matchup Quality Signal {.tabset}
+
+Does our matchup quality score (0–100) predict actual points?
+
+```{r mq-quintiles}
+if (has_actuals && "matchup_quality" %in% names(data)) {
+  data %>%
+    filter(!is.na(actual_pts), !is.na(matchup_quality)) %>%
+    mutate(`MQ Quintile` = ntile(matchup_quality, 5)) %>%
+    group_by(`MQ Quintile`) %>%
+    summarise(
+      N = n(),
+      `Avg MQ` = round(mean(matchup_quality, na.rm = TRUE), 1),
+      `Avg Actual Pts` = round(mean(actual_pts, na.rm = TRUE), 1),
+      `Avg Predicted` = round(mean(ppg, na.rm = TRUE), 1),
+      .groups = "drop"
+    ) %>%
+    styled_table(caption = "Quintile 5 = best matchups. Does MQ predict scoring?")
+}
+```
+
+### By Position
+
+```{r mq-by-position, fig.height=6}
+if (has_actuals && "matchup_quality" %in% names(data)) {
+  plot_data <- data %>%
+    filter(!is.na(actual_pts), !is.na(matchup_quality), ppg > 0) %>%
+    mutate(pos = factor(pos, levels = c("GK", "DEF", "MID", "FWD")))
+  
+  ggplot(plot_data, aes(x = matchup_quality, y = actual_pts, color = pos)) +
+    geom_point(alpha = 0.2, size = 1) +
+    geom_smooth(method = "lm", se = TRUE, linewidth = 0.8, alpha = 0.15) +
+    scale_color_manual(values = pos_colors) +
+    facet_wrap(~pos, scales = "free_y") +
+    labs(title = "Matchup Quality vs Actual Points by Position",
+         subtitle = "Positive slope = MQ predicts scoring. Steeper = stronger signal.",
+         x = "Matchup Quality (0-100)", y = "Actual Points") +
+    theme_backtest() +
+    theme(legend.position = "none")
+}
+```
+
+```{r mq-correlation, results='asis'}
+if (has_actuals && "matchup_quality" %in% names(data)) {
+  mq_cors <- data %>%
+    filter(!is.na(actual_pts), !is.na(matchup_quality)) %>%
+    group_by(pos) %>%
+    summarise(r = round(cor(matchup_quality, actual_pts, use = "complete.obs"), 3), .groups = "drop")
+  
+  overall_r <- round(cor(
+    data$matchup_quality[!is.na(data$actual_pts) & !is.na(data$matchup_quality)],
+    data$actual_pts[!is.na(data$actual_pts) & !is.na(data$matchup_quality)],
+    use = "complete.obs"), 3)
+  
+  cat(sprintf('<div class="interpretation">Overall MQ correlation: <strong>%.3f</strong>. By position: %s. MQ signal is typically weak at the player level (0.05–0.15) because individual variance dominates team context.</div>',
+              overall_r,
+              paste(sprintf("%s=%.3f", mq_cors$pos, mq_cors$r), collapse = ", ")))
+}
+```
+
+---
+
+## Floor / Ceiling Calibration {.tabset}
+
+Are our floor (2nd worst score) and ceiling (2nd best score) estimates realistic?
+
+```{r floor-ceiling, results='asis'}
+if (has_actuals) {
+  fc_data <- data %>%
+    filter(!is.na(actual_pts), pts_floor > 0, pts_ceiling > 0) %>%
+    mutate(
+      below_floor = actual_pts < pts_floor,
+      above_ceiling = actual_pts > pts_ceiling,
+      in_range = actual_pts >= pts_floor & actual_pts <= pts_ceiling
+    )
+  
+  if (nrow(fc_data) > 0) {
+    pct_below  <- round(mean(fc_data$below_floor, na.rm = TRUE) * 100, 1)
+    pct_range  <- round(mean(fc_data$in_range, na.rm = TRUE) * 100, 1)
+    pct_above  <- round(mean(fc_data$above_ceiling, na.rm = TRUE) * 100, 1)
+    
+    cat('<div class="metric-row">')
+    cat(metric_card(paste0(pct_below, "%"), "Below Floor", if (pct_below < 25) "good" else "bad"))
+    cat(metric_card(paste0(pct_range, "%"), "In Range", if (pct_range > 40) "good" else "neutral"))
+    cat(metric_card(paste0(pct_above, "%"), "Above Ceiling", if (pct_above < 35) "good" else "neutral"))
+    cat('</div>')
+    
+    cat(sprintf('<div class="interpretation">Using trimmed 2nd worst/best from history. Target distribution: ~20%% below, ~50%% in range, ~30%% above. Current: <strong>%.0f/%.0f/%.0f</strong>. %s</div>',
+                pct_below, pct_range, pct_above,
+                if (pct_range > 40) "Calibration looks reasonable." else "Range is too narrow or sample too small."))
+  }
+}
+```
+
+### By Position
+
+```{r floor-ceiling-pos}
+if (has_actuals) {
+  data %>%
+    filter(!is.na(actual_pts), pts_floor > 0, pts_ceiling > 0) %>%
+    mutate(
+      below_floor = actual_pts < pts_floor,
+      above_ceiling = actual_pts > pts_ceiling,
+      in_range = actual_pts >= pts_floor & actual_pts <= pts_ceiling
+    ) %>%
+    group_by(Position = pos) %>%
+    summarise(
+      N = n(),
+      `% Below Floor` = round(mean(below_floor) * 100, 1),
+      `% In Range` = round(mean(in_range) * 100, 1),
+      `% Above Ceil` = round(mean(above_ceiling) * 100, 1),
+      `Avg Floor` = round(mean(pts_floor), 1),
+      `Avg Ceil` = round(mean(pts_ceiling), 1),
+      .groups = "drop"
+    ) %>%
+    styled_table()
+}
+```
+
+---
+
+## Ownership Estimation {.tabset}
+
+```{r ownership-section, results='asis'}
+if (has_own_actuals) {
+  own_data <- data %>% filter(!is.na(actual_own_pct), !is.na(est_own_pct))
+  
+  own_mae  <- round(mean(abs(own_data$est_own_pct - own_data$actual_own_pct)), 2)
+  own_r    <- round(cor(own_data$est_own_pct, own_data$actual_own_pct, use = "complete.obs"), 3)
+  own_bias <- round(mean(own_data$est_own_pct - own_data$actual_own_pct), 2)
+  
+  cat('<div class="metric-row">')
+  cat(metric_card(own_mae, "MAE (%pts)", if (own_mae < 5) "good" else "bad", "%.1f"))
+  cat(metric_card(own_r, "Correlation", if (own_r > 0.5) "good" else if (own_r > 0.3) "neutral" else "bad", "%.3f"))
+  cat(metric_card(own_bias, "Mean Bias", if (abs(own_bias) < 2) "good" else "bad", "%+.1f"))
+  cat('</div>')
+} else {
+  cat('<div class="interpretation warning"><strong>No actual ownership data available.</strong> Add data to the ownership Google Sheet (<code>1uI0wkZVLBL9hgMDfoszuZYDx-n9P03BJPZ4vP1KAMjY</code>) in tabs named <code>week_20</code>, <code>week_21</code>, etc. with columns: <code>player, pos, team, price, own_pct, captain_pct, form, score</code>.</div>')
+}
+```
+
+### Predicted vs Actual Ownership
+
+```{r own-scatter, fig.height=6}
+if (has_own_actuals) {
+  own_data <- data %>% filter(!is.na(actual_own_pct), !is.na(est_own_pct))
+  
+  ggplot(own_data, aes(x = est_own_pct, y = actual_own_pct, color = pos)) +
+    geom_point(alpha = 0.5, size = 2) +
+    geom_abline(slope = 1, intercept = 0, linetype = "dashed", color = pal$muted) +
+    scale_color_manual(values = pos_colors) +
+    labs(title = "Estimated vs Actual Ownership",
+         subtitle = "Points on the dashed line = perfect prediction",
+         x = "Estimated Ownership %", y = "Actual Ownership %") +
+    theme_backtest()
+}
+```
+
+### Worst Misses
+
+```{r own-misses}
+if (has_own_actuals) {
+  data %>%
+    filter(!is.na(actual_own_pct), !is.na(est_own_pct)) %>%
+    mutate(Error = round(abs(est_own_pct - actual_own_pct), 1)) %>%
+    arrange(desc(Error)) %>%
+    head(15) %>%
+    transmute(GW = gameweek, Player = player, Pos = pos, `Salary` = salary,
+              `Est Own%` = est_own_pct, `Actual Own%` = actual_own_pct,
+              Error, `Picked By` = picked_by, `Cash` = cash_rating) %>%
+    styled_table(caption = "15 largest ownership estimation errors")
+}
+```
+
+### Spot Check (Latest GW)
+
+```{r own-spot-check}
+# Always show top predicted ownership for manual comparison
+latest_gw <- max(data$gameweek, na.rm = TRUE)
+
+data %>%
+  filter(gameweek == latest_gw) %>%
+  arrange(desc(est_own_pct)) %>%
+  head(20) %>%
+  transmute(Player = player, Pos = pos, Team = team_normalized,
+            Salary = salary, `Est Own%` = est_own_pct, `Est Cpt%` = est_captain_pct,
+            `Picked By` = picked_by, Cash = cash_rating, MQ = matchup_quality) %>%
+  styled_table(caption = sprintf("Top 20 predicted ownership — GW %d (compare against actual contest results)", latest_gw))
+```
+
+---
+
+## Picked By Signal {.tabset}
+
+How predictive is the FanTeam season-long `picked_by` statistic?
+
+```{r picked-by, results='asis'}
+if ("picked_by" %in% names(data) && has_actuals) {
+  pb_data <- data %>%
+    filter(!is.na(actual_pts)) %>%
+    mutate(pb = as.numeric(gsub("[^0-9.]", "", as.character(picked_by)))) %>%
+    filter(!is.na(pb), pb > 0)
+  
+  if (nrow(pb_data) > 20) {
+    r_pts <- round(cor(pb_data$pb, pb_data$actual_pts, use = "complete.obs"), 3)
+    r_ppg <- round(cor(pb_data$pb, pb_data$ppg, use = "complete.obs"), 3)
+    
+    cat('<div class="metric-row">')
+    cat(metric_card(r_pts, "picked_by vs<br>Actual Points", if (r_pts > 0.15) "good" else "neutral", "%.3f"))
+    cat(metric_card(r_ppg, "picked_by vs<br>Season PPG", if (r_ppg > 0.3) "good" else "neutral", "%.3f"))
+    cat(metric_card(comma(nrow(pb_data)), "Players with<br>picked_by > 0", "neutral"))
+    cat('</div>')
+    
+    cat(sprintf('<div class="interpretation"><code>picked_by</code> vs actual weekly points (r=%.3f) is the <strong>weekly signal</strong> — moderate because it is a season-long stat. picked_by vs PPG (r=%.3f) shows how well it tracks season averages — this should be high.</div>',
+                r_pts, r_ppg))
+  }
+}
+```
+
+### Picked By Deciles vs Actual Points
+
+```{r pb-deciles, fig.height=5}
+if ("picked_by" %in% names(data) && has_actuals) {
+  pb_data <- data %>%
+    filter(!is.na(actual_pts)) %>%
+    mutate(pb = as.numeric(gsub("[^0-9.]", "", as.character(picked_by)))) %>%
+    filter(!is.na(pb), pb > 0) %>%
+    mutate(pb_decile = ntile(pb, 10))
+  
+  if (nrow(pb_data) > 50) {
+    decile_summary <- pb_data %>%
+      group_by(pb_decile) %>%
+      summarise(
+        avg_actual = mean(actual_pts, na.rm = TRUE),
+        avg_pb = mean(pb, na.rm = TRUE),
+        .groups = "drop"
+      )
+    
+    ggplot(decile_summary, aes(x = factor(pb_decile), y = avg_actual)) +
+      geom_col(fill = pal$sage, alpha = 0.8) +
+      geom_text(aes(label = sprintf("%.1f", avg_actual)), vjust = -0.5, size = 3.5, color = pal$primary) +
+      labs(title = "Average Actual Points by Picked-By Decile",
+           subtitle = "Decile 10 = most popular players. Should show upward trend.",
+           x = "Picked-By Decile (1=least → 10=most popular)", y = "Avg Actual Points") +
+      theme_backtest()
+  }
+}
+```
+
+---
+
+## Biggest Misses {.tabset}
+
+### Cash Locks That Bombed
+
+Players rated as Cash Lock who scored poorly — where is the model overconfident?
+
+```{r cash-bombs}
+if (has_actuals && "cash_rating" %in% names(data)) {
+  data %>%
+    filter(cash_rating == "Cash Lock", !is.na(actual_pts)) %>%
+    arrange(actual_pts) %>%
+    head(15) %>%
+    transmute(GW = gameweek, Player = player, Pos = pos, Salary = salary,
+              `Cash Score` = cash_score, `Actual Pts` = actual_pts,
+              PPG = ppg, MQ = matchup_quality, `Est Own%` = est_own_pct) %>%
+    styled_table(caption = "Cash Locks with lowest actual points")
+}
+```
+
+### Hard Passes That Exploded
+
+Players rated as Hard Pass who massively outperformed — where are we missing value?
+
+```{r hard-pass-heroes}
+if (has_actuals && "cash_rating" %in% names(data)) {
+  data %>%
+    filter(cash_rating == "Hard Pass", !is.na(actual_pts)) %>%
+    arrange(desc(actual_pts)) %>%
+    head(15) %>%
+    transmute(GW = gameweek, Player = player, Pos = pos, Salary = salary,
+              `Cash Score` = cash_score, `Actual Pts` = actual_pts,
+              PPG = ppg, MQ = matchup_quality, `Est Own%` = est_own_pct) %>%
+    styled_table(caption = "Hard Passes with highest actual points")
+}
+```
+
+### GPP Fades That Smashed
+
+```{r gpp-fade-heroes}
+if (has_actuals && "gpp_rating" %in% names(data)) {
+  data %>%
+    filter(gpp_rating == "Fade", !is.na(actual_pts)) %>%
+    arrange(desc(actual_pts)) %>%
+    head(15) %>%
+    transmute(GW = gameweek, Player = player, Pos = pos, Salary = salary,
+              `GPP Score` = gpp_score, `Actual Pts` = actual_pts,
+              Ceiling = pts_ceiling, MQ = matchup_quality, `Est Own%` = est_own_pct) %>%
+    styled_table(caption = "Fades with highest actual points — GPP upside we're missing")
+}
+```
+
+---
+
+## Data Export {.tabset}
+
+```{r export, results='asis'}
+export_cols <- c(
+  "gameweek", "player", "pos", "team_normalized", "salary",
+  "ppg", "pts_floor", "pts_ceiling", "sortino", "form",
+  "matchup_quality", "est_own_pct", "est_captain_pct",
+  "cash_score", "cash_rating", "gpp_score", "gpp_rating",
+  "captain_score", "captain_rating",
+  "value", "picked_by", "n_games",
+  "actual_pts", "actual_own_pct", "actual_captain_pct",
+  "opponent", "home_away"
+)
+
+export <- data %>%
+  select(any_of(export_cols)) %>%
+  arrange(gameweek, desc(cash_score))
+
+export_path <- "data/backtest_results.csv"
+dir.create(dirname(export_path), showWarnings = FALSE, recursive = TRUE)
+write.csv(export, export_path, row.names = FALSE)
+
+cat(sprintf('<div class="interpretation">Full results exported to <code>%s</code> — <strong>%s rows</strong> across <strong>%d gameweeks</strong>. Open in Excel or R for deeper analysis.</div>',
+            export_path, comma(nrow(export)), length(unique(export$gameweek))))
+```
+
+---
+
+<div style="text-align: center; color: var(--muted); padding: 2em 0; font-size: 0.85em;">
+Generated `r format(Sys.time(), '%d %b %Y at %H:%M')` · Soccer Ratings Backtester v1.0
+</div>

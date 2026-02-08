@@ -55,6 +55,11 @@ load_week_data <- function(season, week, slate = "main") {
       sprintf("fanteam_salaries/%s_late.csv", week_prefix),
       sprintf("fanteam_salaries/%s_fumble.csv", week_prefix)
     )
+  } else if (slate == "showdown") {
+    salary_paths_to_try <- c(
+      sprintf("data/fanteam_salaries/%s/%s_showdown.csv", season, week_prefix),
+      sprintf("fanteam_salaries/%s_showdown.csv", week_prefix)
+    )
   } else if (slate %in% c("two_game_slate", "three_game_slate")) {
     # Custom slate files (e.g., week_15_two_game_slate.csv)
     salary_paths_to_try <- c(
@@ -358,6 +363,21 @@ get_available_slates <- function(season, week) {
     }
   }
   
+  # Check for showdown file without team suffix (e.g., super_bowl_showdown.csv)
+  # This handles playoff weeks where only a showdown contest exists
+  showdown_paths <- c(
+    sprintf("data/fanteam_salaries/%s/%s_showdown.csv", season, week_prefix),
+    sprintf("fanteam_salaries/%s_showdown.csv", week_prefix)
+  )
+  
+  for (path in showdown_paths) {
+    if (file.exists(path)) {
+      slates <- c(slates, "showdown")
+      log_debug("  Showdown slate available at:", path, level = "DEBUG")
+      break
+    }
+  }
+  
   log_debug("Available slates:", paste(slates, collapse = ", "), level = "DEBUG")
   return(slates)
 }
@@ -369,6 +389,7 @@ get_slate_label <- function(slate) {
   labels <- c(
     "main" = "Main",
     "late" = "Late",
+    "showdown" = "Showdown",
     "two_game_slate" = "2-Game",
     "three_game_slate" = "3-Game"
   )
@@ -445,6 +466,11 @@ get_unmatched_players <- function(season, week, slate = "main", min_projection =
       sprintf("data/fanteam_salaries/%s/%s_fumble.csv", season, week_prefix),
       sprintf("fanteam_salaries/%s_late.csv", week_prefix),
       sprintf("fanteam_salaries/%s_fumble.csv", week_prefix)
+    )
+  } else if (slate == "showdown") {
+    salary_paths_to_try <- c(
+      sprintf("data/fanteam_salaries/%s/%s_showdown.csv", season, week_prefix),
+      sprintf("fanteam_salaries/%s_showdown.csv", week_prefix)
     )
   } else if (slate %in% c("two_game_slate", "three_game_slate")) {
     salary_paths_to_try <- c(
@@ -558,6 +584,11 @@ get_slate_teams <- function(season, week, slate = "main") {
       sprintf("data/fanteam_salaries/%s/%s_fumble.csv", season, week_prefix),
       sprintf("fanteam_salaries/%s_late.csv", week_prefix),
       sprintf("fanteam_salaries/%s_fumble.csv", week_prefix)
+    )
+  } else if (slate == "showdown") {
+    salary_paths_to_try <- c(
+      sprintf("data/fanteam_salaries/%s/%s_showdown.csv", season, week_prefix),
+      sprintf("fanteam_salaries/%s_showdown.csv", week_prefix)
     )
   } else if (slate %in% c("two_game_slate", "three_game_slate")) {
     salary_paths_to_try <- c(
