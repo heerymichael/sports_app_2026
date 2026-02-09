@@ -39,29 +39,30 @@ NFL_SHOWDOWN_SALARY_CAP <- 85
 get_available_showdown_slates <- function(season, week) {
   log_debug("get_available_showdown_slates() for season:", season, "week:", week, level = "DEBUG")
   
-  # Get the file prefix (handles both regular weeks and playoff rounds)
+  # Get Google Sheet IDs for this season
+  sheet_ids <- get_nfl_sheet_ids(season)
+  if (is.null(sheet_ids)) {
+    log_debug("No Google Sheet IDs for season:", season, level = "WARN")
+    return(character(0))
+  }
+  
+  # Get the sheet name prefix
   week_prefix <- get_week_file_prefix(week)
   
-  # Look for showdown files in the salary folder
-  salary_dir <- sprintf("data/fanteam_salaries/%s", season)
+  # Get all worksheet names from the salaries sheet
+  all_sheets <- get_nfl_sheet_names(sheet_ids$salaries)
   
-  if (!dir.exists(salary_dir)) {
-    log_debug("Salary directory not found:", salary_dir, level = "WARN")
+  # Pattern: week_X_showdown or week_X_showdown_TEAM1_TEAM2
+  pattern <- sprintf("^%s_showdown(_.+)?$", week_prefix)
+  showdown_sheets <- all_sheets[grepl(pattern, all_sheets)]
+  
+  if (length(showdown_sheets) == 0) {
+    log_debug("No showdown sheets found for week", week, level = "DEBUG")
     return(character(0))
   }
   
-  # Pattern: week_X_showdown_TEAM1_TEAM2.csv or super_bowl_showdown.csv (no team suffix)
-  pattern <- sprintf("^%s_showdown(_.+)?\\.csv$", week_prefix)
-  files <- list.files(salary_dir, pattern = pattern)
-  
-  if (length(files) == 0) {
-    log_debug("No showdown files found for week", week, level = "DEBUG")
-    return(character(0))
-  }
-  
-  # Extract slate names from filenames
-  slates <- gsub(sprintf("^%s_", week_prefix), "", files)
-  slates <- gsub("\\.csv$", "", slates)
+  # Extract slate names from sheet names (remove week prefix)
+  slates <- gsub(sprintf("^%s_", week_prefix), "", showdown_sheets)
   
   log_debug("Found showdown slates:", paste(slates, collapse = ", "), level = "INFO")
   return(slates)
@@ -102,45 +103,46 @@ load_showdown_data <- function(season, week, slate) {
   log_debug("  Week:", week, level = "INFO")
   log_debug("  Slate:", slate, level = "INFO")
   
-  # Get the file prefix (handles both regular weeks and playoff rounds)
+  # Get Google Sheet IDs for this season
+  sheet_ids <- get_nfl_sheet_ids(season)
+  if (is.null(sheet_ids)) {
+    log_debug("No Google Sheet IDs for season:", season, level = "ERROR")
+    return(NULL)
+  }
+  
+  # Get the sheet name prefix
   week_prefix <- get_week_file_prefix(week)
   
-  # Projection file (use regular week projections)
-  proj_file <- NULL
-  proj_paths_to_try <- c(
-    sprintf("data/projections/%s/%s_projections.csv", season, week_prefix),
-    sprintf("projections/%s_projections.csv", week_prefix)
-  )
+  # Projection sheet - just the week prefix (no _projections suffix)
+  proj_sheet_name <- week_prefix
+  log_debug("  Reading projections sheet:", proj_sheet_name, level = "INFO")
   
-  for (path in proj_paths_to_try) {
-    if (file.exists(path)) {
-      proj_file <- path
-      log_debug("  Found projection file:", path, level = "INFO")
-      break
-    }
-  }
+  projections_raw <- read_nfl_sheet(sheet_ids$projections, proj_sheet_name)
   
-  if (is.null(proj_file)) {
-    log_debug("Projections file not found!", level = "ERROR")
+  if (is.null(projections_raw) || nrow(projections_raw) == 0) {
+    log_debug("Projections sheet not found!", level = "ERROR")
     return(NULL)
   }
   
-  # Salary file (showdown-specific)
-  salary_file <- sprintf("data/fanteam_salaries/%s/%s_%s.csv", season, week_prefix, slate)
+  # Salary sheet (showdown-specific)
+  salary_sheet_name <- paste0(week_prefix, "_", slate)
+  log_debug("  Reading salary sheet:", salary_sheet_name, level = "INFO")
   
-  if (!file.exists(salary_file)) {
-    log_debug("Showdown salary file not found:", salary_file, level = "ERROR")
+  salaries_raw <- read_nfl_sheet(sheet_ids$salaries, salary_sheet_name)
+  
+  if (is.null(salaries_raw) || nrow(salaries_raw) == 0) {
+    log_debug("Showdown salary sheet not found:", salary_sheet_name, level = "ERROR")
     return(NULL)
   }
   
-  log_debug("Using files:", level = "INFO")
-  log_debug("  Projection:", proj_file, level = "INFO")
-  log_debug("  Salary:", salary_file, level = "INFO")
+  log_debug("Using sheets:", level = "INFO")
+  log_debug("  Projection:", proj_sheet_name, level = "INFO")
+  log_debug("  Salary:", salary_sheet_name, level = "INFO")
   
   # Load projections
   projections <- tryCatch({
-    read_csv(proj_file, show_col_types = FALSE, locale = locale(encoding = "UTF-8")) %>% 
-      clean_names() %>%
+    projections_raw %>% 
+      janitor::clean_names() %>%
       {
         if ("pos" %in% names(.)) {
           select(., player, team, pos, full_ppr_proj, dk_ceiling) %>%
@@ -157,7 +159,7 @@ load_showdown_data <- function(season, week, slate) {
         blended = (full + ceiling) / 2
       )
   }, error = function(e) {
-    log_debug("Error reading projections:", e$message, level = "ERROR")
+    log_debug("Error processing projections:", e$message, level = "ERROR")
     return(NULL)
   })
   
@@ -167,8 +169,8 @@ load_showdown_data <- function(season, week, slate) {
   
   # Load salaries
   salaries <- tryCatch({
-    read_csv(salary_file, show_col_types = FALSE, locale = locale(encoding = "UTF-8")) %>% 
-      clean_names() %>% 
+    salaries_raw %>% 
+      janitor::clean_names() %>% 
       filter(lineup != "refuted") %>%
       filter(position != "kicker") %>%
       mutate(name = str_remove(name, regex("\\s+Jr\\.?$", ignore_case = TRUE))) %>% 
@@ -204,7 +206,7 @@ load_showdown_data <- function(season, week, slate) {
         TRUE ~ player
       ))
   }, error = function(e) {
-    log_debug("Error reading salaries:", e$message, level = "ERROR")
+    log_debug("Error processing salaries:", e$message, level = "ERROR")
     return(NULL)
   })
   
@@ -1872,7 +1874,7 @@ nfl_showdown_server <- function(id) {
       # Helper for sort indicator
       sort_indicator <- function(col) {
         if (sort_col == col) {
-          if (sort_dir == "desc") " ▼" else " ▲"
+          if (sort_dir == "desc") " â–¼" else " â–²"
         } else {
           ""
         }
@@ -1971,7 +1973,7 @@ nfl_showdown_server <- function(id) {
           div(
             style = sprintf("display: grid; grid-template-columns: 1fr 65px 65px 55px 50px 90px; gap: 0.25rem; padding: 0.4rem 0.75rem; align-items: center; border-bottom: 1px solid var(--bg-secondary); %s", row_style),
             
-            # Player cell with headshot - Name on top, Position · Team below
+            # Player cell with headshot - Name on top, Position Â· Team below
             div(
               style = "display: flex; align-items: center; gap: 0.5rem; min-width: 0;",
               create_headshot_html(p$headshot_url, p$team_bg_color, "tiny", p$position, p$team),
@@ -2544,7 +2546,7 @@ nfl_showdown_server <- function(id) {
                       }
                     ),
                     
-                    # Player name · Team · Position (position slightly heavier)
+                    # Player name Â· Team Â· Position (position slightly heavier)
                     div(
                       style = "flex: 1; min-width: 0; overflow: hidden;",
                       tags$span(

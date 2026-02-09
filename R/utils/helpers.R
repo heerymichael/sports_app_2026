@@ -144,83 +144,25 @@ create_matchup_html <- function(team, opponent = NULL, home = TRUE, show_logos =
 #' @return Full team name
 #' @note Uses NFL_TEAM_NAMES from nfl_config.R (available at runtime)
 get_team_full_name <- function(abbr) {
-  # Use centralized team data from nfl_config.R
-  # NFL_TEAM_NAMES is available after global.R sources all files
   if (exists("NFL_TEAM_NAMES")) {
     return(unname(NFL_TEAM_NAMES[abbr]))
   }
-  # Fallback if called before config loaded
   abbr
 }
 
-#' Get available seasons from data folder
-#' @return Vector of available seasons
+#' Get available seasons from NFL_SHEET_IDS config
+#' @return Vector of available seasons (numeric, descending)
 get_available_seasons <- function() {
   log_debug("========================================", level = "INFO")
   log_debug("get_available_seasons() called", level = "INFO")
-  log_debug("Current working directory:", getwd(), level = "INFO")
   
-  # Try multiple possible path patterns
-  possible_paths <- c(
-    "data/projections",      # New structure: data/projections/2025/
-    "projections"            # Old structure: projections/ (files directly)
-  )
-  
-  proj_path <- NULL
-  path_type <- NULL
-  
-  for (path in possible_paths) {
-    log_debug("Checking path:", path, level = "INFO")
-    if (dir.exists(path)) {
-      proj_path <- path
-      log_debug("  Found!", level = "INFO")
-      break
-    } else {
-      log_debug("  Not found", level = "DEBUG")
-    }
-  }
-  
-  if (is.null(proj_path)) {
-    log_debug("No projection directory found!", level = "ERROR")
-    log_debug("Contents of current directory:", level = "INFO")
-    current_files <- list.files(".", all.files = FALSE)
-    log_debug(paste(current_files, collapse = ", "), level = "INFO")
+  if (!exists("NFL_SHEET_IDS") || length(NFL_SHEET_IDS) == 0) {
+    log_debug("NFL_SHEET_IDS not defined or empty!", level = "ERROR")
     return(character(0))
   }
   
-  # Check if this path has year subfolders or files directly
-  contents <- list.files(proj_path, full.names = FALSE)
-  log_debug("Contents of", proj_path, ":", paste(contents, collapse = ", "), level = "INFO")
-  
-  # Check for year subdirectories (e.g., 2025)
-  subdirs <- list.dirs(proj_path, recursive = FALSE, full.names = FALSE)
-  log_debug("Subdirectories found:", paste(subdirs, collapse = ", "), level = "INFO")
-  
-  if (length(subdirs) > 0) {
-    # New structure: data/projections/2025/
-    seasons <- as.numeric(subdirs)
-    seasons <- seasons[!is.na(seasons)]
-    path_type <- "year_subfolders"
-    log_debug("Structure type: year subfolders", level = "INFO")
-  } else {
-    # Old structure: projections/week_1_projections.csv (no year folders)
-    # In this case, we don't have multiple seasons - just return current year or detect from files
-    csv_files <- list.files(proj_path, pattern = "week_.*_projections\\.csv", full.names = FALSE)
-    if (length(csv_files) > 0) {
-      seasons <- c(2025)  # Default to current season
-      path_type <- "flat_files"
-      log_debug("Structure type: flat files (no year folders), defaulting to 2025", level = "INFO")
-    } else {
-      log_debug("No projection files found in", proj_path, level = "ERROR")
-      return(character(0))
-    }
-  }
-  
-  seasons <- sort(seasons, decreasing = TRUE)
-  
-  # Store path type for later use
-  options(sports_analytics_path_type = path_type)
-  options(sports_analytics_base_path = proj_path)
+  seasons <- as.numeric(names(NFL_SHEET_IDS))
+  seasons <- sort(seasons[!is.na(seasons)], decreasing = TRUE)
   
   log_debug("Available seasons:", paste(seasons, collapse = ", "), level = "INFO")
   log_debug("========================================", level = "INFO")
@@ -232,10 +174,8 @@ get_available_seasons <- function() {
 # PLAYOFF WEEK CONFIGURATION
 # =============================================================================
 
-# Playoff week identifiers in display order (most recent/important first)
 NFL_PLAYOFF_WEEKS <- c("super_bowl", "conference_games", "divisional_round", "wild_card")
 
-# Display labels for playoff weeks
 NFL_PLAYOFF_LABELS <- c(
   "super_bowl" = "Super Bowl",
   "conference_games" = "Conference Games",
@@ -244,15 +184,11 @@ NFL_PLAYOFF_LABELS <- c(
 )
 
 #' Check if a week identifier is a playoff week
-#' @param week Week identifier (numeric or string)
-#' @return TRUE if playoff week
 is_playoff_week <- function(week) {
   as.character(week) %in% NFL_PLAYOFF_WEEKS
 }
 
 #' Get display label for a week
-#' @param week Week identifier (numeric or string)
-#' @return Display label
 get_week_label <- function(week) {
   week_str <- as.character(week)
   if (week_str %in% names(NFL_PLAYOFF_LABELS)) {
@@ -261,9 +197,9 @@ get_week_label <- function(week) {
   paste("Week", week)
 }
 
-#' Build file prefix for a week (handles both regular and playoff weeks)
+#' Build sheet name prefix for a week (handles both regular and playoff weeks)
 #' @param week Week identifier (numeric or string)
-#' @return File prefix (e.g., "week_15" or "wild_card")
+#' @return Sheet name prefix (e.g., "week_15" or "wild_card")
 get_week_file_prefix <- function(week) {
   if (is_playoff_week(week)) {
     return(as.character(week))
@@ -271,71 +207,42 @@ get_week_file_prefix <- function(week) {
   paste0("week_", week)
 }
 
-#' Get available weeks for a season
+#' Get available weeks for a season by reading Google Sheets worksheet names
 #' @param season Year
 #' @return Vector of available weeks (numeric for regular season, character for playoffs)
 get_available_weeks <- function(season) {
   log_debug("get_available_weeks() called for season:", season, level = "INFO")
   
-  # Get stored path info or detect again
-  path_type <- getOption("sports_analytics_path_type", NULL)
-  base_path <- getOption("sports_analytics_base_path", NULL)
-  
-  log_debug("Path type:", path_type, level = "DEBUG")
-  log_debug("Base path:", base_path, level = "DEBUG")
-  
-  # Determine the correct path based on structure
-  if (!is.null(path_type) && path_type == "year_subfolders" && !is.null(base_path)) {
-    # New structure: data/projections/2025/
-    proj_path <- paste0(base_path, "/", season)
-  } else if (!is.null(path_type) && path_type == "flat_files" && !is.null(base_path)) {
-    # Old structure: projections/ (files directly)
-    proj_path <- base_path
-  } else {
-    # Fallback: try to detect
-    if (dir.exists(paste0("data/projections/", season))) {
-      proj_path <- paste0("data/projections/", season)
-    } else if (dir.exists("data/projections")) {
-      proj_path <- "data/projections"
-    } else if (dir.exists("projections")) {
-      proj_path <- "projections"
-    } else {
-      log_debug("Could not determine projections path", level = "ERROR")
-      return(character(0))
-    }
-  }
-  
-  log_debug("Looking for weeks at:", proj_path, level = "INFO")
-  log_debug("Path exists:", dir.exists(proj_path), level = "INFO")
-  
-  if (!dir.exists(proj_path)) {
-    log_debug("Path does not exist:", proj_path, level = "ERROR")
+  # Get Google Sheet IDs for this season
+  sheet_ids <- get_nfl_sheet_ids(season)
+  if (is.null(sheet_ids)) {
+    log_debug("No Google Sheet IDs for season:", season, level = "ERROR")
     return(character(0))
   }
   
-  # List ALL projection files
-  proj_files <- list.files(
-    proj_path, 
-    pattern = ".*_projections\\.csv", 
-    full.names = FALSE
-  )
+  # Get all worksheet names from the projections sheet
+  proj_sheets <- get_nfl_sheet_names(sheet_ids$projections)
+  log_debug("Found projection sheets:", paste(proj_sheets, collapse = ", "), level = "INFO")
   
-  log_debug("Found projection files:", paste(proj_files, collapse = ", "), level = "INFO")
-  
-  if (length(proj_files) == 0) {
-    log_debug("No projection files found", level = "WARN")
+  if (length(proj_sheets) == 0) {
+    log_debug("No projection sheets found", level = "WARN")
     return(character(0))
   }
   
-  # Extract regular season weeks (numeric)
-  regular_weeks <- as.numeric(gsub(".*week_(\\d+)_projections\\.csv", "\\1", proj_files))
+  # =========================================================================
+  # Worksheet names ARE the week identifiers directly:
+  #   week_1, week_2, ..., week_18, wild_card, divisional_round, etc.
+  # There is NO "_projections" suffix on worksheet names.
+  # =========================================================================
+  
+  # Extract regular season weeks (numeric) - match "week_N" pattern exactly
+  regular_weeks <- as.numeric(gsub("^week_(\\d+)$", "\\1", proj_sheets))
   regular_weeks <- sort(regular_weeks[!is.na(regular_weeks)], decreasing = TRUE)
   
-  # Check for playoff weeks
+  # Check for playoff weeks - match directly against sheet names
   playoff_weeks <- c()
   for (pw in NFL_PLAYOFF_WEEKS) {
-    pattern <- paste0("^", pw, "_projections\\.csv$")
-    if (any(grepl(pattern, proj_files))) {
+    if (pw %in% proj_sheets) {
       playoff_weeks <- c(playoff_weeks, pw)
     }
   }

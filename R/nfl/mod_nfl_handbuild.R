@@ -548,8 +548,17 @@ nfl_handbuild_server <- function(id) {
         return()
       }
       
-      # Reset retry counter once we have values
-      if (load_attempts() > 0 && !is.null(season) && season != "") {
+      # If retries exhausted and inputs still not ready, stop without resetting
+      # (avoids infinite loop when e.g. no weeks exist for a season)
+      if (is.null(week) || week == "" || is.null(slate) || slate == "") {
+        if (load_attempts() >= 10) {
+          log_debug(">>> Max retries reached, inputs still not ready. Waiting for user input.", level = "WARN")
+        }
+        return()
+      }
+      
+      # Reset retry counter once ALL inputs have valid values
+      if (load_attempts() > 0) {
         log_debug(">>> Inputs ready after", load_attempts(), "retries", level = "INFO")
         load_attempts(0)
       }
@@ -714,6 +723,9 @@ nfl_handbuild_server <- function(id) {
     # =========================================================================
     observeEvent(input$season, {
       log_debug(">>> Season changed to:", input$season, level = "INFO")
+      
+      # Reset retry counter so data load gets fresh attempts
+      load_attempts(0)
       
       # Skip if empty or placeholder
       if (is.null(input$season) || input$season == "" || input$season == "No data") {
@@ -1318,7 +1330,7 @@ nfl_handbuild_server <- function(id) {
           left_join(player_data %>% select(player, blended), by = "player") %>%
           mutate(
             adj_value = blended * (1 + adj_pct / 100),
-            display = sprintf("%s: %.1f → %.1f (%+.0f%%)", player, blended, adj_value, adj_pct)
+            display = sprintf("%s: %.1f â†’ %.1f (%+.0f%%)", player, blended, adj_value, adj_pct)
           )
       } else {
         adj_df <- adj_df %>%
@@ -1562,7 +1574,7 @@ nfl_handbuild_server <- function(id) {
             ),
             
             # Arrow
-            span(style = "color: var(--text-muted); font-size: 1.2rem;", "→"),
+            span(style = "color: var(--text-muted); font-size: 1.2rem;", "â†’"),
             
             # Stack requirement
             div(
@@ -2004,7 +2016,7 @@ nfl_handbuild_server <- function(id) {
       # Helper for sort indicator
       sort_indicator <- function(col) {
         if (sort_col == col) {
-          if (sort_dir == "desc") " ▼" else " ▲"
+          if (sort_dir == "desc") " â–¼" else " â–²"
         } else {
           ""
         }

@@ -2,11 +2,33 @@
 # NFL Configuration
 # 
 # Centralized configuration for NFL modules including:
+# - Google Sheets data source IDs (per season)
 # - Team information and colors
 # - Player name corrections for data matching
 # - Lineup structure constants
 # - Position settings
 # =============================================================================
+
+# =============================================================================
+# GOOGLE SHEETS DATA SOURCES
+# 
+# Each season has its own pair of Google Sheets:
+#   - salaries: Weekly FanTeam salary files (one worksheet per week/slate)
+#   - projections: Weekly projection files (one worksheet per week)
+# Salary worksheet names: week_1_main, week_1_late, super_bowl_showdown, etc.
+# Projection worksheet names: week_1, week_2, super_bowl, etc. (NO suffix)
+# =============================================================================
+
+NFL_SHEET_IDS <- list(
+  "2025" = list(
+    salaries    = "145RafKYZZmXqm9YqGL-3LTcQ3RzWxMbqMxLatk__0jo",
+    projections = "1TTkqsc0Ny0MRYofbH261UnTdmt1zBEL31m8Hqy6T8pE"
+  ),
+  "2026" = list(
+    salaries    = "1oglnZgEbt3Shgy6_vO9cW_XjGjuPgY4F6bxWMPo7OQs",
+    projections = "1uvEG2WQM62L8jBv9vdEolzDu0uiKuCWXy0EFe6yyMcc"
+  )
+)
 
 # =============================================================================
 # UI THEMING
@@ -201,4 +223,49 @@ NFL_COLUMN_LABELS <- c(
 # EXPORT MESSAGE
 # =============================================================================
 
-message("NFL config loaded: NFL_LINEUP_STRUCTURE, NFL_TEAM_NAMES, NFL_PLAYER_NAME_CORRECTIONS")
+message("NFL config loaded: NFL_SHEET_IDS, NFL_LINEUP_STRUCTURE, NFL_TEAM_NAMES, NFL_PLAYER_NAME_CORRECTIONS")
+
+# =============================================================================
+# GOOGLE SHEETS HELPERS
+# =============================================================================
+
+#' Get sheet IDs for a given season
+#' @param season Year as character or numeric (e.g., "2025" or 2025)
+#' @return List with $salaries and $projections sheet IDs, or NULL
+get_nfl_sheet_ids <- function(season) {
+  season_str <- as.character(season)
+  if (season_str %in% names(NFL_SHEET_IDS)) {
+    return(NFL_SHEET_IDS[[season_str]])
+  }
+  log_debug("No Google Sheet IDs configured for season:", season_str, level = "WARN")
+  return(NULL)
+}
+
+#' Read a worksheet from an NFL Google Sheet
+#' Handles deauth (public sheets) and error handling
+#' @param sheet_id Google Sheet ID
+#' @param sheet_name Worksheet name within the spreadsheet
+#' @return Data frame or NULL on error
+read_nfl_sheet <- function(sheet_id, sheet_name) {
+  tryCatch({
+    googlesheets4::gs4_deauth()
+    data <- googlesheets4::read_sheet(sheet_id, sheet = sheet_name)
+    as.data.frame(data)
+  }, error = function(e) {
+    log_debug("Error reading sheet '", sheet_name, "' from ", sheet_id, ": ", e$message, level = "ERROR")
+    return(NULL)
+  })
+}
+
+#' Get all worksheet names from an NFL Google Sheet
+#' @param sheet_id Google Sheet ID
+#' @return Character vector of sheet names, or character(0) on error
+get_nfl_sheet_names <- function(sheet_id) {
+  tryCatch({
+    googlesheets4::gs4_deauth()
+    googlesheets4::sheet_names(sheet_id)
+  }, error = function(e) {
+    log_debug("Error reading sheet names from ", sheet_id, ": ", e$message, level = "ERROR")
+    return(character(0))
+  })
+}

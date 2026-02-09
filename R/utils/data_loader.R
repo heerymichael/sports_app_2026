@@ -1,6 +1,8 @@
 # =============================================================================
 # Data Loader
 # Functions to load projections and salary data for NFL DFS
+# Now reads from Google Sheets instead of local CSV files.
+# Requires NFL_SHEET_IDS to be defined in nfl_config.R
 # =============================================================================
 
 #' Load data for a specific season, week, and slate
@@ -15,84 +17,59 @@ load_week_data <- function(season, week, slate = "main") {
   log_debug("  Week:", week, level = "INFO")
   log_debug("  Slate:", slate, level = "INFO")
   
-  # Get the file prefix (handles both regular weeks and playoff rounds)
+  # Get Google Sheet IDs for this season
+  sheet_ids <- get_nfl_sheet_ids(season)
+  if (is.null(sheet_ids)) {
+    log_debug("No Google Sheet IDs for season:", season, level = "ERROR")
+    return(NULL)
+  }
+  
+  # Get the sheet name prefix (handles both regular weeks and playoff rounds)
   week_prefix <- get_week_file_prefix(week)
   log_debug("  Week prefix:", week_prefix, level = "DEBUG")
   
-  # Determine file paths based on structure
-  # Try new structure first (data/projections/2025/), then old structure (projections/)
+  # --- Load projections from Google Sheet ---
+  # Worksheet names are the week prefix directly: week_1, super_bowl, etc.
+  # (NO "_projections" suffix)
+  proj_sheet_name <- week_prefix
+  log_debug("  Reading projections sheet:", proj_sheet_name, level = "INFO")
   
-  # Projection file
-  proj_file <- NULL
-  proj_paths_to_try <- c(
-    sprintf("data/projections/%s/%s_projections.csv", season, week_prefix),
-    sprintf("projections/%s_projections.csv", week_prefix)
-  )
+  projections_raw <- read_nfl_sheet(sheet_ids$projections, proj_sheet_name)
   
-  for (path in proj_paths_to_try) {
-    log_debug("  Trying projection path:", path, level = "DEBUG")
-    if (file.exists(path)) {
-      proj_file <- path
-      log_debug("  Found projection file:", path, level = "INFO")
-      break
-    }
-  }
-  
-  if (is.null(proj_file)) {
-    log_debug("Projections file not found! Tried:", level = "ERROR")
-    for (path in proj_paths_to_try) {
-      log_debug("  -", path, level = "ERROR")
-    }
+  if (is.null(projections_raw) || nrow(projections_raw) == 0) {
+    log_debug("Projections sheet not found or empty:", proj_sheet_name, level = "ERROR")
     return(NULL)
   }
   
-  # Salary file
-  salary_file <- NULL
-  if (slate == "late") {
-    salary_paths_to_try <- c(
-      sprintf("data/fanteam_salaries/%s/%s_late.csv", season, week_prefix),
-      sprintf("data/fanteam_salaries/%s/%s_fumble.csv", season, week_prefix),
-      sprintf("fanteam_salaries/%s_late.csv", week_prefix),
-      sprintf("fanteam_salaries/%s_fumble.csv", week_prefix)
-    )
+  # --- Determine salary sheet name ---
+  salary_sheet_name <- if (slate == "late") {
+    # Try "late" first, then "fumble" as fallback
+    all_sheets <- get_nfl_sheet_names(sheet_ids$salaries)
+    late_name <- paste0(week_prefix, "_late")
+    fumble_name <- paste0(week_prefix, "_fumble")
+    if (late_name %in% all_sheets) late_name
+    else if (fumble_name %in% all_sheets) fumble_name
+    else late_name  # will fail gracefully
   } else if (slate == "showdown") {
-    salary_paths_to_try <- c(
-      sprintf("data/fanteam_salaries/%s/%s_showdown.csv", season, week_prefix),
-      sprintf("fanteam_salaries/%s_showdown.csv", week_prefix)
-    )
+    paste0(week_prefix, "_showdown")
   } else if (slate %in% c("two_game_slate", "three_game_slate")) {
-    # Custom slate files (e.g., week_15_two_game_slate.csv)
-    salary_paths_to_try <- c(
-      sprintf("data/fanteam_salaries/%s/%s_%s.csv", season, week_prefix, slate),
-      sprintf("fanteam_salaries/%s_%s.csv", week_prefix, slate)
-    )
+    paste0(week_prefix, "_", slate)
   } else {
-    salary_paths_to_try <- c(
-      sprintf("data/fanteam_salaries/%s/%s_main.csv", season, week_prefix),
-      sprintf("fanteam_salaries/%s_main.csv", week_prefix)
-    )
+    paste0(week_prefix, "_main")
   }
   
-  for (path in salary_paths_to_try) {
-    log_debug("  Trying salary path:", path, level = "DEBUG")
-    if (file.exists(path)) {
-      salary_file <- path
-      log_debug("  Found salary file:", path, level = "INFO")
-      break
-    }
-  }
+  log_debug("  Reading salary sheet:", salary_sheet_name, level = "INFO")
   
-  if (is.null(salary_file)) {
-    log_debug("Salary file not found! Tried:", level = "ERROR")
-    for (path in salary_paths_to_try) {
-      log_debug("  -", path, level = "ERROR")
-    }
+  salaries_raw <- read_nfl_sheet(sheet_ids$salaries, salary_sheet_name)
+  
+  if (is.null(salaries_raw) || nrow(salaries_raw) == 0) {
+    log_debug("Salary sheet not found or empty:", salary_sheet_name, level = "ERROR")
     return(NULL)
   }
   
-  log_debug("Using files:", level = "INFO")
-  log_debug("  Projection:", proj_file, level = "INFO")
-  log_debug("  Salary:", salary_file, level = "INFO")
+  log_debug("Using sheets:", level = "INFO")
+  log_debug("  Projection:", proj_sheet_name, level = "INFO")
+  log_debug("  Salary:", salary_sheet_name, level = "INFO")
   
   # Load schedule for opponent info
   schedule <- tryCatch({
@@ -123,13 +100,13 @@ load_week_data <- function(season, week, slate = "main") {
     NULL
   }
   
-  # Load projections
-  log_debug("Reading projections CSV...", level = "DEBUG")
+  # Process projections
+  log_debug("Processing projections...", level = "DEBUG")
   projections <- tryCatch({
-    read_csv(proj_file, show_col_types = FALSE, locale = locale(encoding = "UTF-8")) %>% 
-      clean_names()
+    projections_raw %>% 
+      janitor::clean_names()
   }, error = function(e) {
-    log_debug("Error reading projections:", e$message, level = "ERROR")
+    log_debug("Error cleaning projections:", e$message, level = "ERROR")
     return(NULL)
   })
   
@@ -170,11 +147,11 @@ load_week_data <- function(season, week, slate = "main") {
   
   log_debug("Projections cleaned:", nrow(projections_clean), "rows", level = "INFO")
   
-  # Load salaries
-  log_debug("Reading salaries CSV...", level = "DEBUG")
+  # Process salaries
+  log_debug("Processing salaries...", level = "DEBUG")
   salaries <- tryCatch({
-    read_csv(salary_file, show_col_types = FALSE, locale = locale(encoding = "UTF-8")) %>% 
-      clean_names() %>% 
+    salaries_raw %>% 
+      janitor::clean_names() %>% 
       filter(lineup != "refuted") %>%
       filter(position != "kicker") %>%
       mutate(name = str_remove(name, regex("\\s+Jr\\.?$", ignore_case = TRUE))) %>% 
@@ -211,7 +188,7 @@ load_week_data <- function(season, week, slate = "main") {
         TRUE ~ player
       ))
   }, error = function(e) {
-    log_debug("Error reading salaries:", e$message, level = "ERROR")
+    log_debug("Error processing salaries:", e$message, level = "ERROR")
     return(NULL)
   })
   
@@ -307,75 +284,45 @@ load_week_data_with_headshots <- function(season, week, slate = "main") {
 get_available_slates <- function(season, week) {
   log_debug("get_available_slates() for season:", season, "week:", week, level = "DEBUG")
   
-  # Get the file prefix (handles both regular weeks and playoff rounds)
+  # Get Google Sheet IDs for this season
+  sheet_ids <- get_nfl_sheet_ids(season)
+  if (is.null(sheet_ids)) return(character(0))
+  
+  # Get all worksheet names from the salaries sheet
+  all_sheets <- get_nfl_sheet_names(sheet_ids$salaries)
+  if (length(all_sheets) == 0) return(character(0))
+  
+  # Get the sheet name prefix
   week_prefix <- get_week_file_prefix(week)
   
   slates <- c()
   
-  # Try multiple path patterns for main slate
-  main_paths <- c(
-    sprintf("data/fanteam_salaries/%s/%s_main.csv", season, week_prefix),
-    sprintf("fanteam_salaries/%s_main.csv", week_prefix)
-  )
-  
-  for (path in main_paths) {
-    if (file.exists(path)) {
-      slates <- c(slates, "main")
-      log_debug("  Main slate available at:", path, level = "DEBUG")
-      break
-    }
+  # Check for main slate
+  if (paste0(week_prefix, "_main") %in% all_sheets) {
+    slates <- c(slates, "main")
+    log_debug("  Main slate available", level = "DEBUG")
   }
   
-  # Try multiple path patterns for late slate
-  late_paths <- c(
-    sprintf("data/fanteam_salaries/%s/%s_fumble.csv", season, week_prefix),
-    sprintf("data/fanteam_salaries/%s/%s_late.csv", season, week_prefix),
-    sprintf("fanteam_salaries/%s_fumble.csv", week_prefix),
-    sprintf("fanteam_salaries/%s_late.csv", week_prefix)
-  )
-  
-  for (path in late_paths) {
-    if (file.exists(path)) {
-      slates <- c(slates, "late")
-      log_debug("  Late slate available at:", path, level = "DEBUG")
-      break
-    }
+  # Check for late/fumble slate
+  if (paste0(week_prefix, "_late") %in% all_sheets || 
+      paste0(week_prefix, "_fumble") %in% all_sheets) {
+    slates <- c(slates, "late")
+    log_debug("  Late slate available", level = "DEBUG")
   }
   
-  # Check for custom slates (two_game_slate, three_game_slate, etc.)
-  custom_slate_patterns <- c(
-    "two_game_slate",
-    "three_game_slate"
-  )
-  
+  # Check for custom slates
+  custom_slate_patterns <- c("two_game_slate", "three_game_slate")
   for (slate_name in custom_slate_patterns) {
-    custom_paths <- c(
-      sprintf("data/fanteam_salaries/%s/%s_%s.csv", season, week_prefix, slate_name),
-      sprintf("fanteam_salaries/%s_%s.csv", week_prefix, slate_name)
-    )
-    
-    for (path in custom_paths) {
-      if (file.exists(path)) {
-        slates <- c(slates, slate_name)
-        log_debug("  Custom slate available:", slate_name, "at:", path, level = "DEBUG")
-        break
-      }
+    if (paste0(week_prefix, "_", slate_name) %in% all_sheets) {
+      slates <- c(slates, slate_name)
+      log_debug("  Custom slate available:", slate_name, level = "DEBUG")
     }
   }
   
-  # Check for showdown file without team suffix (e.g., super_bowl_showdown.csv)
-  # This handles playoff weeks where only a showdown contest exists
-  showdown_paths <- c(
-    sprintf("data/fanteam_salaries/%s/%s_showdown.csv", season, week_prefix),
-    sprintf("fanteam_salaries/%s_showdown.csv", week_prefix)
-  )
-  
-  for (path in showdown_paths) {
-    if (file.exists(path)) {
-      slates <- c(slates, "showdown")
-      log_debug("  Showdown slate available at:", path, level = "DEBUG")
-      break
-    }
+  # Check for showdown (bare, no team suffix)
+  if (paste0(week_prefix, "_showdown") %in% all_sheets) {
+    slates <- c(slates, "showdown")
+    log_debug("  Showdown slate available", level = "DEBUG")
   }
   
   log_debug("Available slates:", paste(slates, collapse = ", "), level = "DEBUG")
@@ -411,31 +358,25 @@ get_slate_label <- function(slate) {
 get_unmatched_players <- function(season, week, slate = "main", min_projection = 3) {
   log_debug("get_unmatched_players() for season:", season, "week:", week, "slate:", slate, level = "INFO")
   
-  # Get the file prefix (handles both regular weeks and playoff rounds)
+  # Get Google Sheet IDs
+  sheet_ids <- get_nfl_sheet_ids(season)
+  if (is.null(sheet_ids)) return(NULL)
+  
+  # Get the sheet name prefix
   week_prefix <- get_week_file_prefix(week)
   
-  # Load projections
-  proj_file <- NULL
-  proj_paths_to_try <- c(
-    sprintf("data/projections/%s/%s_projections.csv", season, week_prefix),
-    sprintf("projections/%s_projections.csv", week_prefix)
-  )
+  # Load projections - sheet name is just the week prefix (no _projections suffix)
+  proj_sheet_name <- week_prefix
+  projections_raw <- read_nfl_sheet(sheet_ids$projections, proj_sheet_name)
   
-  for (path in proj_paths_to_try) {
-    if (file.exists(path)) {
-      proj_file <- path
-      break
-    }
-  }
-  
-  if (is.null(proj_file)) {
-    log_debug("Projections file not found", level = "WARN")
+  if (is.null(projections_raw) || nrow(projections_raw) == 0) {
+    log_debug("Projections sheet not found:", proj_sheet_name, level = "WARN")
     return(NULL)
   }
   
   projections <- tryCatch({
-    read_csv(proj_file, show_col_types = FALSE, locale = locale(encoding = "UTF-8")) %>% 
-      clean_names() %>%
+    projections_raw %>% 
+      janitor::clean_names() %>%
       {
         if ("pos" %in% names(.)) {
           select(., player, team, pos, full_ppr_proj, dk_ceiling) %>%
@@ -452,54 +393,38 @@ get_unmatched_players <- function(season, week, slate = "main", min_projection =
         blended = (full + ceiling) / 2
       )
   }, error = function(e) {
-    log_debug("Error reading projections:", e$message, level = "ERROR")
+    log_debug("Error processing projections:", e$message, level = "ERROR")
     return(NULL)
   })
   
   if (is.null(projections)) return(NULL)
   
-  # Load salaries
-  salary_file <- NULL
-  if (slate == "late") {
-    salary_paths_to_try <- c(
-      sprintf("data/fanteam_salaries/%s/%s_late.csv", season, week_prefix),
-      sprintf("data/fanteam_salaries/%s/%s_fumble.csv", season, week_prefix),
-      sprintf("fanteam_salaries/%s_late.csv", week_prefix),
-      sprintf("fanteam_salaries/%s_fumble.csv", week_prefix)
-    )
+  # Determine salary sheet name
+  all_sheets <- get_nfl_sheet_names(sheet_ids$salaries)
+  salary_sheet_name <- if (slate == "late") {
+    late_name <- paste0(week_prefix, "_late")
+    fumble_name <- paste0(week_prefix, "_fumble")
+    if (late_name %in% all_sheets) late_name
+    else if (fumble_name %in% all_sheets) fumble_name
+    else late_name
   } else if (slate == "showdown") {
-    salary_paths_to_try <- c(
-      sprintf("data/fanteam_salaries/%s/%s_showdown.csv", season, week_prefix),
-      sprintf("fanteam_salaries/%s_showdown.csv", week_prefix)
-    )
+    paste0(week_prefix, "_showdown")
   } else if (slate %in% c("two_game_slate", "three_game_slate")) {
-    salary_paths_to_try <- c(
-      sprintf("data/fanteam_salaries/%s/%s_%s.csv", season, week_prefix, slate),
-      sprintf("fanteam_salaries/%s_%s.csv", week_prefix, slate)
-    )
+    paste0(week_prefix, "_", slate)
   } else {
-    salary_paths_to_try <- c(
-      sprintf("data/fanteam_salaries/%s/%s_main.csv", season, week_prefix),
-      sprintf("fanteam_salaries/%s_main.csv", week_prefix)
-    )
+    paste0(week_prefix, "_main")
   }
   
-  for (path in salary_paths_to_try) {
-    if (file.exists(path)) {
-      salary_file <- path
-      break
-    }
-  }
-  
-  if (is.null(salary_file)) {
-    log_debug("Salary file not found", level = "WARN")
+  salaries_raw <- read_nfl_sheet(sheet_ids$salaries, salary_sheet_name)
+  if (is.null(salaries_raw) || nrow(salaries_raw) == 0) {
+    log_debug("Salary sheet not found:", salary_sheet_name, level = "WARN")
     return(NULL)
   }
   
-  # Get teams in this slate (for filtering projections to slate teams only)
+  # Process salaries
   salaries <- tryCatch({
-    read_csv(salary_file, show_col_types = FALSE, locale = locale(encoding = "UTF-8")) %>% 
-      clean_names() %>% 
+    salaries_raw %>% 
+      janitor::clean_names() %>% 
       filter(lineup != "refuted") %>%
       filter(position != "kicker") %>%
       mutate(name = str_remove(name, regex("\\s+Jr\\.?$", ignore_case = TRUE))) %>% 
@@ -519,7 +444,6 @@ get_unmatched_players <- function(season, week, slate = "main", min_projection =
         position == "DST" ~ paste0(team, " ", position),
         TRUE ~ player
       )) %>% 
-      # Apply same name corrections as in load_week_data
       mutate(player = case_when(
         player == "Amon-Ra St. Brown" ~ "Amon-Ra St Brown",
         player == "A.J. Brown" ~ "AJ Brown",
@@ -536,7 +460,7 @@ get_unmatched_players <- function(season, week, slate = "main", min_projection =
         TRUE ~ player
       ))
   }, error = function(e) {
-    log_debug("Error reading salaries:", e$message, level = "ERROR")
+    log_debug("Error processing salaries:", e$message, level = "ERROR")
     return(NULL)
   })
   
@@ -573,56 +497,44 @@ get_unmatched_players <- function(season, week, slate = "main", min_projection =
 get_slate_teams <- function(season, week, slate = "main") {
   log_debug("get_slate_teams() for season:", season, "week:", week, "slate:", slate, level = "DEBUG")
   
-  # Get the file prefix (handles both regular weeks and playoff rounds)
+  # Get Google Sheet IDs
+  sheet_ids <- get_nfl_sheet_ids(season)
+  if (is.null(sheet_ids)) return(character(0))
+  
+  # Get the sheet name prefix
   week_prefix <- get_week_file_prefix(week)
   
-  # Determine salary file path
-  salary_file <- NULL
-  if (slate == "late") {
-    salary_paths_to_try <- c(
-      sprintf("data/fanteam_salaries/%s/%s_late.csv", season, week_prefix),
-      sprintf("data/fanteam_salaries/%s/%s_fumble.csv", season, week_prefix),
-      sprintf("fanteam_salaries/%s_late.csv", week_prefix),
-      sprintf("fanteam_salaries/%s_fumble.csv", week_prefix)
-    )
+  # Determine salary sheet name
+  all_sheets <- get_nfl_sheet_names(sheet_ids$salaries)
+  salary_sheet_name <- if (slate == "late") {
+    late_name <- paste0(week_prefix, "_late")
+    fumble_name <- paste0(week_prefix, "_fumble")
+    if (late_name %in% all_sheets) late_name
+    else if (fumble_name %in% all_sheets) fumble_name
+    else late_name
   } else if (slate == "showdown") {
-    salary_paths_to_try <- c(
-      sprintf("data/fanteam_salaries/%s/%s_showdown.csv", season, week_prefix),
-      sprintf("fanteam_salaries/%s_showdown.csv", week_prefix)
-    )
+    paste0(week_prefix, "_showdown")
   } else if (slate %in% c("two_game_slate", "three_game_slate")) {
-    salary_paths_to_try <- c(
-      sprintf("data/fanteam_salaries/%s/%s_%s.csv", season, week_prefix, slate),
-      sprintf("fanteam_salaries/%s_%s.csv", week_prefix, slate)
-    )
+    paste0(week_prefix, "_", slate)
   } else {
-    salary_paths_to_try <- c(
-      sprintf("data/fanteam_salaries/%s/%s_main.csv", season, week_prefix),
-      sprintf("fanteam_salaries/%s_main.csv", week_prefix)
-    )
+    paste0(week_prefix, "_main")
   }
   
-  for (path in salary_paths_to_try) {
-    if (file.exists(path)) {
-      salary_file <- path
-      break
-    }
-  }
-  
-  if (is.null(salary_file)) {
-    log_debug("Salary file not found for slate:", slate, level = "WARN")
+  salaries_raw <- read_nfl_sheet(sheet_ids$salaries, salary_sheet_name)
+  if (is.null(salaries_raw) || nrow(salaries_raw) == 0) {
+    log_debug("Salary sheet not found for slate:", slate, level = "WARN")
     return(character(0))
   }
   
   teams <- tryCatch({
-    read_csv(salary_file, show_col_types = FALSE, locale = locale(encoding = "UTF-8")) %>% 
-      clean_names() %>%
+    salaries_raw %>% 
+      janitor::clean_names() %>%
       filter(lineup != "refuted") %>%
       pull(club) %>%
       unique() %>%
       sort()
   }, error = function(e) {
-    log_debug("Error reading salary file:", e$message, level = "ERROR")
+    log_debug("Error reading salary sheet:", e$message, level = "ERROR")
     return(character(0))
   })
   

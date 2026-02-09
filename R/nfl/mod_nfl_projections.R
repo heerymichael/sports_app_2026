@@ -200,8 +200,17 @@ nfl_projections_server <- function(id) {
         return()
       }
       
-      # Reset retry counter once we have values
-      if (load_attempts() > 0 && !is.null(season) && season != "") {
+      # If retries exhausted and inputs still not ready, stop without resetting
+      # (avoids infinite loop when e.g. no weeks exist for a season)
+      if (is.null(week) || week == "" || is.null(slate) || slate == "") {
+        if (load_attempts() >= 10) {
+          log_debug(">>> Max retries reached, inputs still not ready. Waiting for user input.", level = "WARN")
+        }
+        return()
+      }
+      
+      # Reset retry counter once ALL inputs have valid values
+      if (load_attempts() > 0) {
         log_debug(">>> Inputs ready after", load_attempts(), "retries", level = "INFO")
         load_attempts(0)
       }
@@ -246,6 +255,9 @@ nfl_projections_server <- function(id) {
     # =========================================================================
     observeEvent(input$season, {
       log_debug(">>> Season changed to:", input$season, level = "INFO")
+      
+      # Reset retry counter so data load gets fresh attempts
+      load_attempts(0)
       
       # Skip if empty or placeholder
       if (is.null(input$season) || input$season == "" || input$season == "No data found") {
@@ -467,7 +479,7 @@ nfl_projections_server <- function(id) {
       # Sort indicator helper
       sort_indicator <- function(col_name) {
         if (sort_col() == col_name) {
-          if (sort_dir() == "desc") " ▼" else " ▲"
+          if (sort_dir() == "desc") " â–¼" else " â–²"
         } else {
           ""
         }
