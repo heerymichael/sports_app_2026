@@ -23,9 +23,8 @@ get_sports_config <- function() {
       color = APP_COLORS$sage,
       color_light = "#C5D4B8",
       icon_scale = 1.2,
-      # Order: Player Stats â†’ Match Ups â†’ Handbuild â†’ Shot Share â†’ Betting
-      sections = c("player_stats", "matchups", "handbuild", "shot_share", "betting"),
-      default_section = "player_stats"
+      sections = c("matchups", "player_stats", "handbuild", "showdown", "shot_share", "betting"),
+      default_section = "matchups"
     ),
     
     golf = list(
@@ -34,7 +33,7 @@ get_sports_config <- function() {
       icon = "golf.png",
       color = APP_COLORS$gold,
       color_light = "#F5E0B8",
-      icon_scale = 1.0,  # Base size (taller icon)
+      icon_scale = 1.0,
       sections = c("this_week", "season_management", "classic", "showdown"),
       default_section = "this_week"
     ),
@@ -65,51 +64,22 @@ get_sports_config <- function() {
       id = "f1",
       name = "Formula 1",
       icon = "f1.png",
-      color = "#E5383B",
-      color_light = "#F2A3A5",
+      color = APP_COLORS$coral,
+      color_light = "#E8B8A8",
       icon_scale = 1.2,
-      sections = c("dashboard", "projections"),
+      sections = c("dashboard"),
       default_section = "dashboard"
     )
   )
 }
 
-#' Get section definitions
+#' Get all section definitions
 #' @return Named list of section configurations
 get_sections_config <- function() {
   list(
-    # NFL sections
-    ffpc_bestball = list(
-      id = "ffpc_bestball",
-      name = "FFPC Bestball",
-      icon = "trophy"
-    ),
-    
-    handbuild = list(
-      id = "handbuild",
-      name = "Handbuild",
-      icon = "edit"
-    ),
-    
-    showdown = list(
-      id = "showdown",
-      name = "Showdown",
-      icon = "zap"
-    ),
-    
-    projections = list(
-      id = "projections",
-      name = "Projections",
-      icon = "table"
-    ),
-    
-    fanteam_playoffs = list(
-      id = "fanteam_playoffs",
-      name = "FT Playoffs",
-      icon = "award"
-    ),
-    
+    # =========================================================================
     # Soccer sections - ACTIVE
+    # =========================================================================
     player_stats = list(
       id = "player_stats",
       name = "Player Stats",
@@ -122,10 +92,20 @@ get_sections_config <- function() {
       icon = "calendar"
     ),
     
+    # Note: 'handbuild' is shared across sports (soccer, nfl, nhl)
+    # The page container resolves to {sport}_handbuild_ui/server
     handbuild = list(
       id = "handbuild",
       name = "Handbuild",
       icon = "edit-3"
+    ),
+    
+    # Note: 'showdown' is shared across sports (soccer, golf, nfl)
+    # The page container resolves to {sport}_showdown_ui/server
+    showdown = list(
+      id = "showdown",
+      name = "Showdown",
+      icon = "crosshair"
     ),
     
     shot_share = list(
@@ -141,62 +121,96 @@ get_sections_config <- function() {
     ),
     
     # Soccer sections - ARCHIVED (legacy)
-    # Kept for reference but not included in soccer.sections
-    team_dashboard = list(
-      id = "team_dashboard",
-      name = "Team",
-      icon = "users"
+    # team_dashboard = list(id = "team_dashboard", name = "Team", icon = "users"),
+    # player_dashboard = list(id = "player_dashboard", name = "Player", icon = "user"),
+    # fanteam_contests = list(id = "fanteam_contests", name = "FanTeam", icon = "trophy"),
+    
+    # =========================================================================
+    # NFL sections
+    # =========================================================================
+    ffpc_bestball = list(
+      id = "ffpc_bestball",
+      name = "FFPC Bestball",
+      icon = "trophy"
     ),
     
-    player_dashboard = list(
-      id = "player_dashboard",
-      name = "Players",
-      icon = "user"
+    # handbuild already defined above (shared)
+    
+    # showdown already defined above (shared)
+    
+    projections = list(
+      id = "projections",
+      name = "Projections",
+      icon = "table"
     ),
     
-    # Common sections
+    fanteam_playoffs = list(
+      id = "fanteam_playoffs",
+      name = "FT Playoffs",
+      icon = "award"
+    ),
+    
+    # =========================================================================
+    # Golf sections
+    # =========================================================================
+    this_week = list(
+      id = "this_week",
+      name = "This Week",
+      icon = "calendar"
+    ),
+    
+    season_management = list(
+      id = "season_management",
+      name = "Season Mgmt",
+      icon = "layers"
+    ),
+    
+    classic = list(
+      id = "classic",
+      name = "Classic",
+      icon = "award"
+    ),
+    
+    # showdown already defined above (shared)
+    
+    # =========================================================================
+    # NHL sections
+    # =========================================================================
     dashboard = list(
       id = "dashboard",
       name = "Dashboard",
       icon = "grid"
     ),
     
+    # projections already defined above (shared)
+    # handbuild already defined above (shared)
+    
+    # =========================================================================
+    # Common sections (available to multiple sports)
+    # =========================================================================
     optimizer = list(
       id = "optimizer",
       name = "Optimizer",
       icon = "sliders"
     ),
     
-    # Golf sections
-    classic = list(
-      id = "classic",
-      name = "Classic",
-      icon = "flag"
+    performance = list(
+      id = "performance",
+      name = "Performance",
+      icon = "trending-up"
     ),
     
-    this_week = list(
-      id = "this_week",
-      name = "This Week",
-      icon = "calendar-check"
-    ),
-    
-    season_long = list(
-      id = "season_long",
-      name = "Season Long",
-      icon = "calendar"
-    ),
-    
-    season_management = list(
-      id = "season_management",
-      name = "Season Long",
-      icon = "clipboard-list"
+    ownership = list(
+      id = "ownership",
+      name = "Ownership",
+      icon = "percent"
     )
   )
 }
 
 #' Get sections available for a specific sport
 #' @param sport_id Character, the sport identifier
-#' @return List of section configs for that sport (in order specified by sport config)
+#' @return List of section configs for that sport
 get_sport_sections <- function(sport_id) {
   sports <- get_sports_config()
   sections <- get_sections_config()
@@ -204,12 +218,8 @@ get_sport_sections <- function(sport_id) {
   sport <- sports[[sport_id]]
   if (is.null(sport)) return(list())
   
-  
-  # Return sections in the order specified by sport$sections
-  # Use setNames to ensure proper ordering is preserved
-  result <- lapply(sport$sections, function(s) sections[[s]])
-  names(result) <- sport$sections
-  result[!sapply(result, is.null)]
+  # Return only sections available for this sport
+  sections[sport$sections]
 }
 
 #' Get sport config by ID

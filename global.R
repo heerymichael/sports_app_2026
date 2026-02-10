@@ -179,6 +179,10 @@ cat("[STARTUP]     soccer_betting_data.R loaded\n")
 source("R/soccer/mod_soccer_betting.R")     # Betting odds module
 cat("[STARTUP]     mod_soccer_betting.R loaded\n")
 
+# Showdown module
+source("R/soccer/soccer_showdown_config.R")  # Showdown constants, scoring, projections, optimizer
+cat("[STARTUP]     soccer_showdown_config.R loaded\n")
+
 # ARCHIVED: Team and Player dashboards (FBref data no longer available)
 # source("R/soccer/mod_soccer_team_dashboard.R")    # Team dashboard module
 # source("R/soccer/mod_soccer_player_dashboard.R")  # Player dashboard module
@@ -190,6 +194,8 @@ source("R/soccer/mod_soccer_matchups.R")         # Match Ups module (this week's
 cat("[STARTUP]     mod_soccer_matchups.R loaded\n")
 source("R/soccer/mod_soccer_handbuild.R")        # Handbuild module (lineup builder + ratings UI)
 cat("[STARTUP]     mod_soccer_handbuild.R loaded\n")
+source("R/soccer/mod_soccer_showdown.R")          # Showdown single-match builder
+cat("[STARTUP]     mod_soccer_showdown.R loaded\n")
 # Note: Shot share and Betting modules loaded above
 cat("[STARTUP]   Soccer modules loaded\n")
 
