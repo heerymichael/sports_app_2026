@@ -31,7 +31,7 @@
 
 FANTEAM_COEFFICIENTS <- list(
   # HOME SHOTS: shots = intercept + (win_pct * coef) + (total_goals * coef)
-  # RÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â² = 0.2940
+  # RÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â² = 0.2940
   home_shots = list(
     intercept = 3.9941,
     win_pct = 0.150385,
@@ -39,7 +39,7 @@ FANTEAM_COEFFICIENTS <- list(
   ),
   
   # AWAY SHOTS
-  # RÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â² = 0.2570
+  # RÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â² = 0.2570
   away_shots = list(
     intercept = 4.4395,
     win_pct = 0.152701,
@@ -47,7 +47,7 @@ FANTEAM_COEFFICIENTS <- list(
   ),
   
   # HOME SOT
-  # RÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â² = 0.1883
+  # RÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â² = 0.1883
   home_sot = list(
     intercept = 0.2532,
     win_pct = 0.051147,
@@ -55,7 +55,7 @@ FANTEAM_COEFFICIENTS <- list(
   ),
   
   # AWAY SOT
-  # RÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â² = 0.1988
+  # RÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â² = 0.1988
   away_sot = list(
     intercept = 0.5083,
     win_pct = 0.060438,
@@ -63,7 +63,7 @@ FANTEAM_COEFFICIENTS <- list(
   ),
   
   # HOME GOALS: goals = intercept + (win_pct * coef) + (draw_pct * coef) + (total * coef)
-  # RÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â² = 0.1431
+  # RÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â² = 0.1431
   home_goals = list(
     intercept = -1.3634,
     win_pct = 0.024723,
@@ -72,7 +72,7 @@ FANTEAM_COEFFICIENTS <- list(
   ),
   
   # AWAY GOALS
-  # RÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â² = 0.1373
+  # RÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â² = 0.1373
   away_goals = list(
     intercept = -0.5941,
     win_pct = 0.025267,
@@ -92,62 +92,79 @@ FANTEAM_COEFFICIENTS <- list(
 # ODDS DATA LOADING
 # =============================================================================
 
-#' Load odds report from CSV file in fanteam_monster_salaries folder
-#' @param gameweek Optional gameweek number to match specific file
+#' Load odds report from Google Sheets
+#' @param gameweek Optional gameweek number to match specific worksheet (week_N)
 #' @return Data frame with odds data or NULL if not found
 load_fanteam_odds <- function(gameweek = NULL) {
-  if (!exists("FANTEAM_SOCCER_DIR") || !dir.exists(FANTEAM_SOCCER_DIR)) {
-    log_debug("Odds: Directory not found or FANTEAM_SOCCER_DIR not defined", level = "DEBUG")
-    return(NULL)
-  }
   
-  # Look for exact pattern: week_X_odds_report.csv
-  all_files <- list.files(FANTEAM_SOCCER_DIR, pattern = "\\.csv$", full.names = FALSE)
-  
-  selected_file <- NULL
-  if (!is.null(gameweek)) {
-    # Exact match: week_19_odds_report.csv
-    exact_pattern <- sprintf("week_%d_odds_report.csv", gameweek)
-    if (exact_pattern %in% all_files) {
-      selected_file <- exact_pattern
-    }
-  }
-  
-  # If no gameweek specified or no exact match, find most recent odds_report file
-  if (is.null(selected_file)) {
-    odds_report_files <- all_files[grepl("^week_\\d+_odds_report\\.csv$", all_files)]
-    if (length(odds_report_files) > 0) {
-      # Sort by week number descending
-      weeks <- as.integer(gsub("^week_(\\d+)_odds_report\\.csv$", "\\1", odds_report_files))
-      selected_file <- odds_report_files[order(weeks, decreasing = TRUE)[1]]
-    }
-  }
-  
-  if (is.null(selected_file)) {
-    log_debug("Odds: No odds_report file found", level = "DEBUG")
-    return(NULL)
-  }
-  
-  file_path <- file.path(FANTEAM_SOCCER_DIR, selected_file)
-  log_debug("Odds: Loading file:", selected_file, level = "INFO")
+  sheet_name <- if (!is.null(gameweek)) sprintf("week_%d", as.integer(gameweek)) else NULL
   
   odds_data <- tryCatch({
-    raw_lines <- readLines(file_path, n = 3, encoding = "UTF-8")
-    skip_rows <- 0
-    if (length(raw_lines) > 1) {
-      first_line <- raw_lines[1]
-      if (grepl("Implied Goals", first_line, ignore.case = TRUE) || 
-          nchar(gsub(",", "", first_line)) < 10) {
-        skip_rows <- 1
-        log_debug("Odds: Skipping header row", level = "DEBUG")
+    googlesheets4::gs4_deauth()
+    
+    if (is.null(sheet_name)) {
+      # Find the most recent week sheet
+      sheets <- googlesheets4::sheet_names(FANTEAM_MATCHUPS_SHEET_IDS$odds_report)
+      week_sheets <- sheets[grepl("^week_\\d+$", sheets, ignore.case = TRUE)]
+      if (length(week_sheets) == 0) {
+        log_debug("Odds: No week_N sheets found in Google Sheets", level = "WARN")
+        return(NULL)
+      }
+      gw_nums <- as.integer(gsub("^week_(\\d+)$", "\\1", week_sheets, ignore.case = TRUE))
+      sheet_name <- week_sheets[which.max(gw_nums)]
+      log_debug("Odds: Auto-selected most recent sheet:", sheet_name, level = "INFO")
+    }
+    
+    raw <- googlesheets4::read_sheet(
+      FANTEAM_MATCHUPS_SHEET_IDS$odds_report,
+      sheet = sheet_name
+    ) %>% janitor::clean_names()
+    
+    log_debug("Odds: Loaded", nrow(raw), "rows from Google Sheets (", sheet_name, ")", level = "INFO")
+    log_debug("Odds: Columns:", paste(names(raw), collapse = ", "), level = "DEBUG")
+    
+    # Detect garbage headers (x1, x2, x3...) - means the real headers are in a data row
+    # This happens when the sheet has a merged title row above the actual headers
+    unnamed_cols <- sum(grepl("^x\\d+$", names(raw)))
+    if (unnamed_cols >= ncol(raw) / 2) {
+      log_debug("Odds: Detected unnamed columns (", unnamed_cols, "/", ncol(raw), 
+                ") - re-reading with skip=1", level = "WARN")
+      
+      raw <- googlesheets4::read_sheet(
+        FANTEAM_MATCHUPS_SHEET_IDS$odds_report,
+        sheet = sheet_name,
+        skip = 1
+      ) %>% janitor::clean_names()
+      
+      log_debug("Odds: Re-read columns:", paste(names(raw), collapse = ", "), level = "INFO")
+      
+      # If still garbage, try skip=2
+      unnamed_cols2 <- sum(grepl("^x\\d+$", names(raw)))
+      if (unnamed_cols2 >= ncol(raw) / 2) {
+        log_debug("Odds: Still unnamed after skip=1 - trying skip=2", level = "WARN")
+        raw <- googlesheets4::read_sheet(
+          FANTEAM_MATCHUPS_SHEET_IDS$odds_report,
+          sheet = sheet_name,
+          skip = 2
+        ) %>% janitor::clean_names()
+        log_debug("Odds: Re-read columns (skip=2):", paste(names(raw), collapse = ", "), level = "INFO")
       }
     }
     
-    read_csv(file_path, skip = skip_rows, show_col_types = FALSE, 
-             locale = locale(encoding = "UTF-8")) %>%
-      clean_names()
+    # Flatten any list columns (common googlesheets4 issue with mixed types/empty cells)
+    for (col in names(raw)) {
+      if (is.list(raw[[col]])) {
+        raw[[col]] <- sapply(raw[[col]], function(x) if (is.null(x) || length(x) == 0) NA else x[[1]])
+      }
+    }
+    
+    # Drop fully empty rows
+    raw <- raw %>% filter(rowSums(!is.na(.) & . != "") > 0)
+    
+    log_debug("Odds: Final read:", nrow(raw), "rows,", ncol(raw), "cols", level = "INFO")
+    raw
   }, error = function(e) {
-    log_debug("Odds: Error reading file:", e$message, level = "WARN")
+    log_debug("Odds: Google Sheets load failed:", e$message, level = "ERROR")
     return(NULL)
   })
   
@@ -160,19 +177,30 @@ load_fanteam_odds <- function(gameweek = NULL) {
     "team" = "odds_team",
     "opponent" = "odds_opponent", 
     "h_a" = "home_away",
+    "home_or_away" = "home_away",
+    "venue" = "home_away",
     # Win % variants
     "win" = "win_pct",
     "win_percent" = "win_pct",
+    "win_pct_2" = "win_pct",
     # Draw % variants  
     "draw" = "draw_pct",
     "draw_percent" = "draw_pct",
+    "draw_pct_2" = "draw_pct",
     # Clean Sheet % variants
     "clean_sheet" = "clean_sheet_pct",
     "clean_sheet_percent" = "clean_sheet_pct",
+    "cs" = "clean_sheet_pct",
+    "cs_percent" = "clean_sheet_pct",
     # Implied goals
     "scored" = "implied_team_goals",
+    "goals_scored" = "implied_team_goals",
+    "implied_goals" = "implied_team_goals",
     "allowed" = "implied_opp_goals",
-    "total" = "implied_total"
+    "goals_allowed" = "implied_opp_goals",
+    "goals_conceded" = "implied_opp_goals",
+    "total" = "implied_total",
+    "total_goals" = "implied_total"
   )
   
   for (old_name in names(col_renames)) {
@@ -200,6 +228,74 @@ load_fanteam_odds <- function(gameweek = NULL) {
   }
   
   return(odds_data)
+}
+
+#' Load goalscorer odds report from Google Sheets
+#' @param gameweek Gameweek number
+#' @return Data frame with goalscorer odds data or NULL if not found
+load_fanteam_goalscorer_odds <- function(gameweek = NULL) {
+  
+  sheet_name <- if (!is.null(gameweek)) sprintf("week_%d", as.integer(gameweek)) else NULL
+  
+  tryCatch({
+    googlesheets4::gs4_deauth()
+    
+    if (is.null(sheet_name)) {
+      # Find the most recent week sheet
+      sheets <- googlesheets4::sheet_names(FANTEAM_MATCHUPS_SHEET_IDS$goalscorer_odds)
+      week_sheets <- sheets[grepl("^week_\\d+$", sheets, ignore.case = TRUE)]
+      if (length(week_sheets) == 0) {
+        log_debug("Goalscorer odds: No week_N sheets found", level = "WARN")
+        return(NULL)
+      }
+      gw_nums <- as.integer(gsub("^week_(\\d+)$", "\\1", week_sheets, ignore.case = TRUE))
+      sheet_name <- week_sheets[which.max(gw_nums)]
+      log_debug("Goalscorer odds: Auto-selected most recent sheet:", sheet_name, level = "INFO")
+    }
+    
+    raw <- googlesheets4::read_sheet(
+      FANTEAM_MATCHUPS_SHEET_IDS$goalscorer_odds,
+      sheet = sheet_name
+    ) %>% janitor::clean_names()
+    
+    log_debug("Goalscorer odds: Loaded", nrow(raw), "rows from Google Sheets (", sheet_name, ")", level = "INFO")
+    log_debug("Goalscorer odds: Columns:", paste(names(raw), collapse = ", "), level = "DEBUG")
+    
+    # Detect garbage headers (x1, x2, x3...) - means real headers are in a data row
+    unnamed_cols <- sum(grepl("^x\\d+$", names(raw)))
+    if (unnamed_cols >= ncol(raw) / 2) {
+      log_debug("Goalscorer odds: Detected unnamed columns (", unnamed_cols, "/", ncol(raw),
+                ") - re-reading with skip=1", level = "WARN")
+      raw <- googlesheets4::read_sheet(
+        FANTEAM_MATCHUPS_SHEET_IDS$goalscorer_odds,
+        sheet = sheet_name,
+        skip = 1
+      ) %>% janitor::clean_names()
+      log_debug("Goalscorer odds: Re-read columns:", paste(names(raw), collapse = ", "), level = "INFO")
+    }
+    
+    # Flatten any list columns
+    for (col in names(raw)) {
+      if (is.list(raw[[col]])) {
+        raw[[col]] <- sapply(raw[[col]], function(x) if (is.null(x) || length(x) == 0) NA else x[[1]])
+      }
+    }
+    
+    # Drop fully empty rows
+    raw <- raw %>% filter(rowSums(!is.na(.) & . != "") > 0)
+    
+    # Normalize team names if team column exists
+    team_col <- names(raw)[grepl("^team$|^club$", names(raw), ignore.case = TRUE)][1]
+    if (!is.na(team_col)) {
+      raw <- raw %>%
+        mutate(team_normalized = normalize_team_names(.data[[team_col]]))
+    }
+    
+    return(raw)
+  }, error = function(e) {
+    log_debug("Goalscorer odds: Load failed:", e$message, level = "WARN")
+    NULL
+  })
 }
 
 soccer_matchups_ui <- function(id) {
@@ -730,26 +826,54 @@ soccer_matchups_server <- function(id, soccer_data = NULL) {
       # Build matches from odds data (team-centric format)
       if (!is.null(odds_data) && nrow(odds_data) > 0 && "odds_team_normalized" %in% names(odds_data)) {
         log_debug("Using odds data to build matches", level = "INFO")
+        log_debug("Odds columns:", paste(names(odds_data), collapse = ", "), level = "DEBUG")
         
-        # Filter to teams in our slate and home teams only (to avoid duplicates)
-        home_odds <- odds_data %>%
-          filter(
-            odds_team_normalized %in% teams,
-            home_away == "Home" | home_away == "H"
-          )
+        # Filter to teams in our slate
+        slate_odds <- odds_data %>%
+          filter(odds_team_normalized %in% teams)
         
-        log_debug("Found", nrow(home_odds), "home team rows in odds", level = "INFO")
-        log_debug("Available columns:", paste(names(home_odds), collapse = ", "), level = "INFO")
-        log_debug("Has win_pct:", "win_pct" %in% names(home_odds), 
-                  "Has draw_pct:", "draw_pct" %in% names(home_odds),
-                  "Has implied_team_goals:", "implied_team_goals" %in% names(home_odds), level = "INFO")
+        log_debug("Slate-filtered odds rows:", nrow(slate_odds), level = "INFO")
         
-        if (nrow(home_odds) > 0) {
-          # Add default columns if missing (avoids errors in transmute)
-          if (!"win_pct" %in% names(home_odds)) home_odds$win_pct <- 40
-          if (!"draw_pct" %in% names(home_odds)) home_odds$draw_pct <- 30
-          if (!"implied_team_goals" %in% names(home_odds)) home_odds$implied_team_goals <- 1.3
-          if (!"implied_opp_goals" %in% names(home_odds)) home_odds$implied_opp_goals <- 1.2
+        if (nrow(slate_odds) > 0) {
+          # Require home_away column with recognizable values
+          if (!"home_away" %in% names(slate_odds)) {
+            log_debug("ERROR: No home_away column in odds data. Columns:", 
+                      paste(names(slate_odds), collapse = ", "), level = "ERROR")
+            rv$matches <- NULL
+            return()
+          }
+          
+          ha_vals <- unique(tolower(trimws(as.character(slate_odds$home_away))))
+          log_debug("home_away values found:", paste(ha_vals, collapse = ", "), level = "INFO")
+          
+          home_odds <- slate_odds %>%
+            filter(tolower(trimws(as.character(home_away))) %in% c("home", "h"))
+          
+          log_debug("Home rows from home_away filter:", nrow(home_odds), level = "INFO")
+          
+          if (nrow(home_odds) == 0) {
+            log_debug("ERROR: home_away filter returned 0 rows. Values were:", 
+                      paste(ha_vals, collapse = ", "), 
+                      "- Check Google Sheet formatting!", level = "ERROR")
+            rv$matches <- NULL
+            return()
+          }
+          
+          # Require key odds columns
+          if (!"win_pct" %in% names(home_odds)) {
+            log_debug("ERROR: Missing win_pct column. Available:", 
+                      paste(names(home_odds), collapse = ", "), level = "ERROR")
+            rv$matches <- NULL
+            return()
+          }
+          if (!"draw_pct" %in% names(home_odds)) {
+            log_debug("ERROR: Missing draw_pct column. Available:", 
+                      paste(names(home_odds), collapse = ", "), level = "ERROR")
+            rv$matches <- NULL
+            return()
+          }
+          if (!"implied_team_goals" %in% names(home_odds)) home_odds$implied_team_goals <- NA_real_
+          if (!"implied_opp_goals" %in% names(home_odds)) home_odds$implied_opp_goals <- NA_real_
           
           matches_data <- home_odds %>%
             transmute(
@@ -777,19 +901,9 @@ soccer_matchups_server <- function(id, soccer_data = NULL) {
         }
       }
       
-      # Fallback: create matches from team pairs
-      log_debug("No odds data - creating default matches from team pairs", level = "WARN")
-      n <- length(teams)
-      if (n < 2) { rv$matches <- NULL; return() }
-      
-      rv$matches <- data.frame(
-        match_id = seq_len(floor(n/2)), 
-        home_team = teams[seq(1, n-1, 2)], 
-        away_team = teams[seq(2, n, 2)],
-        market_home_win = 40, market_draw = 30, market_away_win = 30, 
-        market_total = 2.5, market_home_goals = 1.3, market_away_goals = 1.2,
-        stringsAsFactors = FALSE
-      )
+      # No valid odds data - set NULL rather than guessing
+      log_debug("ERROR: No valid odds data to build matches - check Google Sheet", level = "ERROR")
+      rv$matches <- NULL
     })
     
     # ==========================================================================
@@ -1307,7 +1421,7 @@ soccer_matchups_server <- function(id, soccer_data = NULL) {
                      paste0("<img src='", logo_path, "' style='width:32px;height:32px;vertical-align:middle;margin-right:8px;'>"), ""),
               "<strong style='font-size:14px;'>", toupper(team_normalized), "</strong><br>",
               "<span style='color:#5C4E3D;'>FOS: <strong>", sprintf("%.1f", fantasy_opp_score), "</strong></span><br>",
-              "<span style='color:#5C4E3D;'>Salary: <strong>ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â£", sprintf("%.2fM", avg_salary), "</strong></span><br>",
+              "<span style='color:#5C4E3D;'>Salary: <strong>ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â£", sprintf("%.2fM", avg_salary), "</strong></span><br>",
               "<span style='color:#5C4E3D;'>CS%: <strong>", sprintf("%.0f%%", clean_sheet_pct), "</strong></span><br>",
               "<span style='color:#5C4E3D;'>xG: <strong>", sprintf("%.2f", implied_team_goals), "</strong></span>",
               "</div>"
@@ -1365,7 +1479,7 @@ soccer_matchups_server <- function(id, soccer_data = NULL) {
           scale_x_continuous(limits = c(x_min, x_max), expand = c(0, 0),
                              labels = function(x) sprintf("%.0f", x)) +
           scale_y_continuous(limits = c(y_min, y_max), expand = c(0, 0),
-                             labels = function(y) sprintf("ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â£%.1fM", y)) +
+                             labels = function(y) sprintf("ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â£%.1fM", y)) +
           labs(x = NULL, y = NULL) +
           theme_minimal(base_size = 14) +
           theme(

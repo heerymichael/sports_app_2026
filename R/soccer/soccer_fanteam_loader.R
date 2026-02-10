@@ -58,107 +58,35 @@ FANTEAM_CLUB_MAPPING <- c(
   "WBA" = "West Brom"
 )
 
-#' Get available gameweeks from FanTeam Monster files
+#' Get available gameweeks from Google Sheets
+#' Reads worksheet names from the salaries Google Sheet to find week_N tabs
 #' @return Vector of gameweek numbers (sorted descending - newest first)
 get_fanteam_soccer_gameweeks <- function() {
   log_debug("get_fanteam_soccer_gameweeks() called", level = "INFO")
   
-  if (!dir.exists(FANTEAM_SOCCER_DIR)) {
-    log_debug("Directory not found:", FANTEAM_SOCCER_DIR, level = "WARN")
+  tryCatch({
+    googlesheets4::gs4_deauth()
+    sheets <- googlesheets4::sheet_names(FANTEAM_MATCHUPS_SHEET_IDS$salaries)
+    log_debug("Found sheets in salaries workbook:", paste(sheets, collapse = ", "), level = "DEBUG")
+    
+    # Filter to week_N pattern and extract numbers
+    week_sheets <- sheets[grepl("^week_\\d+$", sheets, ignore.case = TRUE)]
+    if (length(week_sheets) == 0) {
+      log_debug("No week_N sheets found in Google Sheets", level = "WARN")
+      return(c())
+    }
+    
+    gws <- as.integer(gsub("^week_(\\d+)$", "\\1", week_sheets, ignore.case = TRUE))
+    gws <- sort(unique(gws[!is.na(gws)]), decreasing = TRUE)
+    log_debug("Gameweeks from Google Sheets:", paste(gws, collapse = ", "), level = "INFO")
+    return(gws)
+  }, error = function(e) {
+    log_debug("Google Sheets lookup failed:", e$message, level = "ERROR")
     return(c())
-  }
-  
-  # List CSV files
-  files <- list.files(FANTEAM_SOCCER_DIR, pattern = "\\.csv$", full.names = FALSE)
-  log_debug("Found files:", paste(files, collapse = ", "), level = "DEBUG")
-  
-  if (length(files) == 0) {
-    log_debug("No CSV files found", level = "WARN")
-    return(c())
-  }
-  
-  # Extract gameweek numbers from filenames
-  # Supported formats:
-  #   - gw1.csv, gw12.csv
-  #   - gameweek_1.csv
-  #   - week_1.csv  
-  #   - 1043294_players_20251223205455.csv (FanTeam export - use file order/date)
-  gameweeks <- c()
-  fanteam_files <- c()
-  
-  for (file in files) {
-    gw <- NA
-    
-    # Pattern: gw1.csv, gw12.csv
-    if (grepl("^gw(\\d+)\\.csv$", file, ignore.case = TRUE)) {
-      gw <- as.integer(gsub("^gw(\\d+)\\.csv$", "\\1", file, ignore.case = TRUE))
-    }
-    # Pattern: gameweek_1.csv
-    else if (grepl("gameweek_(\\d+)\\.csv$", file, ignore.case = TRUE)) {
-      gw <- as.integer(gsub(".*gameweek_(\\d+)\\.csv$", "\\1", file, ignore.case = TRUE))
-    }
-    # Pattern: week_1.csv
-    else if (grepl("week_(\\d+)\\.csv$", file, ignore.case = TRUE)) {
-      gw <- as.integer(gsub(".*week_(\\d+)\\.csv$", "\\1", file, ignore.case = TRUE))
-    }
-    # Pattern: FanTeam export format (tournament_players_timestamp.csv)
-    else if (grepl("^\\d+_players_\\d+\\.csv$", file)) {
-      fanteam_files <- c(fanteam_files, file)
-    }
-    
-    if (!is.na(gw)) {
-      gameweeks <- c(gameweeks, gw)
-    }
-  }
-  
-  # If we have FanTeam format files but no numbered ones, create synthetic GW numbers
-  if (length(gameweeks) == 0 && length(fanteam_files) > 0) {
-    # Sort by timestamp in filename (descending = newest first)
-    fanteam_files <- sort(fanteam_files, decreasing = TRUE)
-    gameweeks <- seq_along(fanteam_files)
-    
-    # Store the mapping for later use
-    assign("FANTEAM_FILE_MAPPING", setNames(fanteam_files, as.character(gameweeks)), 
-           envir = .GlobalEnv)
-    log_debug("Created file mapping for", length(fanteam_files), "FanTeam exports", level = "INFO")
-  }
-  
-  gameweeks <- sort(unique(gameweeks), decreasing = TRUE)
-  log_debug("Available gameweeks:", paste(gameweeks, collapse = ", "), level = "INFO")
-  
-  return(gameweeks)
+  })
 }
 
-#' Get filename for a gameweek
-#' @param gameweek Gameweek number
-#' @return Filename or NULL
-get_fanteam_filename <- function(gameweek) {
-  # Check if we have a FanTeam file mapping
-  if (exists("FANTEAM_FILE_MAPPING", envir = .GlobalEnv)) {
-    mapping <- get("FANTEAM_FILE_MAPPING", envir = .GlobalEnv)
-    if (as.character(gameweek) %in% names(mapping)) {
-      return(mapping[[as.character(gameweek)]])
-    }
-  }
-  
-  # Try standard patterns
-  patterns <- c(
-    sprintf("gw%d.csv", gameweek),
-    sprintf("GW%d.csv", gameweek),
-    sprintf("gameweek_%d.csv", gameweek),
-    sprintf("week_%d.csv", gameweek)
-  )
-  
-  for (pattern in patterns) {
-    if (file.exists(file.path(FANTEAM_SOCCER_DIR, pattern))) {
-      return(pattern)
-    }
-  }
-  
-  return(NULL)
-}
-
-#' Load FanTeam Monster salary data for a specific gameweek
+#' Load FanTeam Monster salary data for a specific gameweek from Google Sheets
 #' @param gameweek Gameweek number
 #' @return Data frame with player salaries and positions, or NULL if not found
 load_fanteam_soccer_salaries <- function(gameweek) {
@@ -166,70 +94,61 @@ load_fanteam_soccer_salaries <- function(gameweek) {
   log_debug("load_fanteam_soccer_salaries() called", level = "INFO")
   log_debug("  Gameweek:", gameweek, level = "INFO")
   
-  if (!dir.exists(FANTEAM_SOCCER_DIR)) {
-    log_debug("Directory not found:", FANTEAM_SOCCER_DIR, level = "ERROR")
-    return(NULL)
-  }
+  sheet_name <- sprintf("week_%d", as.integer(gameweek))
   
-  # Get filename for this gameweek
-  filename <- get_fanteam_filename(gameweek)
-  
-  if (is.null(filename)) {
-    # Try to find any matching file
-    files <- list.files(FANTEAM_SOCCER_DIR, pattern = "\\.csv$", full.names = FALSE)
-    if (length(files) > 0) {
-      # Use the first file as fallback
-      filename <- files[min(gameweek, length(files))]
-    }
-  }
-  
-  if (is.null(filename)) {
-    log_debug("No file found for gameweek:", gameweek, level = "ERROR")
-    return(NULL)
-  }
-  
-  file_path <- file.path(FANTEAM_SOCCER_DIR, filename)
-  
-  if (!file.exists(file_path)) {
-    log_debug("File not found:", file_path, level = "ERROR")
-    return(NULL)
-  }
-  
-  log_debug("Loading file:", file_path, level = "INFO")
-  
-  # Load the data
   data <- tryCatch({
-    read_csv(file_path, show_col_types = FALSE, locale = locale(encoding = "UTF-8")) %>%
-      clean_names()
+    googlesheets4::gs4_deauth()
+    raw <- googlesheets4::read_sheet(
+      FANTEAM_MATCHUPS_SHEET_IDS$salaries,
+      sheet = sheet_name
+    ) %>% janitor::clean_names()
+    
+    log_debug("Loaded", nrow(raw), "rows from Google Sheets (salaries,", sheet_name, ")", level = "INFO")
+    log_debug("Columns:", paste(names(raw), collapse = ", "), level = "DEBUG")
+    
+    # Detect garbage headers (x1, x2, x3...) - means real headers are in a data row
+    unnamed_cols <- sum(grepl("^x\\d+$", names(raw)))
+    if (unnamed_cols >= ncol(raw) / 2) {
+      log_debug("Salaries: Detected unnamed columns (", unnamed_cols, "/", ncol(raw),
+                ") - re-reading with skip=1", level = "WARN")
+      raw <- googlesheets4::read_sheet(
+        FANTEAM_MATCHUPS_SHEET_IDS$salaries,
+        sheet = sheet_name,
+        skip = 1
+      ) %>% janitor::clean_names()
+      log_debug("Salaries: Re-read columns:", paste(names(raw), collapse = ", "), level = "INFO")
+    }
+    
+    # Flatten any list columns (common googlesheets4 issue with mixed types/empty cells)
+    for (col in names(raw)) {
+      if (is.list(raw[[col]])) {
+        raw[[col]] <- sapply(raw[[col]], function(x) if (is.null(x) || length(x) == 0) NA else x[[1]])
+      }
+    }
+    
+    raw
   }, error = function(e) {
-    log_debug("Error reading file:", e$message, level = "ERROR")
+    log_debug("Google Sheets salaries load failed:", e$message, level = "ERROR")
     return(NULL)
   })
   
   if (is.null(data) || nrow(data) == 0) {
-    log_debug("No data loaded", level = "WARN")
+    log_debug("No salary data loaded for GW:", gameweek, level = "WARN")
     return(NULL)
   }
   
-  log_debug("Loaded", nrow(data), "rows", level = "INFO")
-  log_debug("Columns:", paste(names(data), collapse = ", "), level = "DEBUG")
-  
   # Process FanTeam format
   # Expected columns: tournament, player_id, name, f_name, club, lineup, position, price
-  
   if (all(c("name", "f_name", "club", "position", "price") %in% names(data))) {
     log_debug("Detected FanTeam export format", level = "INFO")
     
     data <- data %>%
       mutate(
-        # Combine first name and last name
         player = paste(f_name, name),
-        # Map club abbreviation to full team name
         team = case_when(
           club %in% names(FANTEAM_CLUB_MAPPING) ~ FANTEAM_CLUB_MAPPING[club],
           TRUE ~ club
         ),
-        # Standardize positions
         position = case_when(
           tolower(position) == "goalkeeper" ~ "GK",
           tolower(position) == "defender" ~ "DEF",
@@ -237,9 +156,7 @@ load_fanteam_soccer_salaries <- function(gameweek) {
           tolower(position) == "forward" ~ "FWD",
           TRUE ~ toupper(substr(position, 1, 3))
         ),
-        # Convert price to numeric (already in millions)
         salary = as.numeric(price),
-        # Keep lineup status
         status = lineup
       ) %>%
       select(player, team, position, salary, status, 
@@ -249,7 +166,6 @@ load_fanteam_soccer_salaries <- function(gameweek) {
     # Try generic format
     log_debug("Using generic format parsing", level = "INFO")
     
-    # Rename columns to standard names
     data <- data %>%
       rename_with(~ case_when(
         . %in% c("name", "player_name") ~ "player",
@@ -259,7 +175,6 @@ load_fanteam_soccer_salaries <- function(gameweek) {
         TRUE ~ .
       ))
     
-    # Standardize positions if present
     if ("position" %in% names(data)) {
       data <- data %>%
         mutate(position = case_when(
@@ -271,7 +186,6 @@ load_fanteam_soccer_salaries <- function(gameweek) {
         ))
     }
     
-    # Convert salary to numeric
     if ("salary" %in% names(data)) {
       data$salary <- as.numeric(gsub("[^0-9.]", "", as.character(data$salary)))
     }

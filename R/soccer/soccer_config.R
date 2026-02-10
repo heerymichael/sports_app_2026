@@ -14,6 +14,13 @@ SOCCER_SHEET_IDS <- list(
   team_goals = "1gUCVxBFR3kwE259ZccWBLRn7iAlV0HpZL7OccbGsWuo"
 )
 
+# Google Sheet IDs for FanTeam matchups data (weekly worksheets: week_19, week_20, etc.)
+FANTEAM_MATCHUPS_SHEET_IDS <- list(
+  odds_report = "1LsqkONDx8vl0gTQnIErdPSiQS_4B5JqNN4eI4dIn50c",
+  goalscorer_odds = "1I70YbsMtY0szJhj-jHLI9eei29sxxlicnII9s34rbjg",
+  salaries = "1zQAzHJhrLYURUbe1jqGfak3e5QLmz2rWokOTGyJl1tY"
+)
+
 # Google Drive settings
 USE_GOOGLE_DRIVE <- TRUE
 SOCCER_DRIVE_FOLDER_ID <- "1APlkMnjX3RjxPOzEnYWP5DYYCH_AcUM8"
@@ -104,7 +111,7 @@ TEAM_NAME_MAPPING <- c(
   "Nott'ham Forest" = "Nottingham Forest", "Nottingham Forest" = "Nottingham Forest",
   "Southampton" = "Southampton", "Tottenham" = "Tottenham", "Tottenham Hotspur" = "Tottenham",
   "Spurs" = "Tottenham", "West Ham" = "West Ham", "West Ham United" = "West Ham",
-  "Wolves" = "Wolves", "Wolverhampton Wanderers" = "Wolves", "Manchester City" = "Manchester City",
+  "Wolves" = "Wolves", "Wolverhampton Wanderers" = "Wolves", "Wolverhampton" = "Wolves", "Manchester City" = "Manchester City",
   "Man City" = "Manchester City",
   "Inter" = "Inter Milan", "Inter Milan" = "Inter Milan", "Internazionale" = "Inter Milan",
   "Hellas Verona" = "Verona", "Verona" = "Verona", "Milan" = "AC Milan", "AC Milan" = "AC Milan",
